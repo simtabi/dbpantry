@@ -24,6 +24,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Check 45 fails if `images/cassandra/jars.tsv` has a row without a full sha256 or for a
   series that is not built, or if the Cassandra Dockerfile stops running the swap.
 
+### Fixed
+
+- Check 27 (HA failover) could stop without a message when one Patroni probe failed, such as
+  `scripts/ha leader` in the seconds after the leader is killed, because the check runs under
+  `set -e` with pipefail. Its polls now retry within their budget, so it fails only when no
+  new leader is elected in time.
+
 ### Security
 
 - **The Cassandra images replace their vulnerable vendored JARs** with fixed releases from
