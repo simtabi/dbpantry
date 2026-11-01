@@ -60,6 +60,25 @@ RUN set -eux; \
     apt-get install -y --only-upgrade libpcre2-8-0 libexpat1 perl-base $py311; \
     rm -rf /var/lib/apt/lists/*
 
+# Cassandra vendors its Java dependencies in lib/, and both series ship guava,
+# snappy-java, jackson, netty, lz4-java (and on 4.1 logback and snakeyaml)
+# below their security fixes, with no newer Cassandra release to repin to. Each
+# is replaced with a fixed release from Maven Central, pinned by sha256 in
+# jars.tsv (DESIGN.md D-55). The series is read from the base image itself, so
+# a BASE_IMAGE and ENGINE_VERSION that disagree fail here rather than install
+# the other series' JARs. `cassandra -v` then starts the JVM on the new
+# classpath; the boot checks (32, 34) prove the rest.
+COPY cassandra/jars.tsv /usr/local/share/mdb/cassandra-jars.tsv
+COPY --chmod=0755 cassandra/replace-jars.sh /usr/local/bin/replace-jars
+RUN set -eux; \
+    series="${CASSANDRA_VERSION%.*}"; \
+    if [ "$series" != "$ENGINE_VERSION" ]; then \
+        echo "base image is Cassandra $CASSANDRA_VERSION but ENGINE_VERSION is $ENGINE_VERSION" >&2; \
+        exit 1; \
+    fi; \
+    replace-jars /usr/local/share/mdb/cassandra-jars.tsv "$series" "${CASSANDRA_HOME:?}/lib"; \
+    cassandra -v
+
 # gosu from the gotools stage (DESIGN.md D-51). gosu replaces
 # the base image's copy in place, so its entrypoint keeps calling the same path.
 COPY --from=gotools /out/gosu /usr/local/bin/

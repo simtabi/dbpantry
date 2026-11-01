@@ -21,9 +21,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Check 44 fails on any leftover use of the old names outside the history they belong to.
+- Check 45 fails if `images/cassandra/jars.tsv` has a row without a full sha256 or for a
+  series that is not built, or if the Cassandra Dockerfile stops running the swap.
 
 ### Security
 
+- **The Cassandra images replace their vulnerable vendored JARs** with fixed releases from
+  Maven Central, pinned by sha256 (DESIGN.md D-55): guava 33.7.2-jre, snappy-java 1.1.10.12,
+  jackson 2.22.4, lz4-java 1.12.1 and netty 4.1.139.Final on both series, plus logback 1.2.13
+  and snakeyaml 1.33 on 4.1. This fixes the guava and snappy-java findings that failed the
+  Trivy gate, and removes 21 of the 22 Cassandra waivers. The one left, CVE-2022-1471 in
+  snakeyaml on 4.1, is fixed only in snakeyaml 2.x, which Cassandra 4.1 cannot load; it still
+  expires on 2026-11-09.
 - **The Go toolchain moves to 1.27.3**, the latest stable release, for gosu, rclone
   and postgres_exporter. This fixes CVE-2026-111943 in `crypto/x509`, which failed the Trivy
   gate on every engine image.

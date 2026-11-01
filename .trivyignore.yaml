@@ -31,256 +31,32 @@ vulnerabilities:
   # ---------------------------------------------------------------------------
   # Apache Cassandra -- vendored Java dependencies
   # ---------------------------------------------------------------------------
-  # Cassandra ships these JARs inside its own distribution, in lib/, at versions
-  # the Apache release process chose. Three facts make them waivers rather than
-  # fixes:
+  # Cassandra ships its Java dependencies inside lib/. Until 2026-11 the ones
+  # below their security fixes were waived here, because replacing a JAR in
+  # lib/ was treated as an untested configuration. That changed (DESIGN.md
+  # D-55): the image now replaces guava, snappy-java, jackson, netty, lz4-java,
+  # and on 4.1 logback and snakeyaml, with fixed releases pinned by sha256 in
+  # images/cassandra/jars.tsv, checked against Cassandra's own bytecode and
+  # boot-tested on both series. That removed 21 of the 22 waivers that were
+  # here. A new finding in lib/ means a row in jars.tsv needs raising -- do
+  # that, do not add a waiver.
   #
-  #   1. images/bases.tsv already pins 5.0.8 and 4.1.11, published 2026-08-05 and
-  #      the newest releases of either series. There is nothing to repin to.
-  #   2. Replacing a JAR inside lib/ is not a supported configuration; Cassandra
-  #      is tested against the versions it ships, and a swapped netty or jackson
-  #      is a node that fails in production rather than in CI.
-  #   3. The fixed versions exist upstream in the LIBRARY, not in a Cassandra
-  #      release. Only Apache can close these, by shipping a new Cassandra.
-  #
-  # What reduces the exposure meanwhile is the toolkit's own posture rather than
-  # anything about the CVEs: Cassandra is authenticated by default here (check
-  # 32 proves it) and publishes no host port under the default MDB_PUBLISH=none,
-  # so the native protocol is reachable only from the compose network.
-  #
-  # Revisit condition: the next Cassandra release on either series. These expire
-  # 2026-11-09 regardless -- if no release has landed by then the decision gets
-  # made again with whatever is true at that point, rather than inherited.
-
-  - id: GHSA-r7wm-3cxj-wff9
-    purls:
-      - "pkg:maven/com.fasterxml.jackson.core/jackson-core"
-    statement: >-
-      Vendored by Apache Cassandra 5.0.8 and 4.1.11, both the newest releases of
-      their series, so there is no base image to repin to. Fixed only in the
-      library, not in any Cassandra release. Revisit at the next Cassandra release.
-    expired_at: 2026-11-09
-
-  - id: CVE-2026-54512
-    purls:
-      - "pkg:maven/com.fasterxml.jackson.core/jackson-databind"
-    statement: >-
-      jackson-databind arbitrary code execution via polymorphic deserialization,
-      vendored by Cassandra 5.0.8 and 4.1.11 with no newer release to repin to.
-      Replacing the JAR inside lib/ is an untested Cassandra configuration.
-      Revisit at the next Cassandra release.
-    expired_at: 2026-11-09
-
-  - id: CVE-2026-68494
-    purls:
-      - "pkg:maven/com.fasterxml.jackson.core/jackson-core"
-    statement: >-
-      jackson-core, vendored at 2.19.2 by Cassandra 5.0.9 and 4.1.12, both the
-      newest releases of their series, so there is nothing to repin to. Fixed
-      only in the library (2.18.8, 2.21.4); replacing the JAR inside lib/ is an
-      untested Cassandra configuration. Revisit at the next Cassandra release.
-    expired_at: 2026-11-09
-
-  - id: CVE-2026-68497
-    purls:
-      - "pkg:maven/com.fasterxml.jackson.core/jackson-databind"
-    statement: >-
-      jackson-databind, vendored at 2.19.2 by Cassandra 5.0.8 and 4.1.11 with no
-      newer release to repin to. Fixed only in the library (2.18.10, 2.21.6,
-      2.22.2); replacing the JAR inside lib/ is an untested Cassandra
-      configuration. Revisit at the next Cassandra release.
-    expired_at: 2026-11-09
-
-  - id: CVE-2026-54513
-    purls:
-      - "pkg:maven/com.fasterxml.jackson.core/jackson-databind"
-    statement: >-
-      jackson-databind security bypass, vendored by Cassandra 5.0.8 and 4.1.11
-      with no newer release to repin to. Fixed only in the library upstream.
-      Revisit at the next Cassandra release.
-    expired_at: 2026-11-09
-
-  - id: CVE-2026-42583
-    purls:
-      - "pkg:maven/io.netty/netty-codec"
-    statement: >-
-      netty-codec compression flaw in the transport Cassandra's native protocol
-      uses, vendored at 4.1.130.Final by Cassandra 5.0.8 with no newer release to
-      repin to. The port is unpublished by default and the protocol is
-      authenticated. Revisit at the next Cassandra release.
-    expired_at: 2026-11-09
-
-  - id: CVE-2026-59901
-    purls:
-      - "pkg:maven/io.netty/netty-codec"
-    statement: >-
-      netty-codec, vendored at 4.1.130.Final by Cassandra 5.0.8 with no newer
-      Cassandra release to repin to. Revisit at the next Cassandra release.
-    expired_at: 2026-11-09
-
-  - id: CVE-2026-44249
-    purls:
-      - "pkg:maven/io.netty/netty-handler"
-    statement: >-
-      netty-handler, vendored at 4.1.130.Final by Cassandra 5.0.8 with no newer
-      Cassandra release to repin to. Revisit at the next Cassandra release.
-    expired_at: 2026-11-09
-
-  - id: CVE-2026-45416
-    purls:
-      - "pkg:maven/io.netty/netty-handler"
-    statement: >-
-      netty-handler, vendored at 4.1.130.Final by Cassandra 5.0.8 with no newer
-      Cassandra release to repin to. Revisit at the next Cassandra release.
-    expired_at: 2026-11-09
-
-  - id: CVE-2026-50010
-    purls:
-      - "pkg:maven/io.netty/netty-handler"
-    statement: >-
-      netty-handler, vendored at 4.1.130.Final by Cassandra 5.0.8 with no newer
-      Cassandra release to repin to. Revisit at the next Cassandra release.
-    expired_at: 2026-11-09
-
-  - id: CVE-2026-56820
-    purls:
-      - "pkg:maven/io.netty/netty-handler-ssl-ocsp"
-    statement: >-
-      netty-handler-ssl-ocsp, vendored at 4.1.130.Final by Cassandra 5.0.8. OCSP
-      stapling is not enabled by this toolkit's TLS configuration, and there is
-      no newer Cassandra release to repin to. Revisit at the next Cassandra release.
-    expired_at: 2026-11-09
-
-  - id: CVE-2026-56821
-    purls:
-      - "pkg:maven/io.netty/netty-handler-ssl-ocsp"
-    statement: >-
-      netty-handler-ssl-ocsp, vendored at 4.1.130.Final by Cassandra 5.0.8. OCSP
-      stapling is not enabled by this toolkit's TLS configuration, and there is
-      no newer Cassandra release to repin to. Revisit at the next Cassandra release.
-    expired_at: 2026-11-09
-
-  - id: CVE-2026-56822
-    purls:
-      - "pkg:maven/io.netty/netty-handler-ssl-ocsp"
-    statement: >-
-      netty-handler-ssl-ocsp, vendored at 4.1.130.Final by Cassandra 5.0.8. OCSP
-      stapling is not enabled by this toolkit's TLS configuration, and there is
-      no newer Cassandra release to repin to. Revisit at the next Cassandra release.
-    expired_at: 2026-11-09
-
-  - id: CVE-2023-6378
-    purls:
-      - "pkg:maven/ch.qos.logback/logback-classic"
-      - "pkg:maven/ch.qos.logback/logback-core"
-    statement: >-
-      logback deserialisation denial of service, reachable only through the
-      SocketReceiver/SocketAppender that Cassandra 4.1.11 does not configure and
-      this toolkit does not enable. Vendored at 1.2.9 with no newer 4.1 release
-      to repin to. Revisit at the next Cassandra 4.1 release.
-    expired_at: 2026-11-09
+  # The one left is the one a swap cannot fix.
 
   - id: CVE-2022-1471
     purls:
-      - "pkg:maven/org.yaml/snakeyaml"
+      - "pkg:maven/org.yaml/snakeyaml@1.33"
     statement: >-
-      SnakeYAML remote code execution through the unsafe default constructor.
-      Cassandra parses only cassandra.yaml with it, which is operator-supplied
-      and mounted by this toolkit -- an attacker able to change it already
-      controls the container. Vendored at 1.26 by Cassandra 4.1.11 with no newer
-      4.1 release to repin to. Revisit at the next Cassandra 4.1 release.
+      SnakeYAML remote code execution through the unsafe default constructor,
+      fixed only in snakeyaml 2.0. Cassandra 4.1 cannot take 2.x: its
+      YamlConfigurationLoader calls constructors that 2.0 removed, so a 4.1
+      node could not read cassandra.yaml. 4.1 therefore runs 1.33, the last 1.x
+      release (DESIGN.md D-55). Cassandra parses only cassandra.yaml with it,
+      which is operator-supplied and mounted by this toolkit -- an attacker able
+      to change it already controls the container. Cassandra 5.0 ships
+      snakeyaml 2.1 and is not affected. Revisit at the next Cassandra 4.1
+      release.
     expired_at: 2026-11-09
-
-  - id: CVE-2022-25857
-    purls:
-      - "pkg:maven/org.yaml/snakeyaml"
-    statement: >-
-      SnakeYAML denial of service on deeply nested input, bounded by the same
-      trust argument as CVE-2022-1471: the only document parsed is the operator's
-      own cassandra.yaml. Vendored at 1.26 by Cassandra 4.1.11 with no newer 4.1
-      release to repin to. Revisit at the next Cassandra 4.1 release.
-    expired_at: 2026-11-09
-
-  - id: CVE-2026-75595
-    purls:
-      - "pkg:maven/io.netty/netty-handler"
-    statement: >-
-      netty-handler, vendored at 4.1.130.Final by Cassandra 5.0.8 and 4.1.11;
-      fixed in 4.1.137.Final upstream but in no Cassandra release to repin to.
-      The port is unpublished by default and the protocol is authenticated.
-      Revisit at the next Cassandra release.
-    expired_at: 2026-11-09
-
-  # The 2026-10 jackson wave. Found after the repin to 4.1.12 and 5.0.9
-  # (published 2026-10-02, the newest releases of either series), both of which
-  # still ship jackson-core and jackson-databind 2.19.2 in lib/. The repin fixed
-  # nothing here, so these are waived, not repinned. Scoped tighter than the
-  # entries above: the purl carries the exact vendored version, so a Cassandra
-  # release that moves jackson stops matching and the build re-decides.
-  # Upstream: https://issues.apache.org/jira/browse/CASSANDRA-21691 (open).
-  # 90 days from 2026-10-02.
-
-  - id: CVE-2026-89407
-    purls:
-      - "pkg:maven/com.fasterxml.jackson.core/jackson-core@2.19.2"
-    statement: >-
-      jackson-core regex backtracking denial of service, vendored at 2.19.2 by
-      Apache Cassandra 4.1.12 and 5.0.9, the newest releases of both series, so
-      there is no base image to repin to. Fixed upstream in the library (2.18.11,
-      2.21.7, 2.22.3) but in no Cassandra release; replacing the JAR inside lib/
-      is an untested Cassandra configuration. Tracked as CASSANDRA-21691.
-      Revisit at the next Cassandra release.
-    expired_at: 2026-12-31
-
-  - id: CVE-2026-89425
-    purls:
-      - "pkg:maven/com.fasterxml.jackson.core/jackson-core@2.19.2"
-    statement: >-
-      jackson-core unbounded StringBuilder growth on malformed tokens, vendored at
-      2.19.2 by Apache Cassandra 4.1.12 and 5.0.9 with no newer release to repin
-      to. Fixed upstream in the library (2.18.11, 2.21.7, 2.22.3) but in no
-      Cassandra release. Tracked as CASSANDRA-21691. Revisit at the next
-      Cassandra release.
-    expired_at: 2026-12-31
-
-  - id: CVE-2026-91776
-    purls:
-      - "pkg:maven/com.fasterxml.jackson.core/jackson-databind@2.19.2"
-    statement: >-
-      jackson-databind unbounded cache denial of service, vendored at 2.19.2 by
-      Apache Cassandra 4.1.12 and 5.0.9 with no newer release to repin to. Fixed
-      upstream in the library (2.18.11, 2.21.7, 2.22.3) but in no Cassandra
-      release. Tracked as CASSANDRA-21691. Revisit at the next Cassandra release.
-    expired_at: 2026-12-31
-
-  - id: CVE-2026-91777
-    purls:
-      - "pkg:maven/com.fasterxml.jackson.core/jackson-databind@2.19.2"
-    statement: >-
-      jackson-databind, vendored at 2.19.2 by Apache Cassandra 4.1.12 and 5.0.9
-      with no newer release to repin to. Fixed upstream in the library (2.18.11,
-      2.21.7, 2.22.3) but in no Cassandra release. Tracked as CASSANDRA-21691.
-      Revisit at the next Cassandra release.
-    expired_at: 2026-12-31
-
-  # lz4-java, measured 2026-10-13. Trivy reported CVE-2026-106451 against
-  # opt/cassandra/lib/lz4-java-1.10.1.jar in both cassandra 4.1.12 and 5.0.9 on
-  # amd64 and arm64. Those are still the newest releases of either series (Docker
-  # Hub tags last updated 2026-10-06), so there is no base image to repin to, and
-  # the fix (1.11.4) exists only in the library. Scoped to the vendored version
-  # so a Cassandra release that moves lz4-java stops matching. 30 days.
-
-  - id: CVE-2026-106451
-    purls:
-      - "pkg:maven/at.yawk.lz4/lz4-java@1.10.1"
-    statement: >-
-      lz4-java insecure temporary file handling, vendored at 1.10.1 in
-      opt/cassandra/lib by Apache Cassandra 4.1.12 and 5.0.9, the newest releases
-      of both series, so there is no base image to repin to. Fixed upstream in
-      the library (1.11.4) but in no Cassandra release; replacing the JAR inside
-      lib/ is an untested Cassandra configuration. Measured 2026-10-13. Revisit
-      at the next Cassandra release.
-    expired_at: 2026-11-12
 
   # ---------------------------------------------------------------------------
   # gosu, rclone, postgres_exporter -- no waivers, by construction
