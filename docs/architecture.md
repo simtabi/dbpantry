@@ -33,7 +33,7 @@ So engines are **declared**. A descriptor states what the generic layer needs:
 MDB_ENGINE_NAME=pg
 MDB_ENGINE_FAMILY=postgres
 MDB_ENGINE_PARADIGM=relational
-MDB_ENGINE_VERSIONS="15 16 17 18"
+MDB_ENGINE_VERSIONS="17 18"
 MDB_ENGINE_DEFAULT_VERSION=17
 MDB_ENGINE_PORT=5432
 MDB_ENGINE_DATA_DIR=/var/lib/postgresql/data

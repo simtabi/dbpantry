@@ -118,9 +118,11 @@ else; every engine here logs why.
 docker compose logs pg --tail 50
 ```
 
-**MongoDB 8.x crash-loops on start.** That is a known upstream incompatibility
-with Linux kernel 6.19 and later (SERVER-121912), which includes current Docker
-Desktop VMs. Use `MDB_MONGODB_VERSION=7.0`, which is why 7.0 is the default.
+**MongoDB 8.0 crash-loops on start.** That is a known upstream incompatibility
+with Linux kernels 6.19 to 7.0.13 (SERVER-121912), fixed for kernel 7.0.14 and
+later in MongoDB 8.0.30. Check the kernel with `docker run --rm alpine uname -r`.
+On an affected kernel, update Docker Desktop or OrbStack, or run 7.0 through
+`MDB_MONGODB_BASE_IMAGE` — unsupported; see [Supported versions](versions.md).
 
 **Cassandra never becomes healthy.** It is almost always memory. Cassandra needs
 about 2 GB to itself; give Docker 8 GB or raise `MDB_CASSANDRA_HEAP`.

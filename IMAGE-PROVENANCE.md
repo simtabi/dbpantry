@@ -67,8 +67,9 @@ Cassandra release to repin to, the image replaces them
 | `dbpantry-cassandra` | Maven Central, each library's own published release | [`images/cassandra/jars.tsv`](images/cassandra/jars.tsv), by sha256 | `sha256sum` at build, check 45 |
 
 A JAR is only replaced when the fixed release is still binary-compatible with
-the Cassandra series that loads it. snakeyaml 2.x is not, for 4.1, so 4.1 keeps
-the 1.x line and its one waiver in `.trivyignore.yaml`.
+the Cassandra series that loads it. snakeyaml 2.x is not, for 4.1, which is why
+4.1 is no longer maintained here ([D-57](DESIGN.md)) rather than shipped under a
+waiver. `.trivyignore.yaml` has no Cassandra entries.
 
 ## Pinning
 
@@ -76,6 +77,11 @@ Every reference is pinned by **digest**, not tag, so a moved tag cannot change
 what runs. Engine bases live in [`images/bases.tsv`](images/bases.tsv); check 02
 fails the build on any unpinned reference or floating tag. The JARs replaced
 inside the Cassandra image are pinned by sha256 in `images/cassandra/jars.tsv`.
+
+`images/bases.tsv` holds maintained versions only ([Supported versions](docs/versions.md)).
+An older version runs from `MDB_<ENGINE>_BASE_IMAGE`, which must also be
+digest-pinned — `make check-env` refuses a tag — but its provenance is yours to
+judge: this project does not build, scan or verify it.
 
 ---
 

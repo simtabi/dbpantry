@@ -43,10 +43,20 @@ MDB_<SETTING>              global       MDB_TLS_ENFORCE, MDB_BIND_ADDR
 ```
 MDB_PG_VERSION=17
 MDB_MYSQL_VERSION=8.4
-MDB_MONGODB_VERSION=7.0
+MDB_MONGODB_VERSION=8.0
 ```
 
-Each engine offers a menu; anything off it is refused rather than attempted.
+Each engine's menu is its maintained versions: the newest supported line and
+the one before it, listed in [Supported versions](versions.md). Anything off the
+menu is refused, unless you also name its upstream image, pinned by digest:
+
+```
+MDB_MARIADB_VERSION=11.4
+MDB_MARIADB_BASE_IMAGE=mariadb:11.4.13@sha256:<digest>
+```
+
+That version then runs **unsupported**: dbpantry does not build, scan or verify
+it, gives no scan guarantee, and `make check-env` warns on every start.
 
 **Data volumes are per engine and per major version.** Switching
 `MDB_PG_VERSION` from 16 to 17 does not point PostgreSQL 17 at PostgreSQL 16's

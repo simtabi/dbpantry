@@ -5,8 +5,8 @@ copy is possible.
 
 ## The guarantee this rests on
 
-**Volumes are per engine and per major version.** PostgreSQL 16's data lives in
-one volume, 17's in another, and an upgrade writes only to the new one.
+**Volumes are per engine and per major version.** PostgreSQL 17's data lives in
+one volume, 18's in another, and an upgrade writes only to the new one.
 
 The consequence is the useful part: **the old volume is never touched**, so a
 failed upgrade is a non-event and rollback is changing one line in `.env` back.
@@ -16,8 +16,11 @@ You are not racing a backup.
 
 ```bash
 make backup-all
-make upgrade ENGINE=pg FROM=16 TO=17
+make upgrade ENGINE=pg FROM=17 TO=18
 ```
+
+`make upgrade` covers PostgreSQL, MySQL and MariaDB. MongoDB and Cassandra are
+manual, below.
 
 Take the backup anyway. The volume guarantee protects you from the upgrade; it
 does not protect you from discovering a week later that something was already
@@ -30,7 +33,7 @@ wrong.
 3. starts the new major against a fresh volume
 4. restores
 5. compares object and row counts, and **fails loudly if they disagree**
-6. tells you to set `MDB_PG_VERSION=17` — it does not edit `.env` for you
+6. tells you to set `MDB_PG_VERSION=18` — it does not edit `.env` for you
 
 Step 6 is deliberate. The upgrade proving it worked and you deciding to switch
 are two different decisions, and collapsing them means a surprise the next time
@@ -39,8 +42,13 @@ anyone runs `make up`.
 ## Then switch
 
 ```
-MDB_PG_VERSION=17
+MDB_PG_VERSION=18
+MDB_PG_DATA_MOUNT=/var/lib/postgresql
 ```
+
+PostgreSQL 18 moved its data mount one level up, so crossing from 17 to 18
+changes `MDB_PG_DATA_MOUNT` too; `make check-env` refuses a mismatched pair, and
+`make upgrade` mounts each side at its own path.
 
 ```bash
 make up
@@ -50,14 +58,15 @@ make psql -c '\l'
 ## Rolling back
 
 ```
-MDB_PG_VERSION=16
+MDB_PG_VERSION=17
+MDB_PG_DATA_MOUNT=/var/lib/postgresql/data
 ```
 
 ```bash
 make up
 ```
 
-That is the whole procedure. The 16 volume was never written to.
+That is the whole procedure. The 17 volume was never written to.
 
 ## Why dump-and-restore rather than pg_upgrade --link
 
@@ -75,13 +84,49 @@ verified backup, having read the PostgreSQL documentation for your version pair,
 and expect to need `--check` first. It is not automated here because automating
 it would mean shipping a fast path whose failure mode is losing the source.
 
+## From a version that is no longer maintained
+
+dbpantry maintains the newest supported line of each engine and the one before
+it ([Supported versions](versions.md)). When a line drops off — PostgreSQL 15 and
+16, MySQL 8.0, MariaDB 10.11 and 11.4, MongoDB 7.0 and 8.3, Cassandra 4.1 in
+0.2.0 — a `.env` still naming it fails `make check-env`, loudly, and nothing
+touches its volume.
+
+To upgrade off it, the old image has to exist, so build it once from its upstream
+base, unsupported:
+
+```
+MDB_MARIADB_VERSION=11.4
+MDB_MARIADB_BASE_IMAGE=mariadb:11.4.13@sha256:1292844148b311e4ed4300022a996d39083f415a963e970cf47cad1b3b18e3a6
+```
+
+```bash
+scripts/build mariadb          # dbpantry-mariadb:11.4, labelled unsupported
+```
+
+If you already built or pulled `dbpantry-mariadb:11.4` before 0.2.0, it is still
+local and this step is not needed. Then set the target version, remove the
+override, build it, and upgrade as usual:
+
+```bash
+scripts/build mariadb          # after MDB_MARIADB_VERSION=11.8, override removed
+make upgrade ENGINE=mariadb FROM=11.4 TO=11.8
+```
+
+The digest above is the one 0.1.x pinned. Staying on the old version instead is
+equally valid — keep both lines in `.env` — but `make check-env` will say on every
+start that it is unsupported.
+
 ## MySQL and MariaDB
 
 Same command, same guarantee:
 
 ```bash
-make upgrade ENGINE=mysql FROM=8.0 TO=8.4
+make upgrade ENGINE=mysql FROM=8.4 TO=9.7
 ```
+
+8.4 → 9.7 is LTS to LTS, the upgrade path Oracle supports. An 8.0 volume goes to
+8.4 first; MySQL does not support skipping an LTS.
 
 Two version-specific traps, both of which bite after the upgrade rather than
 during it:
@@ -94,24 +139,70 @@ re-enables it as a transition, not a destination.
 targets. Upgrade MariaDB to MariaDB. Moving between them is a migration, and the
 tool for it is `make export` / `make import`.
 
-## MongoDB, Cassandra, FerretDB
+## MongoDB
 
-```bash
-make upgrade ENGINE=mongodb FROM=7.0 TO=8.0
-```
+Not automated: `make upgrade` refuses `ENGINE=mongodb`. The same guarantee is
+kept by hand — copy the old major's volume, and only ever start the new major on
+the copy. Rehearsed for 7.0.39 → 8.0.34 on 2026-11-01: 150 of 150 documents on
+8.0, and the 7.0 volume still started and read afterwards.
 
 **MongoDB does not support skipping major versions.** 6.0 → 8.0 must go through
-7.0. Upgrading in place past a skipped major produces a server that will not
-start against the data files.
+7.0, and the source must be at its own feature compatibility version (FCV) first;
+`db.adminCommand({getParameter: 1, featureCompatibilityVersion: 1})` shows it.
 
-Also note `MDB_MONGODB_VERSION=7.0` is the default for a reason: 8.x crash-loops
-on Linux kernel 6.19 and later (SERVER-121912), which includes current Docker
-Desktop VMs. Verify 8.x starts on your machine before you migrate to it.
+```bash
+make backup-all
+docker compose stop mongodb
+docker volume create mdb_mongodb8.0_data
+docker run --rm -v mdb_mongodb7.0_data:/from:ro -v mdb_mongodb8.0_data:/to \
+    alpine sh -c 'cp -a /from/. /to/'
+```
 
-**Cassandra** upgrades want `nodetool drain` before shutdown and an
-`upgradesstables` afterwards. On a single-node development cluster
-`make upgrade` handles this; on a real cluster, follow the Cassandra
-documentation — a rolling upgrade is not a thing this toolkit can do for you.
+Then set `MDB_MONGODB_VERSION=8.0`, remove `MDB_MONGODB_BASE_IMAGE`, `make up`,
+check your data, and only then raise the FCV — after that the copy cannot go back
+to 7.0, though the original volume still can:
+
+```js
+db.adminCommand({ setFeatureCompatibilityVersion: "8.0", confirm: true })
+```
+
+MongoDB 8.0 refuses to start on Linux kernels 6.19 to 7.0.13 (SERVER-121912),
+fixed for 7.0.14 and later in 8.0.30. Check the kernel your containers see with
+`docker run --rm alpine uname -r` before you migrate.
+
+## Cassandra 4.1 → 5.0
+
+Cassandra 4.1 is no longer maintained here (DESIGN.md D-57). Not automated
+either; on a single node the volume copy keeps the old data untouched. Rehearsed
+for 4.1.12 → 5.0.9 on 2026-11-01: 200 of 200 rows on 5.0, `upgradesstables`
+clean, and the 4.1 volume unchanged.
+
+```bash
+make backup-all
+docker compose exec cassandra nodetool drain     # flush memtables, stop writes
+docker compose stop cassandra
+docker volume create mdb_cassandra5.0_data
+docker run --rm -v mdb_cassandra4.1_data:/from:ro -v mdb_cassandra5.0_data:/to \
+    alpine sh -c 'cp -a /from/. /to/'
+```
+
+Set `MDB_CASSANDRA_VERSION=5.0`, remove `MDB_CASSANDRA_BASE_IMAGE`, `make up`,
+then rewrite the SSTables in the new format:
+
+```bash
+docker compose exec cassandra nodetool upgradesstables
+```
+
+5.0 starts with `storage_compatibility_mode: CASSANDRA_4`, which keeps the files
+readable by 4.1. Leave it there until you are sure; moving it through
+`UPGRADING` to `NONE` is what unlocks 5.0-only features and closes the door back.
+On a real cluster, follow the Cassandra upgrade documentation — a rolling upgrade
+is not a thing this toolkit can do for you.
+
+## FerretDB
+
+FerretDB stores its data in PostgreSQL through the DocumentDB extension, so its
+upgrades follow FerretDB's release notes, not this page.
 
 ## Cleaning up the old volume
 
@@ -120,7 +211,7 @@ noticed a problem. There is no hurry, and the disk is cheaper than the regret.
 
 ```bash
 docker volume ls | grep mdb
-docker volume rm mdb_pg16_data
+docker volume rm mdb_pg17_data
 ```
 
 ---

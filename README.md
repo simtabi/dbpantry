@@ -65,12 +65,17 @@ of the box — correcting that is a large part of why this exists.
 
 | Engine | Paradigm | Versions | Pooling | Licence |
 |---|---|---|---|---|
-| PostgreSQL | relational | 15 · 16 · 17 · 18 | pgBouncer (required in prod) | PostgreSQL |
-| MySQL | relational | 8.0 · 8.4 · 9.7 | ProxySQL (optional) | GPL-2.0 |
-| MariaDB | relational | 10.11 · 11.4 · 11.8 | ProxySQL (optional) | GPL-2.0 |
-| MongoDB | document | 7.0 · 8.0 · 8.3 | driver-side | SSPL — [referenced, not published](docs/licensing.md) |
-| Cassandra | wide-column | 4.1 · 5.0 | driver-side | Apache-2.0 |
-| FerretDB | document | 2 | driver-side | Apache-2.0 |
+| PostgreSQL | relational | **17** · 18 | pgBouncer (required in prod) | PostgreSQL |
+| MySQL | relational | **8.4** · 9.7 (both LTS) | ProxySQL (optional) | GPL-2.0 |
+| MariaDB | relational | **11.8** · 12.3 (both LTS) | ProxySQL (optional) | GPL-2.0 |
+| MongoDB | document | **8.0** · 9.0 | driver-side | SSPL — [referenced, not published](docs/licensing.md) |
+| Cassandra | wide-column | **5.0** | driver-side | Apache-2.0 |
+| FerretDB | document | **2** | driver-side | Apache-2.0 |
+
+Bold is the default. Each engine maintains the newest supported line and the one
+before it; those are the versions built, scanned and verified here. An older
+version still runs, unsupported and with no scan guarantee, by naming its upstream
+image in `MDB_<ENGINE>_BASE_IMAGE` — see [Supported versions](docs/versions.md).
 
 Adding another is a descriptor file — see [Adding an engine](docs/adding-an-engine.md).
 
@@ -84,6 +89,7 @@ published yet; `make build` builds them locally (see [Release](docs/release.md))
 - [Installation](docs/installation.md) — prerequisites and first run
 - [Getting started](docs/getting-started.md) — a new project connected in under a minute
 - [Configuration](docs/configuration.md) — every `MDB_` variable
+- [Supported versions](docs/versions.md) — which versions are maintained, and running any other
 - [Architecture](docs/architecture.md) — how engines are declared rather than hardcoded
 - [Adding an engine](docs/adding-an-engine.md) — the extensibility contract
 - [Connection pooling](docs/pooling.md) — why the answer differs per engine

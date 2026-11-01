@@ -13,7 +13,7 @@ so a green `make verify` is the criteria being met rather than a proxy for it.
 | 1 | Clone → `make init` → `make up` gives PG + Adminer in two commands; profiles bring the rest; Caddy serves every UI over HTTPS | `15-compose-lifecycle`, `18-ui-front-door` | Covered |
 | 2 | `make init-prod` renders a prod env passing `check-env`, TLS enforced, nothing published but Caddy, ports remappable from `.env` | `26-prod-profile-guards`, `06-check-env-enforces` | Covered |
 | 3 | Each engine image runs standalone with only a password env; EMBED toggles self-backup and metrics | `08-pg-standalone-run`, `16-mysql-family-boot`, `24-metrics-and-embed` | Covered |
-| 4 | Version switch 16→17 uses a new volume, leaves the old intact; `make upgrade` migrates; same for MySQL 8.0→8.4 | `14-version-switch`, `29-upgrade-migrates-data` | Covered |
+| 4 | Version switch 17→18 uses a new volume, leaves the old intact; `make upgrade` migrates; same for MySQL 8.4→9.7 (SPEC wrote 16→17 and 8.0→8.4; moved to the maintained pairs by D-57) | `14-version-switch`, `29-upgrade-migrates-data` | Covered |
 | 5 | MySQL and MariaDB run concurrently, phpMyAdmin sees both | `16-mysql-family-boot`, `18-ui-front-door` | Covered |
 | 6a | Two projects per engine, isolated roles, cross-access denied | `13-triplet-isolation`, `28-new-project`, `34-new-project-every-engine` | Covered |
 | 6b | PG RLS demo passes | `36-rls-demo` | Covered |

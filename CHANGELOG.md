@@ -9,6 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Each engine now maintains its current and latest version only** (DESIGN.md D-57,
+  [Supported versions](docs/versions.md)): the newest supported line and the one before it,
+  confirmed from each project's own end-of-life page. The menu goes from 16 versions to 10:
+  PostgreSQL 17 · 18, MySQL 8.4 · 9.7, MariaDB 11.8 · 12.3, MongoDB 8.0 · 9.0, Cassandra 5.0
+  and FerretDB 2. A `.env` naming a version that left the menu fails `make check-env` and its
+  volume is untouched; [Upgrade](docs/UPGRADE.md) covers moving it, or keep it through
+  `MDB_<ENGINE>_BASE_IMAGE`, unsupported.
+- **The MariaDB default moves from 11.4 to 11.8**, and **the MongoDB default from 7.0 to
+  8.0**: MongoDB 8.0.30 and later start on Linux kernel 7.0.14 and later. Kernels 6.19 to
+  7.0.13 still cannot run 8.0 (SERVER-121912); run 7.0 through the override there.
+- MongoDB 8.0 is repinned to 8.0.34.
+
 - **The project is renamed dbpantry** (DESIGN.md D-54). The repository moved from
   `simtabi/multidb-server-docker` to `simtabi/dbpantry`; GitHub redirects the old URL. Images
   are now `dbpantry-<engine>`: run `make build` again, and the next `make up`
@@ -20,11 +32,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`MDB_<ENGINE>_BASE_IMAGE` runs a version that is not maintained**, from its upstream image
+  pinned by digest. `check-env` refuses an off-menu version without it and a tag without a
+  digest, and warns on every start that the version is unsupported, with no scan guarantee;
+  `scripts/build` labels the image `io.simtabi.dbpantry.support=unsupported`.
+- MariaDB 12.3 (12.3.3) and MongoDB 9.0 (9.0.4).
+- [Supported versions](docs/versions.md): the maintained versions per engine, their upstream
+  end-of-life dates and sources, and how to run any other.
+- [Upgrade](docs/UPGRADE.md) documents moving off a version that left the menu, and the
+  manual MongoDB 7.0 → 8.0 and Cassandra 4.1 → 5.0 migrations, each rehearsed with the old
+  volume left intact.
+
 - Check 44 fails on any leftover use of the old names outside the history they belong to.
 - Check 45 fails if `images/cassandra/jars.tsv` has a row without a full sha256 or for a
   series that is not built, or if the Cassandra Dockerfile stops running the swap.
 
+### Fixed
+
+- `make upgrade` mounted PostgreSQL 18 at `/var/lib/postgresql/data`, which 18 no longer
+  uses, so an upgrade to 18 restored into an anonymous volume. Each side now mounts at its own
+  path, and the summary says to set `MDB_PG_DATA_MOUNT`.
+- A compose build of a non-default version used the Dockerfile's default base; the generated
+  compose file now passes that version's pinned base.
+- With `MDB_MONGODB_VERSION` set to a non-default version, compose still ran the default
+  version's image against that version's volume. The image now follows the version.
+- Check 29 removed the default project's `mdb_pg17_data` volume when it started; it now runs
+  under a project of its own.
+- `docs/UPGRADE.md` said `make upgrade` handled MongoDB and Cassandra; it handles PostgreSQL,
+  MySQL and MariaDB only.
+
+### Removed
+
+- **Cassandra 4.1** (DESIGN.md D-57). It vendors snakeyaml 1.x, open to CVE-2022-1471, and
+  cannot load the 2.x line that fixes it. D-57 records when it comes back.
+- PostgreSQL 15 and 16, MySQL 8.0, MariaDB 10.11 and 11.4, MongoDB 7.0 and 8.3 from the
+  maintained menu. Each still runs through `MDB_<ENGINE>_BASE_IMAGE`, unsupported.
+
 ### Security
+
+- **The last Trivy waiver for Cassandra is gone**: CVE-2022-1471 in snakeyaml 1.33 left with
+  Cassandra 4.1, rather than being extended past 2026-11-09. `.trivyignore.yaml` has no
+  Cassandra entries.
 
 - **The Cassandra images replace their vulnerable vendored JARs** with fixed releases from
   Maven Central, pinned by sha256 (DESIGN.md D-55): guava 33.7.2-jre, snappy-java 1.1.10.12,
