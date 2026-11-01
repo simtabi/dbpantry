@@ -1,4 +1,4 @@
-# multidb-server PROD overlay.
+# dbpantry PROD overlay.
 #
 # Three things change from dev, and each is a deliberate default rather than a
 # suggestion (SPEC section 7):
@@ -76,7 +76,7 @@ services:
     profiles: [prod, ha]
     # The official pgbouncer image is amd64-only and stuck at 1.15.0; this one
     # is multi-arch and current (DESIGN.md D-10).
-    image: ghcr.io/simtabi/multidb-server-pgbouncer:dev
+    image: ghcr.io/simtabi/dbpantry-pgbouncer:dev
     restart: unless-stopped
     security_opt:
       - no-new-privileges:true

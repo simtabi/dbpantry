@@ -1,4 +1,4 @@
-# multidb-server — a thin orchestrator. Selection and wiring only.
+# dbpantry — a thin orchestrator. Selection and wiring only.
 #
 # Everything that configures an engine lives in its image (SPEC decision 11), so
 # this file chooses which engines run and how they are exposed. Nothing here is
@@ -115,7 +115,7 @@ services:
     build:
       context: ./images
       dockerfile: caddy/Dockerfile
-    image: ghcr.io/simtabi/multidb-server-caddy:dev
+    image: ghcr.io/simtabi/dbpantry-caddy:dev
     restart: unless-stopped
     <<: *hardening
     # Binding 80/443 needs this one capability back; everything else stays
@@ -155,7 +155,7 @@ services:
   # ---------------------------------------------------------------------------
   backup-pg:
     profiles: [backup]
-    image: ghcr.io/simtabi/multidb-server-pg:${MDB_PG_VERSION:-17}
+    image: ghcr.io/simtabi/dbpantry-pg:${MDB_PG_VERSION:-17}
     restart: unless-stopped
     <<: *hardening
     entrypoint: ["/mdb/scripts/backup", "--engine", "pg", "--schedule"]
@@ -209,7 +209,7 @@ services:
 
   backup-mysql:
     profiles: [backup]
-    image: ghcr.io/simtabi/multidb-server-mysql:${MDB_MYSQL_VERSION:-8.4}
+    image: ghcr.io/simtabi/dbpantry-mysql:${MDB_MYSQL_VERSION:-8.4}
     restart: unless-stopped
     <<: *hardening
     entrypoint: ["/mdb/scripts/backup", "--engine", "mysql", "--schedule"]
@@ -262,7 +262,7 @@ services:
 
   backup-mariadb:
     profiles: [backup]
-    image: ghcr.io/simtabi/multidb-server-mariadb:${MDB_MARIADB_VERSION:-11.4}
+    image: ghcr.io/simtabi/dbpantry-mariadb:${MDB_MARIADB_VERSION:-11.4}
     restart: unless-stopped
     <<: *hardening
     entrypoint: ["/mdb/scripts/backup", "--engine", "mariadb", "--schedule"]

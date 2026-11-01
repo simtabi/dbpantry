@@ -7,8 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **The project is renamed dbpantry** (DESIGN.md D-54). The repository moved from
+  `simtabi/multidb-server-docker` to `simtabi/dbpantry`; GitHub redirects the old URL. Images
+  are now `dbpantry-<engine>`: run `make build` again, and the next `make up`
+  regenerates the compose files with the new names. The `MDB_` variables, the `mdb`
+  Compose project and `mdb_net` network, and the engine descriptor contract keep their names,
+  so existing `.env` files, containers and volumes carry over unchanged.
+- The README drops the GHCR badge and the hosted-docs link, which pointed at pages that do not
+  exist yet.
+
+### Added
+
+- Check 44 fails on any leftover use of the old names outside the history they belong to.
+- Check 45 fails if `images/cassandra/jars.tsv` has a row without a full sha256 or for a
+  series that is not built, or if the Cassandra Dockerfile stops running the swap.
+
 ### Security
 
+- **The Cassandra images replace their vulnerable vendored JARs** with fixed releases from
+  Maven Central, pinned by sha256 (DESIGN.md D-55): guava 33.7.2-jre, snappy-java 1.1.10.12,
+  jackson 2.22.4, lz4-java 1.12.1 and netty 4.1.139.Final on both series, plus logback 1.2.13
+  and snakeyaml 1.33 on 4.1. This fixes the guava and snappy-java findings that failed the
+  Trivy gate, and removes 21 of the 22 Cassandra waivers. The one left, CVE-2022-1471 in
+  snakeyaml on 4.1, is fixed only in snakeyaml 2.x, which Cassandra 4.1 cannot load; it still
+  expires on 2026-11-09.
+- **The Go toolchain moves to 1.27.3**, the latest stable release, for gosu, rclone
+  and postgres_exporter. This fixes CVE-2026-111943 in `crypto/x509`, which failed the Trivy
+  gate on every engine image.
 - **gosu, rclone and postgres_exporter are rebuilt from their release tags on a
   patched Go toolchain**, with gRPC, `x/net` and `x/crypto` raised past their
   fixes (DESIGN.md D-51). This removes 26 Trivy waivers that were due to expire
@@ -94,5 +121,5 @@ topology. 42 acceptance checks; every claim below is one of them.
 - `pg_graphql`'s packaged symlinks are flattened, which also protects against
   the PG 18 volume mount shadowing them (D-26).
 
-[Unreleased]: https://github.com/simtabi/multidb-server-docker/compare/v0.1.0...HEAD
-[0.1.0]: https://github.com/simtabi/multidb-server-docker/releases/tag/v0.1.0
+[Unreleased]: https://github.com/simtabi/dbpantry/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/simtabi/dbpantry/releases/tag/v0.1.0

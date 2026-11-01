@@ -1,6 +1,6 @@
-# multidb-server-patroni — the PostgreSQL image, with Patroni owning the server.
+# dbpantry-patroni — the PostgreSQL image, with Patroni owning the server.
 #
-# Built FROM multidb-server-pg rather than from the upstream base, so an HA node is
+# Built FROM dbpantry-pg rather than from the upstream base, so an HA node is
 # the same PostgreSQL as a standalone one: same extensions, same hardening, same
 # TLS material. A separately-based HA image would drift from the thing it is
 # supposed to be a highly-available copy of.
@@ -13,7 +13,7 @@
 
 ARG ENGINE_VERSION=17
 ARG IMAGE_PREFIX=ghcr.io/simtabi
-FROM ${IMAGE_PREFIX}/multidb-server-pg:${ENGINE_VERSION}
+FROM ${IMAGE_PREFIX}/dbpantry-pg:${ENGINE_VERSION}
 
 # Pinned. Patroni's behaviour on failover is the whole point of this image, so
 # it is not something to let float.
@@ -75,6 +75,6 @@ RUN set -eux; \
 # is what makes the write port follow an election rather than a static config.
 EXPOSE 8008
 
-LABEL org.opencontainers.image.title="multidb-server-patroni" \
-      org.opencontainers.image.description="multidb-server PostgreSQL under Patroni, for the rehearsal HA topology" \
+LABEL org.opencontainers.image.title="dbpantry-patroni" \
+      org.opencontainers.image.description="dbpantry PostgreSQL under Patroni, for the rehearsal HA topology" \
       org.opencontainers.image.licenses="PostgreSQL"

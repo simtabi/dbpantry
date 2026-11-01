@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# The multidb-server acceptance harness runner.
+# The dbpantry acceptance harness runner.
 #
 # Discovers every check in this directory, runs it, and reports. A check is a
 # NN-slug.sh script carrying three metadata headers:
@@ -99,7 +99,7 @@ export MDB_IMAGE_SNAPSHOT
 trap 'rm -f "$MDB_IMAGE_SNAPSHOT"' EXIT
 docker images --format '{{.Repository}}:{{.Tag}}' > "$MDB_IMAGE_SNAPSHOT" 2>/dev/null || true
 
-printf '%s%s multidb-server verify %s%s\n' "$BLD" "$BLU" "$(date '+%H:%M:%S')" "$OFF"
+printf '%s%s dbpantry verify %s%s\n' "$BLD" "$BLU" "$(date '+%H:%M:%S')" "$OFF"
 [[ -n "${VERIFY_TAGS:-}" ]] && printf '%sfiltering by tag: %s%s\n' "$DIM" "$VERIFY_TAGS" "$OFF"
 printf '\n'
 

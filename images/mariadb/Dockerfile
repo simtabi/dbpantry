@@ -1,4 +1,4 @@
-# multidb-server-mariadb — MariaDB with baked configuration, supervised by s6.
+# dbpantry-mariadb — MariaDB with baked configuration, supervised by s6.
 #
 # Build context is images/, not images/mariadb/, so this shares the init
 # scripts and s6 tree with the MySQL image (see images/_shared/mysql-family).
@@ -7,7 +7,7 @@
 ARG BASE_IMAGE=mariadb:11.4.13@sha256:1292844148b311e4ed4300022a996d39083f415a963e970cf47cad1b3b18e3a6
 # The Go toolchain the gotools stage builds with; pinned in images/bases.tsv
 # (row `toolchain go`) and passed by scripts/build, like BASE_IMAGE.
-ARG GO_IMAGE=golang:1.27.2-bookworm@sha256:5cf287a799e6b94384bad13d16b14904c531f51ba65792237e122ce42b392f61
+ARG GO_IMAGE=golang:1.27.3-bookworm@sha256:d9b6a1beb9474adc2a1ce842573639b44b2a0dd49b6669f51d3821baf9ec37c9
 
 # =============================================================================
 # Go tools, rebuilt from their upstream release tags on a patched toolchain
@@ -41,11 +41,11 @@ FROM ${BASE_IMAGE}
 ARG ENGINE_VERSION=11.4
 ARG S6_OVERLAY_VERSION=3.2.3.2
 
-LABEL org.opencontainers.image.title="multidb-server-mariadb" \
-      org.opencontainers.image.description="MariaDB with multidb-server configuration and tooling, supervised by s6-overlay" \
+LABEL org.opencontainers.image.title="dbpantry-mariadb" \
+      org.opencontainers.image.description="MariaDB with dbpantry configuration and tooling, supervised by s6-overlay" \
       org.opencontainers.image.vendor="Simtabi LLC" \
       org.opencontainers.image.licenses="MIT" \
-      org.opencontainers.image.source="https://github.com/simtabi/multidb-server-docker"
+      org.opencontainers.image.source="https://github.com/simtabi/dbpantry"
 
 USER root
 ENV DEBIAN_FRONTEND=noninteractive

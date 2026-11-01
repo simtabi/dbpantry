@@ -55,13 +55,13 @@ failed=0
 scanned=0
 for engine in "${targets[@]}"; do
     if [[ "$engine" == "cli" ]]; then
-        img="ghcr.io/simtabi/multidb-server-cli:dev"
+        img="ghcr.io/simtabi/dbpantry-cli:dev"
     else
         engine_load "$engine" >/dev/null 2>&1 || continue
         upper="$(printf '%s' "$engine" | tr '[:lower:]-' '[:upper:]_')"
         ver="$(grep -E "^MDB_${upper}_VERSION=" .env 2>/dev/null | tail -1 | cut -d= -f2-)"
         ver="${ver:-$MDB_ENGINE_DEFAULT_VERSION}"
-        img="ghcr.io/simtabi/multidb-server-${engine}:${ver}"
+        img="ghcr.io/simtabi/dbpantry-${engine}:${ver}"
     fi
 
     if ! docker image inspect "$img" >/dev/null 2>&1; then

@@ -1,4 +1,4 @@
-# multidb-server-pgbouncer — pgBouncer from Debian's own package.
+# dbpantry-pgbouncer — pgBouncer from Debian's own package.
 #
 # pgBouncer publishes no official image, and this was the toolkit's only
 # third-party rebuild (edoburu/pgbouncer). A third party is an organisation
@@ -52,6 +52,6 @@ EXPOSE 6432
 # nothing, which is exactly the failure check 33 exists to catch.
 ENTRYPOINT ["/usr/local/bin/mdb-pgbouncer-bootstrap"]
 
-LABEL org.opencontainers.image.title="multidb-server-pgbouncer" \
+LABEL org.opencontainers.image.title="dbpantry-pgbouncer" \
       org.opencontainers.image.description="pgBouncer from the PGDG package, built rather than pulled from a third party" \
       org.opencontainers.image.licenses="ISC"

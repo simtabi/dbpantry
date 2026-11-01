@@ -148,7 +148,7 @@ jobs:
             --ignorefile .trivyignore.yaml \
             --exit-code 1 \
             --format table \
-            "ghcr.io/simtabi/multidb-server-${ENGINE}:${VERSION}"
+            "ghcr.io/simtabi/dbpantry-${ENGINE}:${VERSION}"
 
       - name: Report unfixed findings (never fails)
         if: always()
@@ -157,7 +157,7 @@ jobs:
           VERSION: ${{ matrix.entry.version }}
         run: |
           trivy image --severity HIGH,CRITICAL --exit-code 0 --format table \
-            "ghcr.io/simtabi/multidb-server-${ENGINE}:${VERSION}" || true
+            "ghcr.io/simtabi/dbpantry-${ENGINE}:${VERSION}" || true
 
   # ---------------------------------------------------------------------------
   # The acceptance harness, on default versions, on both architectures.

@@ -36,4 +36,4 @@ ferretdb	2	ghcr.io/ferretdb/ferretdb:2@sha256:5706414241eb84f0515512c37b46db0f1b
 # Not an engine: the Go toolchain the gotools stage rebuilds gosu, rclone and
 # postgres_exporter on (DESIGN.md D-51). scripts/build passes it as GO_IMAGE, and
 # check 02 fails if a Dockerfile's GO_IMAGE default disagrees with this row.
-toolchain	go	golang:1.27.2-bookworm@sha256:5cf287a799e6b94384bad13d16b14904c531f51ba65792237e122ce42b392f61
+toolchain	go	golang:1.27.3-bookworm@sha256:d9b6a1beb9474adc2a1ce842573639b44b2a0dd49b6669f51d3821baf9ec37c9

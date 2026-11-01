@@ -1,19 +1,18 @@
-# simtabi/multidb-server-docker
+# simtabi/dbpantry
 
-[![Images](https://img.shields.io/badge/ghcr.io-multidb--server-blue)](https://github.com/simtabi/multidb-server-docker/pkgs/container/multidb-server-pg)
-[![Tests](https://github.com/simtabi/multidb-server-docker/actions/workflows/ci.yml/badge.svg)](https://github.com/simtabi/multidb-server-docker/actions/workflows/ci.yml)
-[![Static analysis](https://github.com/simtabi/multidb-server-docker/actions/workflows/lint.yml/badge.svg)](https://github.com/simtabi/multidb-server-docker/actions/workflows/lint.yml)
+[![Tests](https://github.com/simtabi/dbpantry/actions/workflows/ci.yml/badge.svg)](https://github.com/simtabi/dbpantry/actions/workflows/ci.yml)
+[![Static analysis](https://github.com/simtabi/dbpantry/actions/workflows/lint.yml/badge.svg)](https://github.com/simtabi/dbpantry/actions/workflows/lint.yml)
 [![License MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
 > One local database toolkit for SQL and NoSQL: PostgreSQL, MySQL, MariaDB, MongoDB, Cassandra and FerretDB, each version-switchable, secure by default, with browser UIs — installed once and shared by many projects.
 
-Runs on macOS, Windows and Linux across amd64 and arm64; dev-first, prod-capable. The registry badge is a static label rather than a version badge, because GHCR exposes no shields endpoint for a private package.
+Runs on macOS, Windows and Linux across amd64 and arm64; dev-first, prod-capable.
 
 ## Install
 
 ```bash
-git clone https://github.com/simtabi/multidb-server-docker.git
-cd multidb-server-docker
+git clone https://github.com/simtabi/dbpantry.git
+cd dbpantry
 make init
 make up
 ```
@@ -77,8 +76,8 @@ Adding another is a descriptor file — see [Adding an engine](docs/adding-an-en
 
 ## <a name="documentation"></a>Documentation
 
-Full documentation is hosted at
-**<https://opensource.simtabi.com/documentation/simtabi/multidb-server/>**.
+The documentation lives in [`docs/`](docs/), indexed below. Engine images are not
+published yet; `make build` builds them locally (see [Release](docs/release.md)).
 
 ### Guides
 
@@ -107,9 +106,25 @@ Full documentation is hosted at
 - [Onboarding](docs/ONBOARDING.md) — migrate existing native databases in
 - [Windows](docs/WINDOWS.md) — WSL2 and git-bash notes
 
+## Name
+
+dbpantry was called multidb-server (repository `simtabi/multidb-server-docker`), and
+before that db-toolkit-docker. The rename changed the product, repository and image names
+(`dbpantry-<engine>`) only. These keep their names on purpose, because existing checkouts,
+volumes and integrations depend on them:
+
+- every `MDB_` environment variable;
+- the `mdb` Compose project and its `mdb_net` network, and so every container and volume name;
+- the engine descriptor contract (`engines/*/engine.conf` and its `MDB_ENGINE_*` keys);
+- two strings written into existing data: the PostgreSQL `# multidb-server include` marker and
+  the Patroni `/multidb-server/` namespace.
+
+The decision is [D-54](DESIGN.md#7-decision-log). Check 44 fails on any other use of the old
+names.
+
 ## Community
 
-Issues and discussions: <https://github.com/simtabi/multidb-server-docker/issues>.
+Issues and discussions: <https://github.com/simtabi/dbpantry/issues>.
 
 ## Contributing & security
 

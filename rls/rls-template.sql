@@ -1,4 +1,4 @@
--- multidb-server — PostgreSQL row-level security template (SPEC section 8)
+-- dbpantry — PostgreSQL row-level security template (SPEC section 8)
 --
 -- Multi-tenancy enforced by the database rather than by the application. The
 -- difference matters: an ORM scope you forget to apply leaks every tenant's

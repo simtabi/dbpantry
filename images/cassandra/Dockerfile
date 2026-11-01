@@ -1,4 +1,4 @@
-# multidb-server-cassandra — Apache Cassandra with authentication actually on.
+# dbpantry-cassandra — Apache Cassandra with authentication actually on.
 #
 # The headline: the official image ships `AllowAllAuthenticator` AND
 # `AllowAllAuthorizer`. That is not weak authentication, it is none, with no
@@ -9,7 +9,7 @@
 ARG BASE_IMAGE=cassandra:5.0.9@sha256:1d18946ead0b0d22ed0371bd7384d86f540465c489f2935e88df35e755073f6b
 # The Go toolchain the gotools stage builds with; pinned in images/bases.tsv
 # (row `toolchain go`) and passed by scripts/build, like BASE_IMAGE.
-ARG GO_IMAGE=golang:1.27.2-bookworm@sha256:5cf287a799e6b94384bad13d16b14904c531f51ba65792237e122ce42b392f61
+ARG GO_IMAGE=golang:1.27.3-bookworm@sha256:d9b6a1beb9474adc2a1ce842573639b44b2a0dd49b6669f51d3821baf9ec37c9
 
 # =============================================================================
 # Go tools, rebuilt from their upstream release tags on a patched toolchain
@@ -33,11 +33,11 @@ FROM ${BASE_IMAGE}
 ARG ENGINE_VERSION=5.0
 ARG S6_OVERLAY_VERSION=3.2.3.2
 
-LABEL org.opencontainers.image.title="multidb-server-cassandra" \
+LABEL org.opencontainers.image.title="dbpantry-cassandra" \
       org.opencontainers.image.description="Apache Cassandra with authentication and authorization enabled, supervised by s6-overlay" \
       org.opencontainers.image.vendor="Simtabi LLC" \
       org.opencontainers.image.licenses="Apache-2.0" \
-      org.opencontainers.image.source="https://github.com/simtabi/multidb-server-docker"
+      org.opencontainers.image.source="https://github.com/simtabi/dbpantry"
 
 USER root
 ENV DEBIAN_FRONTEND=noninteractive
@@ -59,6 +59,25 @@ RUN set -eux; \
         2>/dev/null || true)"; \
     apt-get install -y --only-upgrade libpcre2-8-0 libexpat1 perl-base $py311; \
     rm -rf /var/lib/apt/lists/*
+
+# Cassandra vendors its Java dependencies in lib/, and both series ship guava,
+# snappy-java, jackson, netty, lz4-java (and on 4.1 logback and snakeyaml)
+# below their security fixes, with no newer Cassandra release to repin to. Each
+# is replaced with a fixed release from Maven Central, pinned by sha256 in
+# jars.tsv (DESIGN.md D-55). The series is read from the base image itself, so
+# a BASE_IMAGE and ENGINE_VERSION that disagree fail here rather than install
+# the other series' JARs. `cassandra -v` then starts the JVM on the new
+# classpath; the boot checks prove the rest.
+COPY cassandra/jars.tsv /usr/local/share/mdb/cassandra-jars.tsv
+COPY --chmod=0755 cassandra/replace-jars.sh /usr/local/bin/replace-jars
+RUN set -eux; \
+    series="${CASSANDRA_VERSION%.*}"; \
+    if [ "$series" != "$ENGINE_VERSION" ]; then \
+        echo "base image is Cassandra $CASSANDRA_VERSION but ENGINE_VERSION is $ENGINE_VERSION" >&2; \
+        exit 1; \
+    fi; \
+    replace-jars /usr/local/share/mdb/cassandra-jars.tsv "$series" "${CASSANDRA_HOME:?}/lib"; \
+    cassandra -v
 
 # gosu from the gotools stage (DESIGN.md D-51). gosu replaces
 # the base image's copy in place, so its entrypoint keeps calling the same path.

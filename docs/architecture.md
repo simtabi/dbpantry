@@ -1,6 +1,6 @@
 # Architecture
 
-How multidb-server is put together, and why adding a database engine is a descriptor
+How dbpantry is put together, and why adding a database engine is a descriptor
 rather than a refactor.
 
 ## Three layers
@@ -47,7 +47,7 @@ MDB_ENGINE_DUMP_GLOBALS='pg_dumpall --globals-only'
 MDB_ENGINE_RESTORE='pg_restore --no-owner'
 
 MDB_ENGINE_POOLING=external
-MDB_ENGINE_POOLER_IMAGE=ghcr.io/simtabi/multidb-server-pgbouncer:dev
+MDB_ENGINE_POOLER_IMAGE=ghcr.io/simtabi/dbpantry-pgbouncer:dev
 MDB_ENGINE_POOLING_REQUIRED_IN_PROD=true
 
 MDB_ENGINE_LICENSE=PostgreSQL
@@ -125,7 +125,7 @@ logs interleave into an unparsable stream, and per-engine memory limits stop
 meaning anything. Tags explode too — split is a sum, combined is a product, and
 any engine's CVE forces rebuilding all of them.
 
-The single exception is `multidb-server-cli`, because tools are not daemons.
+The single exception is `dbpantry-cli`, because tools are not daemons.
 
 ## Why per-major data volumes
 

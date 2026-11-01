@@ -2,14 +2,14 @@
   "_comment": "Rendered by scripts/env-render into pgAdmin's servers.json so the UI opens with the toolkit's PostgreSQL already listed (SPEC section 7). Contains no password: pgAdmin prompts for it, and the toolkit never writes a credential into a rendered file.",
   "Servers": {
     "1": {
-      "Name": "multidb-server PostgreSQL ${MDB_PG_VERSION:-17}",
-      "Group": "multidb-server",
+      "Name": "dbpantry PostgreSQL ${MDB_PG_VERSION:-17}",
+      "Group": "dbpantry",
       "Host": "pg",
       "Port": 5432,
       "MaintenanceDB": "${MDB_PG_DEFAULT_DB:-postgres}",
       "Username": "postgres",
       "SSLMode": "prefer",
-      "Comment": "Provisioned by multidb-server. Connect over the internal mdb network."
+      "Comment": "Provisioned by dbpantry. Connect over the internal mdb network."
     }
   }
 }

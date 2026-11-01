@@ -20,7 +20,7 @@ Maintained by Docker in partnership with upstream, on the library namespace.
 | `mysql` | MySQL engine base |
 | `mariadb` | MariaDB engine base |
 | `mongo` | MongoDB (referenced, not rebuilt — see [licensing](docs/licensing.md)) |
-| `cassandra` | Cassandra engine base |
+| `cassandra` | Cassandra engine base; vulnerable vendored JARs replaced from Maven Central (see below) |
 | `debian` | the `cli` image base |
 | `golang` | build stage only: rebuilds gosu, rclone and postgres_exporter from their upstream tags ([D-51](DESIGN.md)); never shipped |
 | `caddy` | UI front door |
@@ -55,11 +55,27 @@ stuck at 1.15.0 against a current 1.25.x — it would break the arm64 half of th
 matrix and ship a years-old pooler. Building from PGDG gets the current version
 on both architectures from the PostgreSQL project itself.
 
+## Libraries replaced inside an image
+
+One image changes what its base ships. Cassandra vendors its Java dependencies
+in `lib/`, and where those are below their security fixes with no newer
+Cassandra release to repin to, the image replaces them
+([D-55](DESIGN.md)).
+
+| Image | Replaced from | Pinned in | Checked by |
+|---|---|---|---|
+| `dbpantry-cassandra` | Maven Central, each library's own published release | [`images/cassandra/jars.tsv`](images/cassandra/jars.tsv), by sha256 | `sha256sum` at build, check 45 |
+
+A JAR is only replaced when the fixed release is still binary-compatible with
+the Cassandra series that loads it. snakeyaml 2.x is not, for 4.1, so 4.1 keeps
+the 1.x line and its one waiver in `.trivyignore.yaml`.
+
 ## Pinning
 
 Every reference is pinned by **digest**, not tag, so a moved tag cannot change
 what runs. Engine bases live in [`images/bases.tsv`](images/bases.tsv); check 02
-fails the build on any unpinned reference or floating tag.
+fails the build on any unpinned reference or floating tag. The JARs replaced
+inside the Cassandra image are pinned by sha256 in `images/cassandra/jars.tsv`.
 
 ---
 

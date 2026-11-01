@@ -78,14 +78,14 @@ if [[ -n "$FROM_HOST" ]]; then
             # host doing the migration.
             docker run --rm -i --network host \
                 -v "$ROOT/backups:/backups" \
-                ghcr.io/simtabi/multidb-server-cli:dev \
+                ghcr.io/simtabi/dbpantry-cli:dev \
                 pg_dump -h "$FROM_HOST" -U "$FROM_USER" -Fc "$DB" > "$FILE" \
                 || die "could not dump from $FROM_HOST"
             ;;
         mysql|mariadb)
             docker run --rm -i --network host \
                 -v "$ROOT/backups:/backups" \
-                ghcr.io/simtabi/multidb-server-cli:dev \
+                ghcr.io/simtabi/dbpantry-cli:dev \
                 mariadb-dump -h "$FROM_HOST" -u "$FROM_USER" -p \
                     --single-transaction --routines --triggers --events --quick "$DB" > "$FILE" \
                 || die "could not dump from $FROM_HOST"
