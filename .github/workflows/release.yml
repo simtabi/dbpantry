@@ -1,0 +1,458 @@
+name: Release
+
+# The contract is docs/release.md: a tag `vX.Y.Z` is the only thing that
+# publishes, and nothing is published from a branch, a pull request or by hand.
+# Pushing the tag is the release decision; this workflow only carries it out.
+on:
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+
+permissions:
+  contents: read
+
+# Two runs for one tag would race to push the same manifests. A release is
+# never cancelled half-way: a partly pushed release is worse than a slow one.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # What is being released, and whether it may be.
+  #
+  # Everything that can refuse cheaply refuses here, before a single image is
+  # built: a tag that is not on main, a version with no CHANGELOG section, or a
+  # matrix that would publish MongoDB.
+  # ---------------------------------------------------------------------------
+  prepare:
+    name: resolve release
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      version: ${{ steps.release.outputs.version }}
+      images: ${{ steps.matrix.outputs.images }}
+    steps:
+      # GitHub's own actions float on their major tag, per the Simtabi action
+      # rule: a commit pin is for actions whose tag a third party controls.
+      # Everything third-party here is a checksum-verified binary instead.
+      - uses: actions/checkout@v7
+        with:
+          # Full history: the tag must be checked against main below.
+          fetch-depth: 0
+          # No step in this job pushes, so the token is not kept in .git/config.
+          persist-credentials: false
+
+      - id: release
+        name: Resolve the version from the tag
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          # The trigger's glob is looser than semver; this is the real test.
+          [[ "$TAG" =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+)$ ]] \
+            || { echo "::error::tag $TAG is not vX.Y.Z"; exit 1; }
+          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+
+      # "Nothing is published from a branch": a tag pushed on a feature branch
+      # would otherwise release code that main never reviewed.
+      - name: Refuse a tag that is not on main
+        run: |
+          set -euo pipefail
+          git merge-base --is-ancestor "$GITHUB_SHA" origin/main \
+            || { echo "::error::$GITHUB_REF_NAME points at a commit that is not on main"; exit 1; }
+
+      # The release body is that version's CHANGELOG section. Checked here, so a
+      # missing section fails in seconds rather than after an hour of builds.
+      - name: Require a CHANGELOG section for the version
+        env:
+          VERSION: ${{ steps.release.outputs.version }}
+        run: scripts/release-notes "$VERSION" > /dev/null
+
+      # The same descriptor-derived matrix ci.yml builds, plus the cli image.
+      # MongoDB is referenced, never derived (docs/licensing.md), so ci-matrix
+      # leaves it out; this step fails rather than trusts that.
+      - id: matrix
+        name: Resolve the images to publish
+        run: |
+          set -euo pipefail
+          images="$(scripts/ci-matrix versions | jq -c '. + [{"engine":"cli","version":"dev"}]')"
+          if jq -e 'any(.[]; .engine == "mongodb")' <<<"$images" >/dev/null; then
+            echo "::error::the matrix would publish MongoDB, which is SSPL-licensed and never published"
+            exit 1
+          fi
+          echo "images=$images" >> "$GITHUB_OUTPUT"
+          jq -r '.[] | "\(.engine) \(.version)"' <<<"$images"
+
+  # ---------------------------------------------------------------------------
+  # Gate 1: every image builds and passes the Trivy gate on both architectures.
+  #
+  # Nothing pushes until every image has passed, so a finding in one engine
+  # cannot leave the others half-published under this version. publish rebuilds
+  # and scans again rather than carrying images across jobs; the second scan is
+  # what guards the image that is actually pushed.
+  # ---------------------------------------------------------------------------
+  scan:
+    name: scan ${{ matrix.entry.engine }} ${{ matrix.entry.version }} (${{ matrix.arch }})
+    needs: prepare
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: true
+      matrix:
+        entry: ${{ fromJSON(needs.prepare.outputs.images) }}
+        arch: [amd64, arm64]
+        # Native runners only. There is no emulated build: an image that
+        # cannot be built on arm64 fails the release rather than shipping as
+        # a QEMU build (docs/release.md).
+        include:
+          - arch: amd64
+            runner: ubuntu-latest
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Build ${{ matrix.entry.engine }} ${{ matrix.entry.version }}
+        env:
+          ENGINE: ${{ matrix.entry.engine }}
+          VERSION: ${{ matrix.entry.version }}
+        run: |
+          set -euo pipefail
+          cp .env.example .env
+          # The version is chosen the way `make build` chooses it, through .env.
+          # The cli image has no version variable; scripts/build tags it `dev`.
+          if [ "$ENGINE" != "cli" ]; then
+            upper="$(printf '%s' "$ENGINE" | tr '[:lower:]-' '[:upper:]_')"
+            sed -i "s/^MDB_${upper}_VERSION=.*/MDB_${upper}_VERSION=${VERSION}/" .env
+          fi
+          scripts/build "$ENGINE"
+
+      # The trivy BINARY, pinned and checksum-verified, for the reason given in
+      # ci.yml: 75 of trivy-action's 76 tags were force-pushed in March 2026.
+      - name: Install trivy
+        env:
+          TRIVY_VERSION: 0.73.0
+        run: |
+          set -euo pipefail
+          case "$(uname -m)" in
+            x86_64)  t_arch=64bit ;;
+            aarch64) t_arch=ARM64 ;;
+            *) echo "unsupported architecture: $(uname -m)" >&2; exit 1 ;;
+          esac
+          base="https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}"
+          tarball="trivy_${TRIVY_VERSION}_Linux-${t_arch}.tar.gz"
+          curl -fsSL -o "$tarball" "${base}/${tarball}"
+          curl -fsSL -o checksums.txt "${base}/trivy_${TRIVY_VERSION}_checksums.txt"
+          grep " ${tarball}\$" checksums.txt | sha256sum -c -
+          tar -xzf "$tarball" trivy
+          sudo mv trivy /usr/local/bin/
+          trivy --version
+
+      # The same gate as ci.yml, with the same waivers file: HIGH and CRITICAL
+      # with a known fix fail; an expired waiver no longer applies.
+      - name: Scan ${{ matrix.entry.engine }} ${{ matrix.entry.version }}
+        env:
+          ENGINE: ${{ matrix.entry.engine }}
+          VERSION: ${{ matrix.entry.version }}
+        run: |
+          trivy image --severity HIGH,CRITICAL --ignore-unfixed \
+            --ignorefile .trivyignore.yaml --exit-code 1 --format table \
+            "ghcr.io/simtabi/dbpantry-${ENGINE}:${VERSION}"
+
+  # ---------------------------------------------------------------------------
+  # Gate 2: the acceptance harness, on both architectures.
+  #
+  # `make verify` is the definition of done (docs/release.md). The tagged
+  # commit passed it as a pull request, but a release does not rest on a run
+  # it cannot see: the bases or the waivers' dates may have moved since.
+  # ---------------------------------------------------------------------------
+  verify:
+    name: verify (${{ matrix.arch }})
+    needs: prepare
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 90
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-latest
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      # Same pinned version as lint.yml; see the note there.
+      - name: Install shellcheck
+        env:
+          SHELLCHECK_VERSION: v0.11.0
+        run: |
+          set -euo pipefail
+          curl -fsSL -o sc.tar.xz \
+            "https://github.com/koalaman/shellcheck/releases/download/${SHELLCHECK_VERSION}/shellcheck-${SHELLCHECK_VERSION}.linux.$(uname -m).tar.xz"
+          tar -xJf sc.tar.xz
+          sudo install -m 0755 "shellcheck-${SHELLCHECK_VERSION}/shellcheck" /usr/local/bin/shellcheck
+
+      - name: Confirm docker is available
+        run: docker info
+
+      - name: Harness structure
+        run: make verify-structure
+
+      - name: Initialise the checkout
+        run: make init
+
+      - name: Build the engine images
+        run: make build
+
+      - name: Full acceptance harness
+        run: make verify
+
+      - name: Container logs on failure
+        if: failure()
+        run: |
+          docker ps -a --format '{{.Names}}\t{{.Status}}'
+          for c in $(docker ps -aq); do
+            echo "=== $(docker inspect -f '{{.Name}}' "$c") ==="
+            docker logs --tail 50 "$c" 2>&1 || true
+          done
+
+  # ---------------------------------------------------------------------------
+  # Publish: build, scan again, push one image per architecture, and attach its
+  # SBOM and build provenance to it.
+  #
+  # Each architecture is pushed under its own tag (`<tag>-amd64`, `-arm64`);
+  # the manifest job joins them under the tags people pull. Docker login and
+  # SBOM generation use the CLI and a checksum-verified syft binary, not
+  # third-party actions, for the same reason trivy is installed that way.
+  # ---------------------------------------------------------------------------
+  publish:
+    name: publish ${{ matrix.entry.engine }} ${{ matrix.entry.version }} (${{ matrix.arch }})
+    needs: [prepare, scan, verify]
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      packages: write          # push to ghcr.io/simtabi
+      id-token: write          # sign the attestations (Sigstore)
+      attestations: write      # store them
+      artifact-metadata: write # the storage record for a pushed attestation
+    strategy:
+      fail-fast: true
+      matrix:
+        entry: ${{ fromJSON(needs.prepare.outputs.images) }}
+        arch: [amd64, arm64]
+        include:
+          - arch: amd64
+            runner: ubuntu-latest
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Build ${{ matrix.entry.engine }} ${{ matrix.entry.version }}
+        env:
+          ENGINE: ${{ matrix.entry.engine }}
+          VERSION: ${{ matrix.entry.version }}
+        run: |
+          set -euo pipefail
+          cp .env.example .env
+          if [ "$ENGINE" != "cli" ]; then
+            upper="$(printf '%s' "$ENGINE" | tr '[:lower:]-' '[:upper:]_')"
+            sed -i "s/^MDB_${upper}_VERSION=.*/MDB_${upper}_VERSION=${VERSION}/" .env
+          fi
+          scripts/build "$ENGINE"
+
+      - name: Install trivy and syft
+        env:
+          TRIVY_VERSION: 0.73.0
+          SYFT_VERSION: 1.55.0
+        run: |
+          set -euo pipefail
+          case "$(uname -m)" in
+            x86_64)  t_arch=64bit; s_arch=amd64 ;;
+            aarch64) t_arch=ARM64; s_arch=arm64 ;;
+            *) echo "unsupported architecture: $(uname -m)" >&2; exit 1 ;;
+          esac
+          base="https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}"
+          tarball="trivy_${TRIVY_VERSION}_Linux-${t_arch}.tar.gz"
+          curl -fsSL -o "$tarball" "${base}/${tarball}"
+          curl -fsSL -o trivy-checksums.txt "${base}/trivy_${TRIVY_VERSION}_checksums.txt"
+          grep " ${tarball}\$" trivy-checksums.txt | sha256sum -c -
+          tar -xzf "$tarball" trivy
+          sudo mv trivy /usr/local/bin/
+
+          base="https://github.com/anchore/syft/releases/download/v${SYFT_VERSION}"
+          tarball="syft_${SYFT_VERSION}_linux_${s_arch}.tar.gz"
+          curl -fsSL -o "$tarball" "${base}/${tarball}"
+          curl -fsSL -o syft-checksums.txt "${base}/syft_${SYFT_VERSION}_checksums.txt"
+          grep " ${tarball}\$" syft-checksums.txt | sha256sum -c -
+          tar -xzf "$tarball" syft
+          sudo mv syft /usr/local/bin/
+          trivy --version
+          syft version
+
+      - name: Scan the image about to be pushed
+        env:
+          ENGINE: ${{ matrix.entry.engine }}
+          VERSION: ${{ matrix.entry.version }}
+        run: |
+          trivy image --severity HIGH,CRITICAL --ignore-unfixed \
+            --ignorefile .trivyignore.yaml --exit-code 1 --format table \
+            "ghcr.io/simtabi/dbpantry-${ENGINE}:${VERSION}"
+
+      - id: push
+        name: Push ${{ matrix.entry.engine }} ${{ matrix.entry.version }} (${{ matrix.arch }})
+        env:
+          ENGINE: ${{ matrix.entry.engine }}
+          VERSION: ${{ matrix.entry.version }}
+          RELEASE: ${{ needs.prepare.outputs.version }}
+          ARCH: ${{ matrix.arch }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          repo="ghcr.io/simtabi/dbpantry-${ENGINE}"
+          # An engine's immutable tag is <major>-<release> (17-0.1.1); the cli
+          # image has no database version, so its tag is the release itself.
+          if [ "$ENGINE" = "cli" ]; then immutable="$RELEASE"; else immutable="${VERSION}-${RELEASE}"; fi
+          printf '%s' "$GH_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+          docker tag "${repo}:${VERSION}" "${repo}:${immutable}-${ARCH}"
+          # The digest is read from what the registry acknowledged, not from
+          # RepoDigests, whose meaning differs under the containerd image store.
+          docker push "${repo}:${immutable}-${ARCH}" | tee push.log
+          digest="$(grep -oE 'digest: sha256:[0-9a-f]{64}' push.log | tail -1 | cut -d' ' -f2)"
+          [ -n "$digest" ] || { echo "::error::no digest in the push output"; exit 1; }
+          echo "pushed ${repo}:${immutable}-${ARCH} @ ${digest}"
+          echo "repo=$repo" >> "$GITHUB_OUTPUT"
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
+          syft scan "docker:${repo}:${immutable}-${ARCH}" -o "spdx-json=sbom.spdx.json"
+
+      - name: Attach the SBOM
+        uses: actions/attest@v4
+        with:
+          subject-name: ${{ steps.push.outputs.repo }}
+          subject-digest: ${{ steps.push.outputs.digest }}
+          sbom-path: sbom.spdx.json
+          push-to-registry: true
+
+      - name: Attach the build provenance
+        uses: actions/attest@v4
+        with:
+          subject-name: ${{ steps.push.outputs.repo }}
+          subject-digest: ${{ steps.push.outputs.digest }}
+          push-to-registry: true
+
+  # ---------------------------------------------------------------------------
+  # Join the two architectures under the tags people pull.
+  #
+  # Engines get `<major>` (17), which follows the newest release, and
+  # `<major>-<release>` (17-0.1.1), which never moves. The cli image gets
+  # `<release>`. `latest` appears nowhere (CLAUDE.md).
+  # ---------------------------------------------------------------------------
+  manifest:
+    name: manifest ${{ matrix.entry.engine }} ${{ matrix.entry.version }}
+    needs: [prepare, publish]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+      artifact-metadata: write
+    strategy:
+      fail-fast: false
+      matrix:
+        entry: ${{ fromJSON(needs.prepare.outputs.images) }}
+    steps:
+      - id: create
+        name: Create the multi-architecture manifest
+        env:
+          ENGINE: ${{ matrix.entry.engine }}
+          VERSION: ${{ matrix.entry.version }}
+          RELEASE: ${{ needs.prepare.outputs.version }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          repo="ghcr.io/simtabi/dbpantry-${ENGINE}"
+          if [ "$ENGINE" = "cli" ]; then
+            immutable="$RELEASE"; tags=(-t "${repo}:${RELEASE}")
+          else
+            immutable="${VERSION}-${RELEASE}"; tags=(-t "${repo}:${immutable}" -t "${repo}:${VERSION}")
+          fi
+          printf '%s' "$GH_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+          docker buildx imagetools create "${tags[@]}" \
+            "${repo}:${immutable}-amd64" "${repo}:${immutable}-arm64"
+          digest="$(docker buildx imagetools inspect "${repo}:${immutable}" --format '{{json .Manifest}}' | jq -r .digest)"
+          echo "published ${repo}:${immutable} @ ${digest}"
+          echo "repo=$repo" >> "$GITHUB_OUTPUT"
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
+
+      - name: Attach the build provenance to the manifest
+        uses: actions/attest@v4
+        with:
+          subject-name: ${{ steps.create.outputs.repo }}
+          subject-digest: ${{ steps.create.outputs.digest }}
+          push-to-registry: true
+
+  # ---------------------------------------------------------------------------
+  # The GitHub release, last: it announces images that already exist.
+  #
+  # The body is the version's CHANGELOG section with the contributors since
+  # the previous tag appended (docs/release.md), and the source tarball is
+  # attached with its checksum and provenance.
+  # ---------------------------------------------------------------------------
+  release:
+    name: GitHub release
+    needs: [prepare, manifest]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write          # create the release
+      id-token: write
+      attestations: write
+      artifact-metadata: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Write the release notes and the source tarball
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          scripts/release-notes "$VERSION" > notes.md
+          prev="$(git describe --tags --abbrev=0 "${TAG}^" 2>/dev/null || true)"
+          range="${prev:+${prev}..}${TAG}"
+          {
+            printf '\n### Contributors\n\n'
+            git log --format='%aN' "$range" | grep -v '\[bot\]$' | sort -fu | sed 's/^/- /'
+          } >> notes.md
+          git archive --format=tar.gz --prefix="dbpantry-${VERSION}/" \
+            -o "dbpantry-${VERSION}.tar.gz" "$TAG"
+          sha256sum "dbpantry-${VERSION}.tar.gz" > "dbpantry-${VERSION}.tar.gz.sha256"
+          cat notes.md
+
+      - name: Attach the build provenance to the tarball
+        uses: actions/attest@v4
+        with:
+          subject-path: dbpantry-${{ needs.prepare.outputs.version }}.tar.gz
+
+      - name: Create the release
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+          TAG: ${{ github.ref_name }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$TAG" --verify-tag --title "$TAG" --notes-file notes.md \
+            "dbpantry-${VERSION}.tar.gz" "dbpantry-${VERSION}.tar.gz.sha256"
