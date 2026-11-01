@@ -20,7 +20,7 @@ make up
 PostgreSQL and Adminer are running, with **no host port published** — your
 application joins the `mdb_net` network and connects to `pg:5432`. Set
 `MDB_PUBLISH=direct` (or `proxy`) when a GUI client needs a host port; see
-[Configuration](docs/configuration.md).
+[Configuration](docs/guides/configuration.md).
 
 Add engines with profiles:
 
@@ -55,7 +55,7 @@ make backup ENGINE=pg DB=myapp     # one database
 make verify-backups                # restore them into throwaway containers
 ```
 
-The full walkthrough is in [Getting started](docs/getting-started.md); everything
+The full walkthrough is in [Getting started](docs/guides/getting-started.md); everything
 else is in the [documentation index](#documentation).
 
 ## Engines
@@ -68,50 +68,57 @@ of the box — correcting that is a large part of why this exists.
 | PostgreSQL | relational | **17** · 18 | pgBouncer (required in prod) | PostgreSQL |
 | MySQL | relational | **8.4** · 9.7 (both LTS) | ProxySQL (optional) | GPL-2.0 |
 | MariaDB | relational | **11.8** · 12.3 (both LTS) | ProxySQL (optional) | GPL-2.0 |
-| MongoDB | document | **7.0** · 8.0 · 9.0 | driver-side | SSPL — [referenced, not published](docs/licensing.md) |
+| MongoDB | document | **7.0** · 8.0 · 9.0 | driver-side | SSPL — [referenced, not published](docs/guides/licensing.md) |
 | Cassandra | wide-column | **5.0** | driver-side | Apache-2.0 |
-| FerretDB | document | **2** | driver-side | Apache-2.0 |
+| FerretDB | document | **2** | driver-side | Apache-2.0 — declared, image not built yet ([why](docs/guides/adding-an-engine.md)) |
 
 Bold is the default. Each engine maintains the newest supported line and the one
 before it; those are the versions built, scanned and verified here. An older
 version still runs, unsupported and with no scan guarantee, by naming its upstream
-image in `MDB_<ENGINE>_BASE_IMAGE` — see [Supported versions](docs/versions.md).
+image in `MDB_<ENGINE>_BASE_IMAGE` — see [Supported versions](docs/guides/versions.md).
 
-Adding another is a descriptor file — see [Adding an engine](docs/adding-an-engine.md).
+Adding another is a descriptor file — see [Adding an engine](docs/guides/adding-an-engine.md).
 
 ## <a name="documentation"></a>Documentation
 
 The documentation lives in [`docs/`](docs/), indexed below. Engine images are not
 published yet: the release workflow publishes them from the next tag, and until
-then `make build` builds them locally (see [Release](docs/release.md)).
+then `make build` builds them locally (see [Release](docs/guides/release.md)).
 
-### Guides
+### Guides — `docs/guides/`
 
-- [Installation](docs/installation.md) — prerequisites and first run
-- [Getting started](docs/getting-started.md) — a new project connected in under a minute
-- [Configuration](docs/configuration.md) — every `MDB_` variable
-- [Supported versions](docs/versions.md) — which versions are maintained, and running any other
-- [Architecture](docs/architecture.md) — how engines are declared rather than hardcoded
-- [Adding an engine](docs/adding-an-engine.md) — the extensibility contract
-- [Connection pooling](docs/pooling.md) — why the answer differs per engine
-- [Licensing](docs/licensing.md) — what you are running, and under what terms
-- [Image provenance](IMAGE-PROVENANCE.md) — every image, its publisher, and why
-- [Operations](docs/OPERATIONS.md) — VPS, exposure, tuning, HA
-- [Release](docs/release.md) — how versions ship
+Read once, to learn how the toolkit works and how to set it up.
 
-### Reference
+- [Installation](docs/guides/installation.md) — prerequisites and first run
+- [Getting started](docs/guides/getting-started.md) — a new project connected in under a minute
+- [Configuration](docs/guides/configuration.md) — every `MDB_` variable
+- [Supported versions](docs/guides/versions.md) — which versions are maintained, and running any other
+- [Architecture](docs/guides/architecture.md) — how engines are declared rather than hardcoded
+- [Adding an engine](docs/guides/adding-an-engine.md) — the extensibility contract
+- [Connection pooling](docs/guides/pooling.md) — why the answer differs per engine
+- [Licensing](docs/guides/licensing.md) — what you are running, and under what terms
+- [Release](docs/guides/release.md) — how versions ship
 
-- [Specification](docs/SPEC.md) — the build contract
-- [Acceptance](docs/acceptance.md) — every criterion mapped to the check that proves it
+### Runbooks — `docs/runbooks/`
+
+Followed step by step, often under pressure.
+
+- [Operations](docs/runbooks/OPERATIONS.md) — VPS, exposure, tuning, HA
+- [Restore](docs/runbooks/RESTORE.md) — the 2am runbook
+- [Upgrade](docs/runbooks/UPGRADE.md) — guided major-version migration
+- [Onboarding](docs/runbooks/ONBOARDING.md) — migrate existing native databases in
+- [Windows](docs/runbooks/WINDOWS.md) — WSL2 and git-bash notes
+
+### Reference — `docs/reference/`
+
+Looked up to check the contract, the evidence, or a fact.
+
+- [Specification](docs/reference/SPEC.md) — the build contract
+- [Acceptance](docs/reference/acceptance.md) — every criterion mapped to the check that proves it
+- [Image provenance](docs/reference/image-provenance.md) — every image, its publisher, and why
 - [Design](DESIGN.md) — pinned versions, capacity table, decision log
 - [Row-level security kit](rls/README.md) — database-enforced multi-tenancy
-
-### Recipes
-
-- [Restore](docs/RESTORE.md) — the 2am runbook
-- [Upgrade](docs/UPGRADE.md) — guided major-version migration
-- [Onboarding](docs/ONBOARDING.md) — migrate existing native databases in
-- [Windows](docs/WINDOWS.md) — WSL2 and git-bash notes
+- [Repository layout](docs/REORGANIZATION_PLAN.md) — where each file lives, and why
 
 ## Name
 
@@ -140,4 +147,4 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) and [SECURITY.md](SECURITY.md).
 ## License
 
 MIT for this repository. Published images inherit the licence of the database
-they contain — see [Licensing](docs/licensing.md). See [LICENSE](LICENSE).
+they contain — see [Licensing](docs/guides/licensing.md). See [LICENSE](LICENSE).

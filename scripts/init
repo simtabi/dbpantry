@@ -78,7 +78,7 @@ gen_secret patroni_rest_password.txt
 
 # Poolers hold a credential of their own. pgBouncer never stores an application
 # user's password -- it looks verifiers up with auth_query -- so this is the
-# only one it has. See docs/pooling.md.
+# only one it has. See docs/guides/pooling.md.
 gen_secret pgbouncer_password.txt
 
 # ProxySQL's admin interface and its monitor account. Neither is an application

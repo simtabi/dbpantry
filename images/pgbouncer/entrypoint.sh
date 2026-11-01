@@ -20,7 +20,7 @@ chmod 0600 "$AUTH_FILE"
 
 # pgBouncer authenticates itself to PostgreSQL with this, and resolves every
 # other user through auth_query -- so this is the only credential it holds.
-# See docs/pooling.md and DESIGN.md D-35.
+# See docs/guides/pooling.md and DESIGN.md D-35.
 if [ -n "${DB_USER:-}" ] && [ -n "${DB_PASSWORD:-}" ]; then
     printf '"%s" "%s"\n' "$DB_USER" "$DB_PASSWORD" >> "$AUTH_FILE"
 fi

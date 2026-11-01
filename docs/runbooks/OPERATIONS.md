@@ -50,7 +50,7 @@ MDB_MTLS=true
 
 `proxy` mode is worth preferring here: one front door is one thing to firewall,
 one thing to audit, and one place a rule can be wrong. It uses Caddy with the
-layer4 module — see [image provenance](../IMAGE-PROVENANCE.md). That module is
+layer4 module — see [image provenance](../reference/image-provenance.md). That module is
 pre-1.0, so if you would rather not have it in the connection path, `direct`
 publishes the same ports without it.
 
@@ -91,7 +91,7 @@ MDB_CASSANDRA_HEAP_NEW=800M
 ## Connection pooling
 
 On a server this stops being optional for PostgreSQL. See
-[Connection pooling](pooling.md) for why, and for what transaction pooling
+[Connection pooling](../guides/pooling.md) for why, and for what transaction pooling
 breaks. Short version:
 
 ```bash
@@ -113,6 +113,13 @@ MDB_BACKUP_RETAIN_WEEKLY=4
 MDB_BACKUP_RETAIN_MONTHLY=6
 MDB_BACKUP_NOTIFY_URL=https://...
 ```
+
+Each backup run, scheduled or `make backup-all`, prunes dumps
+(`<engine>_<db>_<timestamp>.*`) older than `MDB_BACKUP_RETAIN_DAILY` days. Other
+files in the directory are left alone. That includes the backup checks in
+`make verify`, which run against this same directory. Only the daily window is
+enforced today: `MDB_BACKUP_RETAIN_WEEKLY` and `MDB_BACKUP_RETAIN_MONTHLY` are
+read by nothing yet.
 
 Two things that are not optional on a server:
 
@@ -341,4 +348,4 @@ restoring until you know which problem you have.
 
 ---
 
-[← Docs index](../README.md#documentation)
+[← Docs index](../../README.md#documentation)

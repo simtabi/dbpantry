@@ -21,7 +21,7 @@ RUN set -eux; \
         ca-certificates curl gnupg postgresql-common; \
     # PGDG rather than Debian stable: pgBouncer's transaction-pooling
     # behaviour around prepared statements changed materially in 1.21, and
-    # docs/pooling.md relies on the newer behaviour.
+    # docs/guides/pooling.md relies on the newer behaviour.
     /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y; \
     apt-get update; \
     apt-get install -y --no-install-recommends pgbouncer; \

@@ -9,13 +9,14 @@ cd "$MDB_ROOT" || exit 1
 
 for d in images/pg images/mysql images/mariadb images/cli \
          overrides/pg overrides/mysql overrides/mariadb \
-         caddy scripts scripts/verify rls docs .github/workflows; do
+         config/caddy config/haproxy config/proxysql \
+         scripts scripts/verify rls docs .github/workflows; do
     need_dir "$MDB_ROOT/$d"
 done
 
 for f in Makefile .env.example .gitignore .gitattributes .editorconfig \
          README.md CONTRIBUTING.md SECURITY.md CODE_OF_CONDUCT.md CHANGELOG.md LICENSE \
-         CLAUDE.md DESIGN.md docs/SPEC.md docs/KIT.md; do
+         CLAUDE.md DESIGN.md docs/reference/SPEC.md docs/reference/KIT.md; do
     need_file "$MDB_ROOT/$f"
 done
 

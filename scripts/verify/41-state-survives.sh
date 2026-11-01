@@ -34,6 +34,9 @@ unmapped=0
 while IFS= read -r engine; do
     [[ -z "$engine" ]] && continue
     engine_load "$engine" || continue
+    # No service is generated for an engine with no image yet (gen-compose),
+    # so it has no data dir to map; check 47 and check-env cover that state.
+    engine_implemented || continue
     grep -q -- "- ${MDB_ENGINE_NAME}_data:${MDB_ENGINE_DATA_DIR}" "$MDB_ROOT/compose.engines.yml" \
         || { printf '      %s: data dir %s is not mapped to a named volume\n' \
                 "$MDB_ENGINE_NAME" "$MDB_ENGINE_DATA_DIR" >&2; unmapped=$(( unmapped + 1 )); }

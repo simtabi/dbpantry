@@ -34,7 +34,7 @@ all_profiles := --profile '*'
 # Emit a consistent "not implemented" failure. $(1) is the owning phase.
 define unimplemented
 	@printf '\033[33m✗ %s\033[0m is scaffolded but not implemented yet (phase %s).\n' "$@" "$(1)" >&2; \
-	printf '  See docs/KIT.md section 5 for what that phase delivers.\n' >&2; \
+	printf '  See docs/reference/KIT.md section 5 for what that phase delivers.\n' >&2; \
 	exit 1
 endef
 
@@ -236,8 +236,8 @@ ha-reinit: ## Rebuild one replica from the current leader (NODE=)
 # -----------------------------------------------------------------------------
 
 .PHONY: verify
-verify: ## Full acceptance harness (SPEC section 18 as scripts)
-	@scripts/verify/run.sh
+verify: ## Full acceptance harness (SPEC section 18 as scripts); CHECKS=21,28 or TAGS=pg,backup to narrow
+	@VERIFY_CHECKS="$(CHECKS)" VERIFY_TAGS="$(or $(TAGS),$(VERIFY_TAGS))" scripts/verify/run.sh
 
 .PHONY: verify-fast
 verify-fast: ## Inner-loop subset of the harness

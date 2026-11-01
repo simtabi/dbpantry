@@ -116,10 +116,19 @@ engine_has_external_pooler() { [ "${MDB_ENGINE_POOLING:-}" = "external" ]; }
 engine_is_heavy()            { [ "${MDB_ENGINE_HEAVY:-false}" = "true" ]; }
 engine_tls_always()          { [ "${MDB_ENGINE_TLS_ALWAYS:-false}" = "true" ]; }
 
+# Can the currently loaded engine actually run? A referenced engine runs the
+# upstream image; a derived one needs its Dockerfile under images/. A descriptor
+# can land before its image does, and an engine in that state must be refused
+# by name rather than handed to compose as a build that cannot succeed.
+engine_implemented() {
+    [ "${MDB_ENGINE_PUBLISH:-derive}" = "reference" ] \
+        || [ -f "$MDB_ENGINES_DIR/../images/${MDB_ENGINE_NAME}/Dockerfile" ]
+}
+
 # Is a version on this engine's supported menu?
 #
 # The menu holds MAINTAINED versions only: the newest supported line and the one
-# before it (DESIGN.md D-57, docs/versions.md). A version off the menu is not
+# before it (DESIGN.md D-57, docs/guides/versions.md). A version off the menu is not
 # refused outright. It runs from MDB_<ENGINE>_BASE_IMAGE, unsupported, and
 # check-env says so; see engine_base_override.
 engine_supports_version() {

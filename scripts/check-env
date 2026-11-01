@@ -121,25 +121,37 @@ check_version() {
 
     if engine_supports_version "$value"; then
         [[ -z "$base" ]] || warn "$base_key replaces the pinned base for $key=$value.
-       UNSUPPORTED: built from your image, not ours; no scan guarantee (docs/versions.md)."
+       UNSUPPORTED: built from your image, not ours; no scan guarantee (docs/guides/versions.md)."
         return 0
     fi
 
     if [[ -n "$base" ]]; then
         warn "$key=$value is not a maintained version (maintained: $MDB_ENGINE_VERSIONS).
        Running it from $base_key. UNSUPPORTED: not built, scanned or verified
-       here; no scan guarantee (docs/versions.md)."
+       here; no scan guarantee (docs/guides/versions.md)."
     else
         err "$key=$value is not a maintained version (maintained: $MDB_ENGINE_VERSIONS).
        To run it anyway, set $base_key to its upstream image pinned by
        digest (name:tag@sha256:<digest>). That is unsupported: no scan
-       guarantee. See docs/versions.md."
+       guarantee. See docs/guides/versions.md."
     fi
 }
 
 for _engine in $(engine_list); do
     engine_load "$_engine" || continue
     check_version "$(printf '%s' "$MDB_ENGINE_NAME" | tr '[:lower:]-' '[:upper:]_')"
+done
+
+# A profile naming an engine whose image does not exist yet. Without this,
+# compose fails with a missing-Dockerfile path that names neither the engine
+# nor the reason. Same profile resolution as the port check below.
+_selected=",${COMPOSE_PROFILES:-${MDB_CHECK_PROFILES:-$(get MDB_PROFILES)}},"
+for _engine in $(engine_list); do
+    [[ "$_selected" == *,"$_engine",* ]] || continue
+    engine_load "$_engine" || continue
+    engine_implemented \
+        || err "profile '$_engine' names an engine that is declared but not built yet
+       (no images/$_engine/Dockerfile). Remove it from PROFILES / MDB_PROFILES."
 done
 
 # PostgreSQL 18 moved the expected mount point. Up to 17 the data directory is

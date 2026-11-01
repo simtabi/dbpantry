@@ -171,7 +171,7 @@ services:
     networks: [mdb]
     depends_on: [patroni1, patroni2, patroni3]
     volumes:
-      - ./haproxy/haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro
+      - ./config/haproxy/haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro
     ports:
       - "${MDB_BIND_ADDR:-127.0.0.1}:${MDB_HAPROXY_WRITE_PORT:-5432}:5432"
       - "${MDB_BIND_ADDR:-127.0.0.1}:${MDB_HAPROXY_READ_PORT:-5433}:5433"

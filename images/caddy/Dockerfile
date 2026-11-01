@@ -6,7 +6,7 @@
 #
 # Built with xcaddy from Caddy's own official builder image, the same way the
 # pgBouncer image is built from a Docker Official base -- see
-# IMAGE-PROVENANCE.md. Both stages are digest-pinned.
+# docs/reference/image-provenance.md. Both stages are digest-pinned.
 #
 # caddy-l4 is pre-1.0 and its author says to expect breaking changes, so it is
 # pinned to an exact commit rather than a branch. It is also why MDB_PUBLISH

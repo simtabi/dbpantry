@@ -14,9 +14,12 @@ Three files, sometimes two:
 | `engines/_family/<family>.sh` | Only for a new family | The handful of operations that genuinely need code |
 | `images/<name>/Dockerfile` | Only when publishing | Absent for engines we reference rather than build |
 
-An engine joining an existing family costs **one file**. FerretDB speaks the
-MongoDB wire protocol, so it declared `MDB_ENGINE_FAMILY=mongodb` and inherited
-`mongosh`, `mongodump` and `mongorestore` without a line of new code.
+An engine joining an existing family costs **one file** to declare. FerretDB
+speaks the MongoDB wire protocol, so it declared `MDB_ENGINE_FAMILY=mongodb` and
+inherited `mongosh`, `mongodump` and `mongorestore` without a line of new code.
+Declaring is not running, though: a derived engine also needs its
+`images/<name>/Dockerfile`, and until it has one `gen-compose` emits no service
+for it and `check-env` refuses its profile. FerretDB is in that state today.
 
 ## 1. Write the descriptor
 
@@ -54,7 +57,7 @@ MDB_ENGINE_POOLING_RATIONALE='clients multiplex over one connection'
 
 MDB_ENGINE_LICENSE=RSALv2
 MDB_ENGINE_OSI_APPROVED=false
-MDB_ENGINE_LICENSE_NOTE='Source-available since 7.4. See docs/licensing.md.'
+MDB_ENGINE_LICENSE_NOTE='Source-available since 7.4. See docs/guides/licensing.md.'
 MDB_ENGINE_PUBLISH=reference
 
 MDB_ENGINE_OVERRIDES_DIR=/mdb/overrides
@@ -168,4 +171,4 @@ has a genuine gap and that is worth an issue.
 
 ---
 
-[← Docs index](../README.md#documentation)
+[← Docs index](../../README.md#documentation)

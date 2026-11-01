@@ -27,11 +27,10 @@ jobs:
     outputs:
       versions: ${{ steps.gen.outputs.versions }}
     steps:
-      # Pinned to the commit, not the tag, for the same reason the trivy binary
-      # is checksum-verified below: 75 of trivy-action's 76 tags were force-
-      # pushed in the 2026 supply-chain attack, and tj-actions spread the same
-      # way. Dependabot's github-actions ecosystem bumps the SHA and keeps the
-      # version comment current.
+      # Pinned by tag today, not yet by commit (see .github/dependabot.yml).
+      # A tag can be moved: 75 of trivy-action's 76 tags were force-pushed in
+      # the 2026 supply-chain attack, which is why the trivy binary below is
+      # checksum-verified. Re-pinning this to a SHA is the open follow-up.
       - uses: actions/checkout@v7
         with:
           # No job in this workflow pushes, so the token has no business
@@ -70,11 +69,10 @@ jobs:
             runner: ubuntu-24.04-arm
 
     steps:
-      # Pinned to the commit, not the tag, for the same reason the trivy binary
-      # is checksum-verified below: 75 of trivy-action's 76 tags were force-
-      # pushed in the 2026 supply-chain attack, and tj-actions spread the same
-      # way. Dependabot's github-actions ecosystem bumps the SHA and keeps the
-      # version comment current.
+      # Pinned by tag today, not yet by commit (see .github/dependabot.yml).
+      # A tag can be moved: 75 of trivy-action's 76 tags were force-pushed in
+      # the 2026 supply-chain attack, which is why the trivy binary below is
+      # checksum-verified. Re-pinning this to a SHA is the open follow-up.
       - uses: actions/checkout@v7
         with:
           # No job in this workflow pushes, so the token has no business
@@ -176,11 +174,10 @@ jobs:
             runner: ubuntu-24.04-arm
 
     steps:
-      # Pinned to the commit, not the tag, for the same reason the trivy binary
-      # is checksum-verified below: 75 of trivy-action's 76 tags were force-
-      # pushed in the 2026 supply-chain attack, and tj-actions spread the same
-      # way. Dependabot's github-actions ecosystem bumps the SHA and keeps the
-      # version comment current.
+      # Pinned by tag today, not yet by commit (see .github/dependabot.yml).
+      # A tag can be moved: 75 of trivy-action's 76 tags were force-pushed in
+      # the 2026 supply-chain attack, which is why the trivy binary below is
+      # checksum-verified. Re-pinning this to a SHA is the open follow-up.
       - uses: actions/checkout@v7
         with:
           # No job in this workflow pushes, so the token has no business

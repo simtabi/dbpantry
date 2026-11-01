@@ -81,7 +81,7 @@ services:
     volumes:
       # Rendered by scripts/env-render so the UI opens with the server already
       # listed rather than asking for a hostname (SPEC section 7).
-      - ./caddy/servers.json:/pgadmin4/servers.json:ro
+      - ./config/caddy/servers.json:/pgadmin4/servers.json:ro
       - pgadmin_data:/var/lib/pgadmin
     # A compose SECRET rather than the ./secrets bind mount every other service
     # uses, because pgAdmin is the only one that reads a secret as a non-root
@@ -111,7 +111,7 @@ services:
     profiles: [ui, prod]
     # Built here: stock Caddy proxies HTTP, and the database engines speak raw
     # TCP. images/caddy/Dockerfile adds caddy-l4 so ONE front door can own the
-    # host ports for every engine. See IMAGE-PROVENANCE.md.
+    # host ports for every engine. See docs/reference/image-provenance.md.
     build:
       context: ./images
       dockerfile: caddy/Dockerfile
@@ -125,9 +125,9 @@ services:
     volumes:
       # Generated from the engine descriptors by scripts/gen-compose; empty
       # unless MDB_PUBLISH=proxy.
-      - ./caddy/layer4.caddy:/etc/caddy/layer4.caddy:ro
-      # Rendered from caddy/Caddyfile.tmpl (dev) or Caddyfile.prod.tmpl (prod).
-      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./config/caddy/layer4.caddy:/etc/caddy/layer4.caddy:ro
+      # Rendered from config/caddy/Caddyfile.tmpl (dev) or Caddyfile.prod.tmpl (prod).
+      - ./config/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
       # Persisted so the internal CA and any issued certificates survive a
       # restart; without this every `make up` would mint a new local CA and
       # browsers would warn again each time.

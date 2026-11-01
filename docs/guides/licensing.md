@@ -61,7 +61,10 @@ Running MongoDB as a dependency of your own application does not trigger it.
 That is a summary, not legal advice — if you are building a hosted product on
 MongoDB, read the licence.
 
-**If SSPL is unacceptable to you**, use the `ferretdb` engine instead. It is
+**If SSPL is unacceptable to you**, the `ferretdb` engine is the intended
+alternative — but it is declared, not yet built: there is no
+`images/ferretdb/Dockerfile`, so `check-env` refuses the profile until there is.
+It is
 Apache 2.0, speaks the MongoDB wire protocol so your existing drivers connect
 unchanged, and stores data in PostgreSQL. Its limitations are real and
 documented rather than glossed: no `$lookup` or `$facet` aggregation stages,
@@ -93,4 +96,4 @@ gh attestation verify oci://ghcr.io/simtabi/dbpantry-pg:17 --owner simtabi
 
 ---
 
-[← Docs index](../README.md#documentation)
+[← Docs index](../../README.md#documentation)

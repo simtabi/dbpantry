@@ -9,7 +9,7 @@ What you need before `make up`, and what to do when the usual things go wrong.
 | Docker Engine | 24.0 | Compose v2 must be the `docker compose` subcommand, not `docker-compose` |
 | RAM allocated to Docker | 4 GB | 8 GB if you run Cassandra, which alone wants ~2 GB |
 | Disk | 20 GB | Images are large; PostgreSQL alone with extensions is ~1 GB per major |
-| `make` | any | Preinstalled on macOS and Linux; on Windows see [WINDOWS.md](WINDOWS.md) |
+| `make` | any | Preinstalled on macOS and Linux; on Windows see [WINDOWS.md](../runbooks/WINDOWS.md) |
 | `bash` | 3.2 | macOS ships 3.2 from 2007 and every script here supports it |
 
 Check the first one:
@@ -90,7 +90,7 @@ day.
 
 ## When it goes wrong
 
-**`make: command not found` on Windows.** Use WSL2. See [WINDOWS.md](WINDOWS.md).
+**`make: command not found` on Windows.** Use WSL2. See [WINDOWS.md](../runbooks/WINDOWS.md).
 
 **Port already in use.** `make up` refuses before starting anything and names
 the port and the setting:
@@ -133,4 +133,4 @@ reporting.
 
 ---
 
-[← Docs index](../README.md#documentation)
+[← Docs index](../../README.md#documentation)

@@ -15,7 +15,7 @@ body:
       label: Proposed behaviour
       description: >-
         What it should look like — a make target, an MDB_ variable, an engine
-        descriptor. New engines are descriptor files; see docs/adding-an-engine.md.
+        descriptor. New engines are descriptor files; see docs/guides/adding-an-engine.md.
     validations:
       required: true
   - type: textarea

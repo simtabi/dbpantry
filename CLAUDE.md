@@ -1,6 +1,6 @@
 # dbpantry build rules
 
-You are building dbpantry per docs/SPEC.md. That file is the contract. Read it before any work.
+You are building dbpantry per docs/reference/SPEC.md. That file is the contract. Read it before any work.
 
 ## The loop (applies to every task, no exceptions)
 1. PLAN: restate the task and name its executable check before writing code.
@@ -26,6 +26,7 @@ You are building dbpantry per docs/SPEC.md. That file is the contract. Read it b
 - `make up` / `make down`  - stack lifecycle (never touches data)
 - `make verify`            - full acceptance harness (section 18 of SPEC.md as scripts)
 - `make verify-fast`       - subset for inner-loop iteration
+- `make verify CHECKS=21,28` / `TAGS=pg,backup` - run selected checks only
 - `make test-profile`      - boots the tmpfs test profile and runs its checks
 - `make backup-all` / `make verify-backups` - full-fleet dumps and automated restore verification
 - Full public interface: SPEC.md section 15.1 (certs, sockets, rotation, upgrade, import/export)

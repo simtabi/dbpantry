@@ -9,7 +9,7 @@
 # upgrade is a non-event and rollback is changing one line in .env back.
 #
 # pg_upgrade --link is faster on large datasets and is documented in
-# docs/UPGRADE.md as the manual path; it is not automated here because it
+# docs/runbooks/UPGRADE.md as the manual path; it is not automated here because it
 # mutates the source data directory, which would throw away that guarantee.
 #
 # Usage: scripts/upgrade --engine pg --from 17 --to 18
@@ -75,7 +75,7 @@ for v in "$FROM" "$TO"; do
         || die "image not built: $img
        Build it first: set MDB_${ENGINE_UPPER}_VERSION=$v in .env and run
        scripts/build $ENGINE. A version that is no longer maintained also
-       needs MDB_${ENGINE_UPPER}_BASE_IMAGE (docs/versions.md)."
+       needs MDB_${ENGINE_UPPER}_BASE_IMAGE (docs/guides/versions.md)."
 done
 
 cat <<PLAN

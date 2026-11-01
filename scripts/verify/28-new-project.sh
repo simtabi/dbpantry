@@ -25,7 +25,9 @@ add_cleanup "docker compose exec -T pg psql -U postgres -q -c 'DROP ROLE IF EXIS
 add_cleanup "docker compose exec -T pg psql -U postgres -q -c 'DROP ROLE IF EXISTS ${a}_user_readonly;' >/dev/null 2>&1"
 add_cleanup "docker compose exec -T pg psql -U postgres -q -c 'DROP ROLE IF EXISTS ${b}_user;' >/dev/null 2>&1"
 add_cleanup "docker compose exec -T pg psql -U postgres -q -c 'DROP ROLE IF EXISTS ${b}_user_readonly;' >/dev/null 2>&1"
-add_cleanup "rm -f secrets/pg_${a}_user_password.txt secrets/pg_${b}_user_password.txt"
+# new-project writes a readonly companion secret beside each app secret; both
+# go, or every run leaks two more files into secrets/.
+add_cleanup "rm -f secrets/pg_${a}_user_password.txt secrets/pg_${a}_user_readonly_password.txt secrets/pg_${b}_user_password.txt secrets/pg_${b}_user_readonly_password.txt"
 add_cleanup "make down"
 
 mdb_up PROFILES=pg || vfail "make up failed"

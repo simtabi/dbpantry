@@ -9,7 +9,7 @@
 #
 # This is the ONLY credential pgBouncer holds. Application users are resolved
 # with auth_query against a narrow SECURITY DEFINER function -- see
-# docs/pooling.md.
+# docs/guides/pooling.md.
 
 set -eu
 
