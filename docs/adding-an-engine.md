@@ -1,6 +1,6 @@
 # Adding an engine
 
-How to add a database to multidb-server. If you find yourself editing compose, the
+How to add a database to dbpantry. If you find yourself editing compose, the
 backup script, or a check, stop — that is a bug in this design, not in your
 engine, and it is worth reporting.
 

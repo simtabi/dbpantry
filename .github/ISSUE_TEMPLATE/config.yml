@@ -1,8 +1,8 @@
 blank_issues_enabled: false
 contact_links:
   - name: Questions and ideas
-    url: https://github.com/simtabi/multidb-server-docker/discussions
+    url: https://github.com/simtabi/dbpantry/discussions
     about: Ask about usage, propose features, or share how you run the toolkit.
   - name: Security reports
-    url: https://github.com/simtabi/multidb-server-docker/blob/main/SECURITY.md
+    url: https://github.com/simtabi/dbpantry/blob/main/SECURITY.md
     about: Never open a public issue for a vulnerability — see SECURITY.md.

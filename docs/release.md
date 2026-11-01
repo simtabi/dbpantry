@@ -1,6 +1,6 @@
 # Release
 
-How a version of multidb-server ships, and what a consumer gets.
+How a version of dbpantry ships, and what a consumer gets.
 
 > **Status:** the repository has `ci.yml` and `lint.yml`. The release workflow
 > described below is **not yet in `.github/workflows/`** — it is KIT phase 6, and
@@ -15,8 +15,8 @@ A release is one git tag, `vX.Y.Z`, that produces:
 
 | Artefact | Where |
 |---|---|
-| Engine images, one per engine per supported major | `ghcr.io/simtabi/multidb-server-<engine>` |
-| The `cli` image | `ghcr.io/simtabi/multidb-server-cli` |
+| Engine images, one per engine per supported major | `ghcr.io/simtabi/dbpantry-<engine>` |
+| The `cli` image | `ghcr.io/simtabi/dbpantry-cli` |
 | Source tarball | GitHub release |
 | SBOM per image | attached to the image |
 | Build provenance attestation | attached to the image |

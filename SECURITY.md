@@ -6,7 +6,7 @@ Where this file is silent, the [Simtabi security policy](https://github.com/simt
 
 Do not open a public issue for a vulnerability. Report it privately, through
 GitHub private vulnerability reporting at
-<https://github.com/simtabi/multidb-server-docker/security/advisories/new>. The
+<https://github.com/simtabi/dbpantry/security/advisories/new>. The
 report stays attached to the repository, with a draft advisory and a CVE request
 path. If you do not use GitHub, email **security@simtabi.com** instead.
 
@@ -17,7 +17,7 @@ disclosure.
 
 ## Supported versions
 
-The most recent minor release of multidb-server is supported. Engine images track
+The most recent minor release of dbpantry is supported. Engine images track
 upstream PostgreSQL, MySQL, and MariaDB support windows; an engine major that
 upstream has ended support for is removed from the version menu at the next
 minor release, announced in `CHANGELOG.md`.
@@ -28,7 +28,7 @@ Every published image carries a build-provenance attestation and an SBOM
 generated in CI.
 
 ```bash
-gh attestation verify oci://ghcr.io/simtabi/multidb-server-pg:17 --owner simtabi
+gh attestation verify oci://ghcr.io/simtabi/dbpantry-pg:17 --owner simtabi
 ```
 
 Images are pinned by digest throughout this repository. If a digest in

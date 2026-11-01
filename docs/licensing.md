@@ -18,8 +18,8 @@ the toolkit, but pulled from its own vendor.
 here is MIT, and you can do what you like with them.
 
 **A published image inherits the licence of what it is built FROM.** That was
-always true — `multidb-server-pg` contains PostgreSQL under the PostgreSQL licence,
-`multidb-server-mysql` contains MySQL under GPLv2 — and it is not a caveat unique to
+always true — `dbpantry-pg` contains PostgreSQL under the PostgreSQL licence,
+`dbpantry-mysql` contains MySQL under GPLv2 — and it is not a caveat unique to
 this project. Our layers are MIT; the database inside is whatever its authors
 chose.
 
@@ -53,7 +53,7 @@ discover that.
 - the same commands
 
 The only difference is that `docker compose up` pulls `mongo:7.0.x` from
-MongoDB's own registry rather than `multidb-server-mongodb` from ours.
+MongoDB's own registry rather than `dbpantry-mongodb` from ours.
 
 **What the SSPL asks of you**, in practice: its service clause binds anyone
 *offering MongoDB as a service* to release the source of the service stack.
@@ -85,10 +85,10 @@ Every published image carries an accurate
 provenance attestation:
 
 ```bash
-docker inspect ghcr.io/simtabi/multidb-server-pg:17 \
+docker inspect ghcr.io/simtabi/dbpantry-pg:17 \
   --format '{{ index .Config.Labels "org.opencontainers.image.licenses" }}'
 
-gh attestation verify oci://ghcr.io/simtabi/multidb-server-pg:17 --owner simtabi
+gh attestation verify oci://ghcr.io/simtabi/dbpantry-pg:17 --owner simtabi
 ```
 
 ---

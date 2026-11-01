@@ -15,8 +15,8 @@ itself wrong, fix it in a separate commit that explains the reasoning.
 ## Getting set up
 
 ```bash
-git clone https://github.com/simtabi/multidb-server-docker.git
-cd multidb-server
+git clone https://github.com/simtabi/dbpantry.git
+cd dbpantry
 make init
 make verify-structure   # harness self-test; must be green
 make verify             # full acceptance harness

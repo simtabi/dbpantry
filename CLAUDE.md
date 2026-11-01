@@ -1,6 +1,6 @@
-# multidb-server build rules
+# dbpantry build rules
 
-You are building multidb-server per docs/SPEC.md. That file is the contract. Read it before any work.
+You are building dbpantry per docs/SPEC.md. That file is the contract. Read it before any work.
 
 ## The loop (applies to every task, no exceptions)
 1. PLAN: restate the task and name its executable check before writing code.

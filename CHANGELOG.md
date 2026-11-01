@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **The project is renamed dbpantry** (DESIGN.md D-54). The repository moved from
+  `simtabi/multidb-server-docker` to `simtabi/dbpantry`; GitHub redirects the old URL. Images
+  are now `dbpantry-<engine>`: run `make build` again, and the next `make up`
+  regenerates the compose files with the new names. The `MDB_` variables, the `mdb`
+  Compose project and `mdb_net` network, and the engine descriptor contract keep their names,
+  so existing `.env` files, containers and volumes carry over unchanged.
+- The README drops the GHCR badge and the hosted-docs link, which pointed at pages that do not
+  exist yet.
+
+### Added
+
+- Check 44 fails on any leftover use of the old names outside the history they belong to.
+
 ### Security
 
 - **gosu, rclone and postgres_exporter are rebuilt from their release tags on a
@@ -94,5 +109,5 @@ topology. 42 acceptance checks; every claim below is one of them.
 - `pg_graphql`'s packaged symlinks are flattened, which also protects against
   the PG 18 volume mount shadowing them (D-26).
 
-[Unreleased]: https://github.com/simtabi/multidb-server-docker/compare/v0.1.0...HEAD
-[0.1.0]: https://github.com/simtabi/multidb-server-docker/releases/tag/v0.1.0
+[Unreleased]: https://github.com/simtabi/dbpantry/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/simtabi/dbpantry/releases/tag/v0.1.0

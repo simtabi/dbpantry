@@ -1,4 +1,4 @@
-# multidb-server design
+# dbpantry design
 
 Step 1 output: research resolved, versions pinned, spec reconciled. **No implementation code exists yet and none will be written until this document is approved.**
 
@@ -8,10 +8,10 @@ Everything below was verified during this session against live registries, the G
 
 | Field | Value |
 |---|---|
-| Repository | `github.com/simtabi/multidb-server-docker` |
-| Images | `ghcr.io/simtabi/multidb-server-{pg,mysql,mariadb,cli}` |
-| Docs | `https://opensource.simtabi.com/documentation/simtabi/multidb-server/` |
-| Product page | `https://opensource.simtabi.com/products/simtabi/multidb-server` |
+| Repository | `github.com/simtabi/dbpantry` (was `dbpantry-docker`, and before that `db-toolkit-docker`) |
+| Images | `ghcr.io/simtabi/dbpantry-{pg,mysql,mariadb,cli}` |
+| Docs | [`docs/`](docs/) in this repository; no hosted site yet |
+| Product page | none yet |
 | Env prefix | `MDB_` |
 | Compose project | `mdb` |
 | Registry visibility | private until explicitly flipped public (section 19 default) |
@@ -22,21 +22,21 @@ Resolves the three-way conflict recorded in decision **D-02**.
 
 | Service | Image | Profile | Internal port | Host port env | Published by default |
 |---|---|---|---|---|---|
-| `pg` | `ghcr.io/simtabi/multidb-server-pg:<ver>` | `pg` | 5432 | `MDB_PG_HOST_PORT` | no |
-| `mysql` | `ghcr.io/simtabi/multidb-server-mysql:<ver>` | `mysql` | 3306 | `MDB_MYSQL_HOST_PORT` | no |
-| `mariadb` | `ghcr.io/simtabi/multidb-server-mariadb:<ver>` | `mariadb` | 3306 | `MDB_MARIADB_HOST_PORT` (3307) | no |
+| `pg` | `ghcr.io/simtabi/dbpantry-pg:<ver>` | `pg` | 5432 | `MDB_PG_HOST_PORT` | no |
+| `mysql` | `ghcr.io/simtabi/dbpantry-mysql:<ver>` | `mysql` | 3306 | `MDB_MYSQL_HOST_PORT` | no |
+| `mariadb` | `ghcr.io/simtabi/dbpantry-mariadb:<ver>` | `mariadb` | 3306 | `MDB_MARIADB_HOST_PORT` (3307) | no |
 | `adminer` | `adminer:5.4.1` | `ui` | 8080 | `MDB_ADMINER_HOST_PORT` | no (via Caddy) |
 | `phpmyadmin` | `phpmyadmin:5.2.3` | `ui` | 80 | `MDB_PMA_HOST_PORT` | no (via Caddy) |
 | `pgadmin` | `dpage/pgadmin4:9.9` | `ui` | 80 | `MDB_PGADMIN_HOST_PORT` | no (via Caddy) |
 | `caddy` | `caddy:2.10.2` | `ui`, `prod` | 80/443 | `MDB_CADDY_HTTP_PORT` / `_HTTPS_PORT` | yes (the only web surface) |
 | `backup` | `nfrastack/db-backup:4.9.0` | `backup` | — | — | no |
-| `pgbackrest` | built into `multidb-server-pg` | `prod`, `ha` | — | — | no |
+| `pgbackrest` | built into `dbpantry-pg` | `prod`, `ha` | — | — | no |
 | `pg-exporter` | `quay.io/prometheuscommunity/postgres-exporter:v0.19.0` | `metrics` | 9187 | — | no |
 | `mysqld-exporter` | `prom/mysqld-exporter:v0.18.0` | `metrics` | 9104 | — | no |
-| `pgbouncer` | `multidb-server-pgbouncer` (built) | `prod` (required), `ha` | 6432 | `MDB_PGBOUNCER_HOST_PORT` | no |
+| `pgbouncer` | `dbpantry-pgbouncer` (built) | `prod` (required), `ha` | 6432 | `MDB_PGBOUNCER_HOST_PORT` | no |
 | `etcd` | `gcr.io/etcd-development/etcd:v3.6.6` | `ha` | 2379/2380 | — | no |
 | `haproxy` | `haproxy:3.2-alpine` | `ha` | 5432 w / 5433 r | `MDB_HAPROXY_*_PORT` | no |
-| `cli` | `ghcr.io/simtabi/multidb-server-cli:<ver>` | on demand | — | — | no |
+| `cli` | `ghcr.io/simtabi/dbpantry-cli:<ver>` | on demand | — | — | no |
 
 Profiles: engine selectors `pg` / `mysql` / `mariadb`; mode overlays `ui` / `backup` / `metrics` / `prod` / `test` / `ha`. Default `COMPOSE_PROFILES=pg,ui`.
 
@@ -62,7 +62,7 @@ All digests resolved from the live registry this session. **Every image below is
 | phpMyAdmin | `5.2.3` | `sha256:5e2289bcd500868ed4ac9261ddd7cbcc6e20036f83031ade72667b15dca31c60` | [phpmyadmin](https://hub.docker.com/_/phpmyadmin) |
 | pgAdmin | `9.9` | `sha256:5d9624a93634d1c5e595619cc57b1d330758120d1baf445fa97300c0c1fc3c0a` | [pgadmin4](https://www.pgadmin.org/docs/pgadmin4/latest/container_deployment.html) |
 | Caddy | `2.10.2` | `sha256:c3d7ee5d2b11f9dc54f947f68a734c84e9c9666c92c88a7f30b9cba5da182adb` | [caddy](https://caddyserver.com/docs/) |
-| pgBouncer | `multidb-server-pgbouncer` (built from `debian:12-slim` + PGDG) | n/a — built here | see **D-10**, superseded by **D-48** |
+| pgBouncer | `dbpantry-pgbouncer` (built from `debian:12-slim` + PGDG) | n/a — built here | see **D-10**, superseded by **D-48** |
 | Go toolchain (build stage) | `golang:1.27.2-bookworm` | `sha256:5cf287a799e6b94384bad13d16b14904c531f51ba65792237e122ce42b392f61` | [golang](https://hub.docker.com/_/golang); see **D-51** |
 | gosu / rclone / postgres_exporter (in-image) | `1.19` / `v1.75.1` / `v0.20.1`, rebuilt from tag | n/a — built here | see **D-51** |
 | postgres_exporter | `v0.19.0` | `sha256:e8a170b85eab07c75c2b0f3aa2806be5c2fe5bba46fd0336914e1f36572cde08` | prometheus-community |
@@ -340,3 +340,5 @@ Two things fell out of building the check. `python3` parses the file but **PyYAM
 Compose's `uid`/`gid`/`mode` fields on file-backed secrets are not the fix: outside swarm they are silently ignored ([docker/compose#9648](https://github.com/docker/compose/issues/9648); the PR to honour them, [#12625](https://github.com/docker/compose/pull/12625), was closed unmerged). A first pgAdmin fix set them, verified only that compose accepted the syntax — on macOS, where the failing condition cannot occur — and changed nothing.
 
 The rule that follows: **our images read secrets as root and drop privileges at exec** (Patroni stages certs with `install -o postgres`; pgBouncer now starts root and drops via `setpriv` — the `USER postgres` directive was what forced the unprivileged read). For **third-party images that start unprivileged** (pgAdmin), the secret is mounted per-file — stepping around the 0700 directory — and generated world-readable, with the 0700 directory as the host-side guard; `render-config` heals the mode on existing checkouts because `init` refuses to run twice. And `scripts/build` now accepts derived image names explicitly: `scripts/build pgbouncer` used to match nothing, build zero images and exit 0, which cost one full round of testing against a stale image.
+
+**D-54 — Renamed to dbpantry; the machine-facing `mdb` names stay.** The owner found "multidb-server-docker" a poor name and chose dbpantry on 2026-11-01: a pantry keeps a household's staples ready for every meal, as this keeps databases ready for every project. The repository moved from `simtabi/multidb-server-docker` to `simtabi/dbpantry` (GitHub redirects the old URL), and the product and image names followed (`dbpantry-<engine>`); nothing had been published, so no image alias is needed, but a local checkout must run `make build` again (the next `make up` regenerates the compose files). What did **not** change is everything existing state already depends on: the `MDB_` variables, the `mdb` Compose project and `mdb_net` network (and so every container and volume name), the engine descriptor contract, the PostgreSQL include marker `# multidb-server include` (a new marker would append the include block to every existing `postgresql.conf` a second time) and the Patroni `/multidb-server/` namespace (a new one orphans a running cluster). Renaming those buys nothing a user can see and costs a migration. `docs/SPEC.md`, `docs/KIT.md`, `docs/KICKOFF-PROMPT.txt`, released CHANGELOG entries and this decision log keep the old names as history. Check 44 fails on the old names anywhere else.
