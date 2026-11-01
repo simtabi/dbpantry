@@ -7,7 +7,7 @@
 ARG BASE_IMAGE=pgvector/pgvector:0.8.6-pg17@sha256:7ae6051efd0e60444282c27c7e141af07f322ce033300e727a49c3dd11075e38
 # The Go toolchain the gotools stage builds with; pinned in images/bases.tsv
 # (row `toolchain go`) and passed by scripts/build, like BASE_IMAGE.
-ARG GO_IMAGE=golang:1.27.2-bookworm@sha256:5cf287a799e6b94384bad13d16b14904c531f51ba65792237e122ce42b392f61
+ARG GO_IMAGE=golang:1.27.3-bookworm@sha256:d9b6a1beb9474adc2a1ce842573639b44b2a0dd49b6669f51d3821baf9ec37c9
 
 # =============================================================================
 # Builder: the four extensions PGDG does not package.

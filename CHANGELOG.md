@@ -24,6 +24,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+- **The Go toolchain moves to 1.27.3**, the latest stable release, for gosu, rclone
+  and postgres_exporter. This fixes CVE-2026-111943 in `crypto/x509`, which failed the Trivy
+  gate on every engine image.
 - **gosu, rclone and postgres_exporter are rebuilt from their release tags on a
   patched Go toolchain**, with gRPC, `x/net` and `x/crypto` raised past their
   fixes (DESIGN.md D-51). This removes 26 Trivy waivers that were due to expire

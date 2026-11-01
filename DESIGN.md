@@ -63,7 +63,7 @@ All digests resolved from the live registry this session. **Every image below is
 | pgAdmin | `9.9` | `sha256:5d9624a93634d1c5e595619cc57b1d330758120d1baf445fa97300c0c1fc3c0a` | [pgadmin4](https://www.pgadmin.org/docs/pgadmin4/latest/container_deployment.html) |
 | Caddy | `2.10.2` | `sha256:c3d7ee5d2b11f9dc54f947f68a734c84e9c9666c92c88a7f30b9cba5da182adb` | [caddy](https://caddyserver.com/docs/) |
 | pgBouncer | `dbpantry-pgbouncer` (built from `debian:12-slim` + PGDG) | n/a — built here | see **D-10**, superseded by **D-48** |
-| Go toolchain (build stage) | `golang:1.27.2-bookworm` | `sha256:5cf287a799e6b94384bad13d16b14904c531f51ba65792237e122ce42b392f61` | [golang](https://hub.docker.com/_/golang); see **D-51** |
+| Go toolchain (build stage) | `golang:1.27.3-bookworm` | `sha256:d9b6a1beb9474adc2a1ce842573639b44b2a0dd49b6669f51d3821baf9ec37c9` | [golang](https://hub.docker.com/_/golang); see **D-51** |
 | gosu / rclone / postgres_exporter (in-image) | `1.19` / `v1.75.1` / `v0.20.1`, rebuilt from tag | n/a — built here | see **D-51** |
 | postgres_exporter | `v0.19.0` | `sha256:e8a170b85eab07c75c2b0f3aa2806be5c2fe5bba46fd0336914e1f36572cde08` | prometheus-community |
 | mysqld_exporter | `v0.18.0` | `sha256:2598c0571f383708e19016d119bb45c06128a9ebc962c9f49483278ac5a94c41` | prometheus |
