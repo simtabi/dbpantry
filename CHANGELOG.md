@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+The first release published by CI: every engine image and the cli image on GHCR,
+for amd64 and arm64, each with an SBOM and build provenance. It also renames the
+project to dbpantry and fixes the findings that failed the Trivy gate on every
+image, replacing Cassandra's vulnerable vendored JARs rather than waiving them.
+
 ### Changed
 
 - **The project is renamed dbpantry** (DESIGN.md D-54). The repository moved from
@@ -41,22 +46,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Trivy gate, and removes 21 of the 22 Cassandra waivers. The one left, CVE-2022-1471 in
   snakeyaml on 4.1, is fixed only in snakeyaml 2.x, which Cassandra 4.1 cannot load; it still
   expires on 2026-11-09.
-- **The Go toolchain moves to 1.27.3**, the latest stable release, for gosu, rclone
-  and postgres_exporter. This fixes CVE-2026-111943 in `crypto/x509`, which failed the Trivy
-  gate on every engine image.
+- **The Go toolchain moves to 1.27.3**, the latest stable release, with `x/net` at
+  v0.60.0, for gosu, rclone and postgres_exporter. This fixes CVE-2026-111943 in
+  `crypto/x509`, and CVE-2026-78667, CVE-2026-78669 and CVE-2026-97031, which
+  failed the Trivy gate on every engine image.
 - **gosu, rclone and postgres_exporter are rebuilt from their release tags on a
   patched Go toolchain**, with gRPC, `x/net` and `x/crypto` raised past their
   fixes (DESIGN.md D-51). This removes 26 Trivy waivers that were due to expire
   on 2026-11-09 and fail every build. The toolchain is pinned in
   `images/bases.tsv`, and check 02 fails if a Dockerfile's `GO_IMAGE` default
   drifts from it.
-- **The Go toolchain moves to 1.27.2 and `x/net` to v0.60.0** for gosu, rclone
-  and postgres_exporter, fixing CVE-2026-78667, CVE-2026-78669 and
-  CVE-2026-97031, which failed the Trivy gate on every engine image.
 - **The cassandra 4.1 image upgrades its python3.11 packages** to
   3.11.2-6+deb12u9, the same named-package pattern used for perl.
-- **lz4-java 1.10.1, vendored by Cassandra, is waived for CVE-2026-106451**
-  until 2026-11-12: neither 4.1.12 nor 5.0.9 has a release carrying the fix.
 
 ## [0.1.0] - 2026-08-10
 
