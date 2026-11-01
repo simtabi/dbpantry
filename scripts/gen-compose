@@ -108,6 +108,16 @@ for engine in $(engine_list); do
     resolved="${resolved:-$MDB_ENGINE_DEFAULT_VERSION}"
     pinned="$(engine_pinned_base "$MDB_ENGINE_NAME" "$resolved")"
 
+    # Declared but not built yet: no service, only a note. Emitting a build of
+    # a Dockerfile that does not exist made `make up PROFILES=<engine>` fail
+    # inside compose with a path error; check-env now refuses the profile by
+    # name instead.
+    if ! engine_implemented; then
+        printf '  # %s: declared in engines/%s/engine.conf, but images/%s/Dockerfile\n  # does not exist yet, so no service is generated.\n\n' \
+            "$MDB_ENGINE_TITLE" "$MDB_ENGINE_NAME" "$MDB_ENGINE_NAME" >> "$tmp"
+        continue
+    fi
+
     # A referenced engine is not rebuilt under our namespace, so it runs the
     # upstream image directly (SPEC section 22.5). Everything else runs the
     # image we publish.
@@ -324,8 +334,7 @@ L4="$ROOT/config/caddy/layer4.caddy"
         printf 'layer4 {\n'
         for engine in $(engine_list); do
             engine_load "$engine" || continue
-            [ -f "$ROOT/images/$MDB_ENGINE_NAME/Dockerfile" ] \
-                || [ "${MDB_ENGINE_PUBLISH:-derive}" = "reference" ] || continue
+            engine_implemented || continue
             printf '\t# %s\n' "$MDB_ENGINE_TITLE"
             printf '\t%s {\n' ":$(( PORT_BASE + MDB_ENGINE_PORT_OFFSET ))"
             printf '\t\troute {\n'
@@ -348,8 +357,7 @@ CADDY_PORTS="$ROOT/compose.proxy.yml"
         printf '    ports:\n'
         for engine in $(engine_list); do
             engine_load "$engine" || continue
-            [ -f "$ROOT/images/$MDB_ENGINE_NAME/Dockerfile" ] \
-                || [ "${MDB_ENGINE_PUBLISH:-derive}" = "reference" ] || continue
+            engine_implemented || continue
             printf '      - "${MDB_BIND_ADDR:-127.0.0.1}:%s:%s"\n' \
                 "$(( PORT_BASE + MDB_ENGINE_PORT_OFFSET ))" \
                 "$(( PORT_BASE + MDB_ENGINE_PORT_OFFSET ))"

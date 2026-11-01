@@ -142,6 +142,18 @@ for _engine in $(engine_list); do
     check_version "$(printf '%s' "$MDB_ENGINE_NAME" | tr '[:lower:]-' '[:upper:]_')"
 done
 
+# A profile naming an engine whose image does not exist yet. Without this,
+# compose fails with a missing-Dockerfile path that names neither the engine
+# nor the reason. Same profile resolution as the port check below.
+_selected=",${COMPOSE_PROFILES:-${MDB_CHECK_PROFILES:-$(get MDB_PROFILES)}},"
+for _engine in $(engine_list); do
+    [[ "$_selected" == *,"$_engine",* ]] || continue
+    engine_load "$_engine" || continue
+    engine_implemented \
+        || err "profile '$_engine' names an engine that is declared but not built yet
+       (no images/$_engine/Dockerfile). Remove it from PROFILES / MDB_PROFILES."
+done
+
 # PostgreSQL 18 moved the expected mount point. Up to 17 the data directory is
 # /var/lib/postgresql/data; from 18 the image stores data in major-versioned
 # subdirectories and expects the volume one level up at /var/lib/postgresql, so
