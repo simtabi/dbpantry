@@ -20,6 +20,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Releases are built and published by CI.** A `vX.Y.Z` tag on `main` runs
+  `release.yml`: every image is built natively on amd64 and arm64, scanned, and
+  proven by the full harness on both before anything is pushed to
+  `ghcr.io/simtabi/dbpantry-<engine>`, with an SBOM and build provenance attached.
+  Engines are tagged `<major>-<release>`, which never moves, and `<major>`; see
+  [Release](docs/release.md).
+- `scripts/release-notes` prints a version's CHANGELOG section, the body of its
+  GitHub release; `scripts/release-notes Unreleased` previews the next one.
 - Check 44 fails on any leftover use of the old names outside the history they belong to.
 - Check 45 fails if `images/cassandra/jars.tsv` has a row without a full sha256 or for a
   series that is not built, or if the Cassandra Dockerfile stops running the swap.
