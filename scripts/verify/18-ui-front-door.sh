@@ -12,7 +12,7 @@ cd "$MDB_ROOT" || exit 1
 # HTTPS" and "Both MySQL and MariaDB run concurrently with phpMyAdmin seeing
 # both via one UI".
 
-need_file "$MDB_ROOT/caddy/Caddyfile.tmpl"
+need_file "$MDB_ROOT/config/caddy/Caddyfile.tmpl"
 need_file "$MDB_ROOT/docker-compose.yml"
 
 domain="$(env_get MDB_UI_DOMAIN db.localhost)"
