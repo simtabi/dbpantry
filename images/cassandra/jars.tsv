@@ -21,6 +21,10 @@
 #
 # Not here: snakeyaml 2.x on 4.1. Cassandra 4.1's YamlConfigurationLoader calls
 # constructors snakeyaml 2.0 removed, so 4.1 takes 1.33, the last 1.x release.
+#
+# netty-tcnative after 2.0.36 carries its native code only in the platform-
+# classified JARs (linux-x86_64, linux-aarch_64), so 4.1, whose 2.0.36 JAR
+# bundled them, adds those two alongside the unclassified one.
 
 4.1	guava-27.0-jre.jar	com.google.guava:guava:33.7.2-jre	b530942257fb935f8b2cfaa5f8eb5bd59c555fd8e8d01b8ce98912e077ea606c
 4.1	-	com.google.guava:failureaccess:1.0.3	cbfc3906b19b8f55dd7cfd6dfe0aa4532e834250d7f080bd8d211a3e246b59cb
@@ -35,6 +39,8 @@
 4.1	snakeyaml-1.26.jar	org.yaml:snakeyaml:1.33	11ff459788f0a2d781f56a4a86d7e69202cebacd0273d5269c4ae9f02f3fd8f0
 4.1	netty-tcnative-boringssl-static-2.0.36.Final.jar	io.netty:netty-tcnative-boringssl-static:2.0.84.Final	15fe111906d28b1075da6362db6b76590b232dd400e1401cf4af36fc4f321add
 4.1	-	io.netty:netty-tcnative-classes:2.0.84.Final	7a4437abf98b0cec053af4443fe321177d2cfccfec7bcad4e7d8b75571bbec4d
+4.1	-	io.netty:netty-tcnative-boringssl-static:2.0.84.Final:linux-x86_64	19d7cd7c3081c80ebe417af870e2fe62be1ca5969683d9cd402bb3ebc754d257
+4.1	-	io.netty:netty-tcnative-boringssl-static:2.0.84.Final:linux-aarch_64	610f92fa30ee2a4f5022ddb005728b6914b53101de195a99266f526ce1aeda1e
 4.1	netty-all-4.1.58.Final.jar	io.netty:netty-buffer:4.1.139.Final	48d805b74e56dc5f92b1f288858185abc86db16d293e8da183542df6243427f2
 4.1	-	io.netty:netty-codec:4.1.139.Final	ad43f07219dfb757a87b9c2b4765002be478c5401971379954e3d182f285fe6b
 4.1	-	io.netty:netty-common:4.1.139.Final	50372d86e27b4b1cf0810d75eb534795966a199049a1e85a0c41bbd2bb97f519

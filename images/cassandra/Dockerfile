@@ -67,7 +67,7 @@ RUN set -eux; \
 # jars.tsv (DESIGN.md D-55). The series is read from the base image itself, so
 # a BASE_IMAGE and ENGINE_VERSION that disagree fail here rather than install
 # the other series' JARs. `cassandra -v` then starts the JVM on the new
-# classpath; the boot checks (32, 34) prove the rest.
+# classpath; the boot checks prove the rest.
 COPY cassandra/jars.tsv /usr/local/share/mdb/cassandra-jars.tsv
 COPY --chmod=0755 cassandra/replace-jars.sh /usr/local/bin/replace-jars
 RUN set -eux; \
