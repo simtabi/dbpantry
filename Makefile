@@ -236,8 +236,8 @@ ha-reinit: ## Rebuild one replica from the current leader (NODE=)
 # -----------------------------------------------------------------------------
 
 .PHONY: verify
-verify: ## Full acceptance harness (SPEC section 18 as scripts)
-	@scripts/verify/run.sh
+verify: ## Full acceptance harness (SPEC section 18 as scripts); CHECKS=21,28 or TAGS=pg,backup to narrow
+	@VERIFY_CHECKS="$(CHECKS)" VERIFY_TAGS="$(or $(TAGS),$(VERIFY_TAGS))" scripts/verify/run.sh
 
 .PHONY: verify-fast
 verify-fast: ## Inner-loop subset of the harness

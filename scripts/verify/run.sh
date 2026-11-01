@@ -13,6 +13,12 @@
 #   run.sh                    run everything
 #   run.sh --structure-only   validate the harness itself, run no checks
 #   VERIFY_TAGS=fast run.sh   run only checks carrying a matching tag
+#   VERIFY_TAGS=pg,backup     several tags (comma or space separated): a check
+#                             runs when it carries ANY of them
+#   VERIFY_CHECKS=21,28       run only these checks, by number or full name
+#                             (make verify CHECKS=21,28 sets this)
+#
+# Both filters may be combined; a check must then pass both.
 
 set -euo pipefail
 
@@ -30,6 +36,34 @@ if [[ -t 1 ]] && [[ -z "${NO_COLOR:-}" ]]; then
 else
     RED=''; GRN=''; YLW=''; BLU=''; DIM=''; BLD=''; OFF=''
 fi
+
+# Is word $1 in the comma/space separated list $2?
+in_list() {
+    local item
+    for item in ${2//,/ }; do
+        [[ "$item" == "$1" ]] && return 0
+    done
+    return 1
+}
+
+# Does a check, by its name and tags, pass the VERIFY_TAGS and VERIFY_CHECKS
+# filters? Unset filters select everything.
+selected() {
+    local name="$1" tags="$2" num t hit
+    if [[ -n "${VERIFY_CHECKS:-}" ]]; then
+        num="${name%%-*}"
+        in_list "$num" "$VERIFY_CHECKS" || in_list "$name" "$VERIFY_CHECKS" \
+            || in_list "$((10#$num))" "$VERIFY_CHECKS" || return 1
+    fi
+    if [[ -n "${VERIFY_TAGS:-}" ]]; then
+        hit=1
+        for t in $tags; do
+            in_list "$t" "$VERIFY_TAGS" && { hit=0; break; }
+        done
+        return "$hit"
+    fi
+    return 0
+}
 
 meta() { grep -m1 -E "^# $1:" "$2" 2>/dev/null | sed -E "s/^# $1:[[:space:]]*//" || true; }
 
@@ -83,7 +117,7 @@ fi
 # bash 3.2 and does not on the bash 5 CI runs on, which is why the harness ran
 # all 42 checks locally and died after the first passing check in CI, printing
 # the check's name and nothing else.
-pass=0; fail=0; skip=0
+pass=0; fail=0; skip=0; ran=0
 failed_names=()
 skipped_names=()
 
@@ -101,6 +135,7 @@ docker images --format '{{.Repository}}:{{.Tag}}' > "$MDB_IMAGE_SNAPSHOT" 2>/dev
 
 printf '%s%s dbpantry verify %s%s\n' "$BLD" "$BLU" "$(date '+%H:%M:%S')" "$OFF"
 [[ -n "${VERIFY_TAGS:-}" ]] && printf '%sfiltering by tag: %s%s\n' "$DIM" "$VERIFY_TAGS" "$OFF"
+[[ -n "${VERIFY_CHECKS:-}" ]] && printf '%sfiltering by check: %s%s\n' "$DIM" "$VERIFY_CHECKS" "$OFF"
 printf '\n'
 
 for c in "${CHECKS[@]}"; do
@@ -109,9 +144,8 @@ for c in "${CHECKS[@]}"; do
     tags="$(meta tags "$c")"
     phase="$(meta phase "$c")"
 
-    if [[ -n "${VERIFY_TAGS:-}" ]] && [[ " $tags " != *" $VERIFY_TAGS "* ]]; then
-        continue
-    fi
+    selected "$name" "$tags" || continue
+    ran=$(( ran + 1 ))
 
     printf '%s→%s %-34s %s%s%s\n' "$BLU" "$OFF" "$name" "$DIM" "$desc" "$OFF"
 
@@ -136,6 +170,13 @@ for c in "${CHECKS[@]}"; do
             ;;
     esac
 done
+
+# A filter that matches nothing is a typo, not a green run.
+if (( ran == 0 )); then
+    printf '%s✗ no check matched VERIFY_TAGS=%s VERIFY_CHECKS=%s%s\n' \
+        "$RED" "${VERIFY_TAGS:-}" "${VERIFY_CHECKS:-}" "$OFF" >&2
+    exit 1
+fi
 
 # -----------------------------------------------------------------------------
 # Summary
