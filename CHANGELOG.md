@@ -11,15 +11,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Each engine now maintains its current and latest version only** (DESIGN.md D-57,
   [Supported versions](docs/versions.md)): the newest supported line and the one before it,
-  confirmed from each project's own end-of-life page. The menu goes from 16 versions to 10:
-  PostgreSQL 17 · 18, MySQL 8.4 · 9.7, MariaDB 11.8 · 12.3, MongoDB 8.0 · 9.0, Cassandra 5.0
+  confirmed from each project's own end-of-life page. The menu goes from 16 versions to 11:
+  PostgreSQL 17 · 18, MySQL 8.4 · 9.7, MariaDB 11.8 · 12.3, MongoDB 7.0 · 8.0 · 9.0, Cassandra 5.0
   and FerretDB 2. A `.env` naming a version that left the menu fails `make check-env` and its
   volume is untouched; [Upgrade](docs/UPGRADE.md) covers moving it, or keep it through
   `MDB_<ENGINE>_BASE_IMAGE`, unsupported.
-- **The MariaDB default moves from 11.4 to 11.8**, and **the MongoDB default from 7.0 to
-  8.0**: MongoDB 8.0.30 and later start on Linux kernel 7.0.14 and later. Kernels 6.19 to
-  7.0.13 still cannot run 8.0 (SERVER-121912); run 7.0 through the override there.
-- MongoDB 8.0 is repinned to 8.0.34.
+- **The MariaDB default moves from 11.4 to 11.8.** MongoDB keeps 7.0 as its default, the
+  one exception to the policy: 8.x and 9.x refuse to start on kernels reporting 6.19 to
+  7.0.13 (SERVER-121912), and every Ubuntu 7.0 kernel, GitHub's runners included, reports
+  7.0.0 (SERVER-136848).
+- MongoDB 7.0 is repinned to 7.0.45, and 8.0 to 8.0.34.
 
 - **The project is renamed dbpantry** (DESIGN.md D-54). The repository moved from
   `simtabi/multidb-server-docker` to `simtabi/dbpantry`; GitHub redirects the old URL. Images
@@ -65,7 +66,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Cassandra 4.1** (DESIGN.md D-57). It vendors snakeyaml 1.x, open to CVE-2022-1471, and
   cannot load the 2.x line that fixes it. D-57 records when it comes back.
-- PostgreSQL 15 and 16, MySQL 8.0, MariaDB 10.11 and 11.4, MongoDB 7.0 and 8.3 from the
+- PostgreSQL 15 and 16, MySQL 8.0, MariaDB 10.11 and 11.4, MongoDB 8.3 from the
   maintained menu. Each still runs through `MDB_<ENGINE>_BASE_IMAGE`, unsupported.
 
 ### Security

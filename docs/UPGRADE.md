@@ -88,7 +88,7 @@ it would mean shipping a fast path whose failure mode is losing the source.
 
 dbpantry maintains the newest supported line of each engine and the one before
 it ([Supported versions](versions.md)). When a line drops off — PostgreSQL 15 and
-16, MySQL 8.0, MariaDB 10.11 and 11.4, MongoDB 7.0 and 8.3, Cassandra 4.1 in
+16, MySQL 8.0, MariaDB 10.11 and 11.4, MongoDB 8.3, Cassandra 4.1 in
 0.2.0 — a `.env` still naming it fails `make check-env`, loudly, and nothing
 touches its volume.
 
@@ -158,7 +158,7 @@ docker run --rm -v mdb_mongodb7.0_data:/from:ro -v mdb_mongodb8.0_data:/to \
     alpine sh -c 'cp -a /from/. /to/'
 ```
 
-Then set `MDB_MONGODB_VERSION=8.0`, remove `MDB_MONGODB_BASE_IMAGE`, `make up`,
+Then set `MDB_MONGODB_VERSION=8.0`, `make up`,
 check your data, and only then raise the FCV — after that the copy cannot go back
 to 7.0, though the original volume still can:
 
@@ -166,9 +166,10 @@ to 7.0, though the original volume still can:
 db.adminCommand({ setFeatureCompatibilityVersion: "8.0", confirm: true })
 ```
 
-MongoDB 8.0 refuses to start on Linux kernels 6.19 to 7.0.13 (SERVER-121912),
-fixed for 7.0.14 and later in 8.0.30. Check the kernel your containers see with
-`docker run --rm alpine uname -r` before you migrate.
+MongoDB 8.0 refuses to start on Linux kernels that report 6.19 to 7.0.13
+(SERVER-121912), which includes every Ubuntu 7.0 kernel (SERVER-136848). Check
+the kernel your containers see with `docker run --rm alpine uname -r` before you
+migrate; if it is affected, stay on 7.0.
 
 ## Cassandra 4.1 → 5.0
 

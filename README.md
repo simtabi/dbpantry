@@ -68,7 +68,7 @@ of the box — correcting that is a large part of why this exists.
 | PostgreSQL | relational | **17** · 18 | pgBouncer (required in prod) | PostgreSQL |
 | MySQL | relational | **8.4** · 9.7 (both LTS) | ProxySQL (optional) | GPL-2.0 |
 | MariaDB | relational | **11.8** · 12.3 (both LTS) | ProxySQL (optional) | GPL-2.0 |
-| MongoDB | document | **8.0** · 9.0 | driver-side | SSPL — [referenced, not published](docs/licensing.md) |
+| MongoDB | document | **7.0** · 8.0 · 9.0 | driver-side | SSPL — [referenced, not published](docs/licensing.md) |
 | Cassandra | wide-column | **5.0** | driver-side | Apache-2.0 |
 | FerretDB | document | **2** | driver-side | Apache-2.0 |
 

@@ -43,7 +43,7 @@ MDB_<SETTING>              global       MDB_TLS_ENFORCE, MDB_BIND_ADDR
 ```
 MDB_PG_VERSION=17
 MDB_MYSQL_VERSION=8.4
-MDB_MONGODB_VERSION=8.0
+MDB_MONGODB_VERSION=7.0
 ```
 
 Each engine's menu is its maintained versions: the newest supported line and
