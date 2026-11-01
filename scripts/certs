@@ -35,7 +35,7 @@ if [[ ! -s "$CERT_DIR/ca.crt" ]]; then
     printf 'creating the toolkit CA\n'
     openssl req -x509 -newkey rsa:4096 -nodes \
         -days 3650 \
-        -subj "/O=Simtabi LLC/OU=multidb-server/CN=multidb-server local CA" \
+        -subj "/O=Simtabi LLC/OU=dbpantry/CN=dbpantry local CA" \
         -keyout "$CERT_DIR/ca.key" \
         -out "$CERT_DIR/ca.crt" 2>/dev/null
     chmod 0600 "$CERT_DIR/ca.key"
@@ -73,7 +73,7 @@ issue() {
     fi
 
     openssl req -newkey rsa:2048 -nodes \
-        -subj "/O=Simtabi LLC/OU=multidb-server/CN=${engine}" \
+        -subj "/O=Simtabi LLC/OU=dbpantry/CN=${engine}" \
         -keyout "$dir/server.key" \
         -out "$dir/server.csr" 2>/dev/null
 

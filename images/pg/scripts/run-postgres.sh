@@ -5,7 +5,7 @@
 # SPEC section 6.1 names this as the integration risk to respect: the upstream
 # docker-entrypoint.sh owns first-run initdb, the POSTGRES_* env semantics, the
 # _FILE convention, and /docker-entrypoint-initdb.d. We invoke it; we do not
-# reimplement it. Everything multidb-server adds has already happened in the init
+# reimplement it. Everything dbpantry adds has already happened in the init
 # stages before this point.
 #
 # Runs as root on purpose: the official entrypoint re-executes itself as the

@@ -163,14 +163,14 @@ if engine_tls_always; then
 # TLS is always on for this engine. verify-full is the only mode that checks
 # the hostname, so it is the only one worth using; point it at the toolkit CA:
 DB_SSLMODE=verify-full
-DB_SSLROOTCERT=/path/to/multidb-server/certs/ca.crt
+DB_SSLROOTCERT=/path/to/dbpantry/certs/ca.crt
 BLOCK
 else
     cat <<'BLOCK'
 
 # In the prod profile the server refuses plaintext TCP, so point your client
 # at the toolkit CA:
-DB_SSL_CA=/path/to/multidb-server/certs/ca.crt
+DB_SSL_CA=/path/to/dbpantry/certs/ca.crt
 BLOCK
 fi
 

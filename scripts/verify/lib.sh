@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # shellcheck shell=bash
 #
-# Shared helpers for multidb-server verify checks.
+# Shared helpers for dbpantry verify checks.
 #
 # Contract for every check script:
 #   exit 0  -> PASS
@@ -72,14 +72,14 @@ engine_selected() {
 image_exists() { docker image inspect "$1" >/dev/null 2>&1; }
 
 # Fully-qualified name for one of our engine images.
-#   image_name pg      -> ghcr.io/simtabi/multidb-server-pg:17
-#   image_name mariadb -> ghcr.io/simtabi/multidb-server-mariadb:11.4
+#   image_name pg      -> ghcr.io/simtabi/dbpantry-pg:17
+#   image_name mariadb -> ghcr.io/simtabi/dbpantry-mariadb:11.4
 image_name() {
     local engine="$1" prefix ver
     prefix="${MDB_IMAGE_PREFIX:-ghcr.io/simtabi}"
     ver="$(engine_version "$engine")"
     [[ -n "$ver" ]] || vfail "unknown engine: $engine"
-    printf '%s/multidb-server-%s:%s\n' "$prefix" "$engine" "$ver"
+    printf '%s/dbpantry-%s:%s\n' "$prefix" "$engine" "$ver"
 }
 
 # The configured version for an engine: MDB_<ENGINE>_VERSION if set, otherwise
@@ -127,7 +127,7 @@ need_image() {
         # Deliberately only for the reclaimed case: an image that was never
         # built is a different problem with a different fix, and rebuilding
         # silently there would hide "you forgot to run make build".
-        local engine="${img##*/}"; engine="${engine%%:*}"; engine="${engine#multidb-server-}"
+        local engine="${img##*/}"; engine="${engine%%:*}"; engine="${engine#dbpantry-}"
         if [[ -f "$MDB_ROOT/images/$engine/Dockerfile" ]]; then
             printf '      image %s was reclaimed mid-run; rebuilding\n' "$img" >&2
             if ( cd "$MDB_ROOT" && ./scripts/build "$engine" >/dev/null 2>&1 ); then
@@ -152,7 +152,7 @@ need_image() {
     #
     # So build the version that was asked for, when the repo declares a base for
     # it. Anything not in bases.tsv is a genuine "you forgot", and still says so.
-    local engine="${img##*/}"; engine="${engine%%:*}"; engine="${engine#multidb-server-}"
+    local engine="${img##*/}"; engine="${engine%%:*}"; engine="${engine#dbpantry-}"
     local want="${img##*:}"
     if [[ -f "$MDB_ROOT/images/$engine/Dockerfile" ]] \
        && awk -v e="$engine" -v v="$want" \

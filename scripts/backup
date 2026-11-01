@@ -240,7 +240,7 @@ notify_failure() {
     [[ -z "$url" ]] && return 0
     command -v curl >/dev/null 2>&1 || return 0
     curl -fsS -X POST -H 'Content-Type: application/json' \
-        -d "{\"text\":\"multidb-server backup FAILED on $(hostname) at $(date -u)\"}" \
+        -d "{\"text\":\"dbpantry backup FAILED on $(hostname) at $(date -u)\"}" \
         "$url" >/dev/null 2>&1 || true
 }
 # shellcheck disable=SC2154  # rc is assigned inside the trap body itself

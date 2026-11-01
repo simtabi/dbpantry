@@ -1,4 +1,4 @@
-# multidb-server-mysql — MySQL with baked configuration, supervised by s6.
+# dbpantry-mysql — MySQL with baked configuration, supervised by s6.
 #
 # Build context is images/, not images/mysql/, so this can share the init
 # scripts and s6 tree with the MariaDB image (see images/_shared/mysql-family).
@@ -41,11 +41,11 @@ FROM ${BASE_IMAGE}
 ARG ENGINE_VERSION=8.4
 ARG S6_OVERLAY_VERSION=3.2.3.2
 
-LABEL org.opencontainers.image.title="multidb-server-mysql" \
-      org.opencontainers.image.description="MySQL with multidb-server configuration and tooling, supervised by s6-overlay" \
+LABEL org.opencontainers.image.title="dbpantry-mysql" \
+      org.opencontainers.image.description="MySQL with dbpantry configuration and tooling, supervised by s6-overlay" \
       org.opencontainers.image.vendor="Simtabi LLC" \
       org.opencontainers.image.licenses="MIT" \
-      org.opencontainers.image.source="https://github.com/simtabi/multidb-server-docker"
+      org.opencontainers.image.source="https://github.com/simtabi/dbpantry"
 
 USER root
 

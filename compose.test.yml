@@ -1,4 +1,4 @@
-# multidb-server TEST profile — speed over durability, for CI and test suites.
+# dbpantry TEST profile — speed over durability, for CI and test suites.
 #
 # **DATA LOSS ON STOP IS THE POINT.** The data directory is a tmpfs and every
 # durability guarantee is switched off. Never point this at anything you intend

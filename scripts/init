@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Initialise a multidb-server checkout: environment file, generated secrets, and the
+# Initialise a dbpantry checkout: environment file, generated secrets, and the
 # TLS certificates PostgreSQL needs in order to start at all (SPEC section 13).
 #
 # Idempotent, and refuses to overwrite an existing environment file without

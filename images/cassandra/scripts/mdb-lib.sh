@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # shellcheck shell=bash
-# Shared helpers for the multidb-server-cassandra init stages.
+# Shared helpers for the dbpantry-cassandra init stages.
 set -euo pipefail
 
 MDB_CONF=/etc/cassandra/cassandra.yaml

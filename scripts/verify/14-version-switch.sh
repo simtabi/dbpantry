@@ -13,8 +13,8 @@ need_docker
 # both halves: the new major runs, and the old data still exists.
 
 prefix="${MDB_IMAGE_PREFIX:-ghcr.io/simtabi}"
-old_img="$prefix/multidb-server-pg:16"
-new_img="$prefix/multidb-server-pg:17"
+old_img="$prefix/dbpantry-pg:16"
+new_img="$prefix/dbpantry-pg:17"
 
 need_image "$old_img"
 need_image "$new_img"

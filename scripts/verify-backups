@@ -54,7 +54,7 @@ for engine in $(engine_list); do
 
     engine_load "$engine" || continue
 
-    prefix_img="$PREFIX/multidb-server-$engine"
+    prefix_img="$PREFIX/dbpantry-$engine"
     upper="$(printf '%s' "$engine" | tr '[:lower:]-' '[:upper:]_')"
     ver="$(get "MDB_${upper}_VERSION")"; ver="${ver:-$MDB_ENGINE_DEFAULT_VERSION}"
 

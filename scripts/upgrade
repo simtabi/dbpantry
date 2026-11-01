@@ -59,7 +59,7 @@ docker volume inspect "$vol_from" >/dev/null 2>&1 \
 # pull from a private registry and fails with a bare "denied", which says
 # nothing about what is actually wrong.
 for v in "$FROM" "$TO"; do
-    img="$PREFIX/multidb-server-$ENGINE:$v"
+    img="$PREFIX/dbpantry-$ENGINE:$v"
     docker image inspect "$img" >/dev/null 2>&1 \
         || die "image not built: $img
        Build it first:  MDB_${ENGINE_UPPER}_VERSION=$v scripts/build $ENGINE"
@@ -104,7 +104,7 @@ log "starting $ENGINE $FROM against its existing volume (read only as far as you
 case "$ENGINE" in
     pg)
         docker run -d --name "$old_c" -e POSTGRES_PASSWORD=mdb-throwaway-upgrade \
-            -v "$vol_from:/var/lib/postgresql/data" "$PREFIX/multidb-server-pg:$FROM" >/dev/null \
+            -v "$vol_from:/var/lib/postgresql/data" "$PREFIX/dbpantry-pg:$FROM" >/dev/null \
             || die "could not start $ENGINE $FROM"
         for _ in $(seq 1 120); do
             docker exec "$old_c" pg_isready -U postgres >/dev/null 2>&1 && break
@@ -124,7 +124,7 @@ case "$ENGINE" in
         root_pw="$(cat "secrets/${ENGINE}_root_password.txt")"
 
         docker run -d --name "$old_c" -e "$pw_env=$root_pw" \
-            -v "$vol_from:/var/lib/mysql" "$PREFIX/multidb-server-$ENGINE:$FROM" >/dev/null \
+            -v "$vol_from:/var/lib/mysql" "$PREFIX/dbpantry-$ENGINE:$FROM" >/dev/null \
             || die "could not start $ENGINE $FROM"
         for _ in $(seq 1 180); do
             docker exec "$old_c" "$client" -uroot -p"$root_pw" -e "SELECT 1" >/dev/null 2>&1 && break
@@ -151,7 +151,7 @@ log "starting $ENGINE $TO on a fresh volume"
 case "$ENGINE" in
     pg)
         docker run -d --name "$new_c" -e POSTGRES_PASSWORD=mdb-throwaway-upgrade \
-            -v "$vol_to:/var/lib/postgresql/data" "$PREFIX/multidb-server-pg:$TO" >/dev/null \
+            -v "$vol_to:/var/lib/postgresql/data" "$PREFIX/dbpantry-pg:$TO" >/dev/null \
             || die "could not start $ENGINE $TO"
         for _ in $(seq 1 120); do
             docker exec "$new_c" pg_isready -U postgres >/dev/null 2>&1 && break
@@ -166,7 +166,7 @@ case "$ENGINE" in
         ;;
     mysql|mariadb)
         docker run -d --name "$new_c" -e "$pw_env=$root_pw" \
-            -v "$vol_to:/var/lib/mysql" "$PREFIX/multidb-server-$ENGINE:$TO" >/dev/null \
+            -v "$vol_to:/var/lib/mysql" "$PREFIX/dbpantry-$ENGINE:$TO" >/dev/null \
             || die "could not start $ENGINE $TO"
         for _ in $(seq 1 180); do
             docker exec "$new_c" "$client" -uroot -p"$root_pw" -e "SELECT 1" >/dev/null 2>&1 && break

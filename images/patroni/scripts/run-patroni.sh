@@ -79,6 +79,7 @@ stage "writing $conf for node $name in scope $scope"
 cat > "$conf" <<YAML
 scope: ${scope}
 name: ${name}
+# The old product name stays: a new namespace orphans an existing cluster (D-54).
 namespace: /multidb-server/
 
 restapi:

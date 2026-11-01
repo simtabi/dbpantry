@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Build the multidb-server images for this architecture.
+# Build the dbpantry images for this architecture.
 #
 # Bases come from images/bases.tsv, the single source of truth for what every
 # image is built FROM, so a digest is never written twice.
@@ -73,7 +73,7 @@ for engine in ${engines[@]+"${engines[@]}"}; do
         || { printf 'images/%s/Dockerfile does not exist\n' "$engine" >&2; exit 1; }
 
     version="$(version_for "$engine")"
-    tag="$PREFIX/multidb-server-$engine:$version"
+    tag="$PREFIX/dbpantry-$engine:$version"
 
     # The build context is images/, not images/<engine>/, so the MySQL and
     # MariaDB images can share one set of init scripts (images/_shared).
@@ -102,7 +102,7 @@ done
 # ---------------------------------------------------------------------------
 # Derived images, built last because their base is one of ours.
 #
-# The Patroni image is FROM multidb-server-pg, so an HA node is the same PostgreSQL
+# The Patroni image is FROM dbpantry-pg, so an HA node is the same PostgreSQL
 # as a standalone one -- same extensions, same hardening. That also means it has
 # no entry in images/bases.tsv, which holds digest-pinned UPSTREAM references
 # and would be the wrong place to name an image we just built.
@@ -113,7 +113,7 @@ done
 # Derived images are built ONLY in a full build.
 #
 # They are FROM images this script produces -- patroni is FROM
-# multidb-server-pg -- so building them during `scripts/build cassandra`
+# dbpantry-pg -- so building them during `scripts/build cassandra`
 # makes Docker look for a base that exists nowhere but a full local build.
 # In CI, where each matrix job builds one engine, that surfaced as a 403 from
 # ghcr for an image we have never published.
@@ -127,7 +127,7 @@ case " $explicit_derived " in *" pgbouncer "*) build_pgbouncer=1 ;; *) build_pgb
 case " $explicit_derived " in *" patroni "*)   build_patroni=1   ;; *) build_patroni=$build_derived   ;; esac
 
 if (( build_pgbouncer )) && [[ -f "$ROOT/images/pgbouncer/Dockerfile" ]]; then
-    tag="$PREFIX/multidb-server-pgbouncer:dev"
+    tag="$PREFIX/dbpantry-pgbouncer:dev"
     printf 'building %s\n  from debian:12-slim + PGDG\n' "$tag"
     docker build -f "$ROOT/images/pgbouncer/Dockerfile" -t "$tag" "$ROOT/images"
     derived=$(( derived + 1 ))
@@ -135,8 +135,8 @@ fi
 
 if (( build_patroni )) && [[ -f "$ROOT/images/patroni/Dockerfile" ]]; then
     pg_version="$(version_for pg)"
-    tag="$PREFIX/multidb-server-patroni:$pg_version"
-    printf 'building %s\n  from %s/multidb-server-pg:%s\n' "$tag" "$PREFIX" "$pg_version"
+    tag="$PREFIX/dbpantry-patroni:$pg_version"
+    printf 'building %s\n  from %s/dbpantry-pg:%s\n' "$tag" "$PREFIX" "$pg_version"
     docker build \
         -f "$ROOT/images/patroni/Dockerfile" \
         --build-arg "ENGINE_VERSION=$pg_version" \

@@ -1,4 +1,4 @@
-# multidb-server-cli — every client tool, no server.
+# dbpantry-cli — every client tool, no server.
 #
 # SPEC decision 12: CLI tools are not daemons, so the one-process-per-container
 # rule does not apply to them. This is the one place a combined image is right,
@@ -38,11 +38,11 @@ FROM ${BASE_IMAGE}
 
 ARG PG_CLIENT_VERSION=17
 
-LABEL org.opencontainers.image.title="multidb-server-cli" \
-      org.opencontainers.image.description="PostgreSQL, MySQL and MariaDB clients, dump/restore tools, and the multidb-server scripts" \
+LABEL org.opencontainers.image.title="dbpantry-cli" \
+      org.opencontainers.image.description="PostgreSQL, MySQL and MariaDB clients, dump/restore tools, and the dbpantry scripts" \
       org.opencontainers.image.vendor="Simtabi LLC" \
       org.opencontainers.image.licenses="MIT" \
-      org.opencontainers.image.source="https://github.com/simtabi/multidb-server-docker"
+      org.opencontainers.image.source="https://github.com/simtabi/dbpantry"
 
 ENV DEBIAN_FRONTEND=noninteractive
 

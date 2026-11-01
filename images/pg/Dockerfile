@@ -1,4 +1,4 @@
-# multidb-server-pg — PostgreSQL with the full extension suite, supervised by s6.
+# dbpantry-pg — PostgreSQL with the full extension suite, supervised by s6.
 #
 # BASE_IMAGE is passed digest-pinned from images/bases.tsv (the single source of
 # truth). It varies by PostgreSQL major, which is why it cannot be a literal
@@ -143,11 +143,11 @@ FROM ${BASE_IMAGE}
 ARG ENGINE_VERSION=17
 ARG S6_OVERLAY_VERSION=3.2.3.2
 
-LABEL org.opencontainers.image.title="multidb-server-pg" \
-      org.opencontainers.image.description="PostgreSQL with the full multidb-server extension suite, supervised by s6-overlay" \
+LABEL org.opencontainers.image.title="dbpantry-pg" \
+      org.opencontainers.image.description="PostgreSQL with the full dbpantry extension suite, supervised by s6-overlay" \
       org.opencontainers.image.vendor="Simtabi LLC" \
       org.opencontainers.image.licenses="MIT" \
-      org.opencontainers.image.source="https://github.com/simtabi/multidb-server-docker"
+      org.opencontainers.image.source="https://github.com/simtabi/dbpantry"
 
 ENV DEBIAN_FRONTEND=noninteractive \
     PG_MAJOR=${ENGINE_VERSION}

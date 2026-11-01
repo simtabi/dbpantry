@@ -1,4 +1,4 @@
-# multidb-server-cassandra — Apache Cassandra with authentication actually on.
+# dbpantry-cassandra — Apache Cassandra with authentication actually on.
 #
 # The headline: the official image ships `AllowAllAuthenticator` AND
 # `AllowAllAuthorizer`. That is not weak authentication, it is none, with no
@@ -33,11 +33,11 @@ FROM ${BASE_IMAGE}
 ARG ENGINE_VERSION=5.0
 ARG S6_OVERLAY_VERSION=3.2.3.2
 
-LABEL org.opencontainers.image.title="multidb-server-cassandra" \
+LABEL org.opencontainers.image.title="dbpantry-cassandra" \
       org.opencontainers.image.description="Apache Cassandra with authentication and authorization enabled, supervised by s6-overlay" \
       org.opencontainers.image.vendor="Simtabi LLC" \
       org.opencontainers.image.licenses="Apache-2.0" \
-      org.opencontainers.image.source="https://github.com/simtabi/multidb-server-docker"
+      org.opencontainers.image.source="https://github.com/simtabi/dbpantry"
 
 USER root
 ENV DEBIAN_FRONTEND=noninteractive

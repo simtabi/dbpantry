@@ -1,4 +1,4 @@
-# multidb-server HA — Patroni, an etcd quorum, and HAProxy.
+# dbpantry HA — Patroni, an etcd quorum, and HAProxy.
 #
 # **This is a REHEARSAL topology, not production HA.** Every node here is on one
 # host, so the host is a single point of failure and no amount of Patroni fixes
@@ -37,7 +37,7 @@ x-patroni: &patroni
     dockerfile: patroni/Dockerfile
     args:
       ENGINE_VERSION: ${MDB_PG_VERSION:-17}
-  image: ghcr.io/simtabi/multidb-server-patroni:${MDB_PG_VERSION:-17}
+  image: ghcr.io/simtabi/dbpantry-patroni:${MDB_PG_VERSION:-17}
   profiles: [ha]
   restart: unless-stopped
   networks: [mdb]

@@ -48,7 +48,7 @@ for f in "${candidates[@]}"; do
             # published. The rule exists to pin what we consume, not what we
             # produce; their bases are pinned in images/bases.tsv, validated
             # below.
-            *ghcr.io/simtabi/multidb-server-*) continue ;;
+            *ghcr.io/simtabi/dbpantry-*) continue ;;
         esac
         printf '      %s: not digest-pinned: %s\n' "${f#./}" "$line" >&2
         (( violations++ )) || true

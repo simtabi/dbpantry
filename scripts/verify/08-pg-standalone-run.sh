@@ -7,7 +7,7 @@ source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
 need_docker
 
-# SPEC section 18: "docker run ghcr.io/simtabi/multidb-server-pg with only a
+# SPEC section 18: "docker run ghcr.io/simtabi/dbpantry-pg with only a
 # password env yields a fully configured server, no compose required."
 # This is the check that keeps layer 2 of the architecture honest.
 

@@ -1,4 +1,4 @@
-# multidb-server — the single entry point for humans and CI.
+# dbpantry — the single entry point for humans and CI.
 #
 # Targets marked "phase N" are scaffolded but not implemented yet. They fail
 # loudly rather than succeeding silently, so `make verify` stays honestly red
@@ -40,7 +40,7 @@ endef
 
 .PHONY: help
 help: ## Show this help
-	@printf 'multidb-server — make targets\n\n'
+	@printf 'dbpantry — make targets\n\n'
 	@grep -hE '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
 		| awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}'
 	@printf '\nProfiles: make up PROFILES=pg,mysql,ui\n'
@@ -163,7 +163,7 @@ shell: ## Open the cli image (tools with no server required)
 		--network $(COMPOSE_PROJECT_NAME)_net \
 		-v "$(CURDIR)/certs:/certs:ro" \
 		-v "$(CURDIR)/backups:/work/backups" \
-		ghcr.io/simtabi/multidb-server-cli:dev
+		ghcr.io/simtabi/dbpantry-cli:dev
 
 .PHONY: new-project
 new-project: ## Provision DB + roles + extensions, print the Laravel .env block

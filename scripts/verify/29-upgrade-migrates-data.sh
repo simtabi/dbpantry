@@ -14,8 +14,8 @@ cd "$MDB_ROOT" || exit 1
 # that the old major is still sitting there, complete, to roll back to.
 
 prefix="${MDB_IMAGE_PREFIX:-ghcr.io/simtabi}"
-old_img="$prefix/multidb-server-pg:16"
-new_img="$prefix/multidb-server-pg:17"
+old_img="$prefix/dbpantry-pg:16"
+new_img="$prefix/dbpantry-pg:17"
 need_image "$old_img"
 need_image "$new_img"
 

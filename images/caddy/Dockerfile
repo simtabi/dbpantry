@@ -1,4 +1,4 @@
-# multidb-server-caddy — Caddy with the layer4 module.
+# dbpantry-caddy — Caddy with the layer4 module.
 #
 # Caddy proxies HTTP out of the box; databases speak raw TCP. caddy-l4 adds
 # layer-4 proxying, which is what lets ONE front door own the host ports for
@@ -34,6 +34,6 @@ COPY --from=builder /usr/bin/caddy /usr/bin/caddy
 RUN caddy version && caddy list-modules | grep -q '^layer4' \
     && echo "layer4 modules present"
 
-LABEL org.opencontainers.image.title="multidb-server-caddy" \
+LABEL org.opencontainers.image.title="dbpantry-caddy" \
       org.opencontainers.image.description="Caddy with caddy-l4, so one front door can own every engine's host port" \
       org.opencontainers.image.licenses="Apache-2.0"

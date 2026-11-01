@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # shellcheck shell=bash
 #
-# Shared helpers for the multidb-server MySQL-family s6 init stages.
+# Shared helpers for the dbpantry MySQL-family s6 init stages.
 #
 # One set of scripts serves both engines. DESIGN.md D-17 warned that MySQL
 # (Oracle Linux 9) and MariaDB (Ubuntu 24.04) do not share a base OS, and that
