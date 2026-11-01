@@ -18,8 +18,17 @@ cd "$MDB_ROOT" || exit 1
 need_file "$MDB_ROOT/scripts/backup"
 need_file "$MDB_ROOT/scripts/restore"
 
-mdb_up PROFILES=pg,mysql,mariadb || vfail "make up failed"
+# Cleanups run in the order registered: the roundtrip databases are dropped
+# while the engines are still up, then the stack comes down. The dumps this
+# check takes are removed; earlier ones in backups/ are left alone.
+cleanup_new_backups
+add_cleanup "docker compose exec -T pg psql -U postgres -q -c 'DROP DATABASE IF EXISTS roundtrip;'"
+for e in mysql mariadb; do
+    add_cleanup "docker compose exec -T $e $e -uroot -p\"\$(cat secrets/${e}_root_password.txt)\" -e 'DROP DATABASE IF EXISTS roundtrip;'"
+done
 add_cleanup 'make down'
+
+mdb_up PROFILES=pg,mysql,mariadb || vfail "make up failed"
 
 # shellcheck disable=SC2016  # evaluated by the subshell, not here
 wait_for 120 "all engines healthy" bash -c \
@@ -40,7 +49,8 @@ docker compose exec -T pg psql -U postgres -d roundtrip -q -c "
 make backup ENGINE=pg DB=roundtrip >/dev/null 2>&1 || vfail "make backup ENGINE=pg failed"
 
 # Globals must be dumped alongside, or a restore lands in a server with no roles.
-ls backups/*globals* >/dev/null 2>&1 \
+# Fresh only: a globals file left by an earlier run must not satisfy this.
+find backups -name '*globals*' -type f -newermt '-10 minutes' | grep -q . \
     || vfail "no pg_dumpall --globals-only output; a per-DB dump alone loses roles and grants"
 vinfo "pg dump written with globals alongside"
 

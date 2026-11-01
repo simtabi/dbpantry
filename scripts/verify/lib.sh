@@ -240,6 +240,19 @@ track_container() { CLEANUP_CONTAINERS+=("$1"); }
 track_volume()    { CLEANUP_VOLUMES+=("$1"); }
 add_cleanup()     { CLEANUP_COMMANDS+=("$1"); }
 
+# Remove, at exit, every file the check adds under backups/ and nothing else.
+#
+# Checks that take real dumps write into the operator's backups/ directory. Left
+# behind, they piled up by the hundred across runs and were indistinguishable
+# from the operator's own dumps. The snapshot is taken when this is called, so
+# call it before the first dump; anything already there is never touched.
+cleanup_new_backups() {
+    local list
+    list="$(mktemp "${TMPDIR:-/tmp}/mdb-backups.XXXXXX")" || return 0
+    find "$MDB_ROOT/backups" -type f > "$list" 2>/dev/null || true
+    add_cleanup "find '$MDB_ROOT/backups' -type f ! -name .gitkeep | grep -vxF -f '$list' | while IFS= read -r f; do rm -f \"\$f\"; done; rm -f '$list'"
+}
+
 mdb_cleanup() {
     local item
     for item in ${CLEANUP_COMMANDS[@]+"${CLEANUP_COMMANDS[@]}"}; do

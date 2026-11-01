@@ -18,8 +18,9 @@ cd "$MDB_ROOT" || exit 1
 
 need_file "$MDB_ROOT/scripts/backup"
 
-mdb_up PROFILES=pg,mysql,mariadb,backup || vfail "make up failed"
+cleanup_new_backups
 add_cleanup 'make down'
+mdb_up PROFILES=pg,mysql,mariadb,backup || vfail "make up failed"
 
 # shellcheck disable=SC2016  # evaluated by the subshell, not here
 wait_for 120 "all engines healthy" bash -c \
@@ -38,7 +39,7 @@ find backups -name '*globals*' -type f -newermt '-10 minutes' | grep -q . \
 vinfo "pg globals dumped"
 
 # Checksums, per SPEC section 11.
-find backups -name '*.sha256' -o -name '*.md5' | grep -q . \
+find backups \( -name '*.sha256' -o -name '*.md5' \) -type f -newermt '-10 minutes' | grep -q . \
     || vfail "no checksum files alongside the dumps"
 vinfo "checksums written"
 
