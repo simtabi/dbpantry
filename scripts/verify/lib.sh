@@ -73,7 +73,7 @@ image_exists() { docker image inspect "$1" >/dev/null 2>&1; }
 
 # Fully-qualified name for one of our engine images.
 #   image_name pg      -> ghcr.io/simtabi/dbpantry-pg:17
-#   image_name mariadb -> ghcr.io/simtabi/dbpantry-mariadb:11.4
+#   image_name mariadb -> ghcr.io/simtabi/dbpantry-mariadb:11.8
 image_name() {
     local engine="$1" prefix ver
     prefix="${MDB_IMAGE_PREFIX:-ghcr.io/simtabi}"

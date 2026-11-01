@@ -26,14 +26,17 @@ if [[ ! -f "$ENV_FILE" ]]; then
 fi
 
 if [[ -t 1 ]] && [[ -z "${NO_COLOR:-}" ]]; then
-    RED=$'\033[31m'; GRN=$'\033[32m'; OFF=$'\033[0m'
+    RED=$'\033[31m'; GRN=$'\033[32m'; YEL=$'\033[33m'; OFF=$'\033[0m'
 else
-    RED=''; GRN=''; OFF=''
+    RED=''; GRN=''; YEL=''; OFF=''
 fi
 
 errors=0
 err()  { printf '%scheck-env%s %s\n' "$RED" "$OFF" "$1" >&2; (( errors++ )) || true; }
 note() { (( QUIET )) || printf '  %s\n' "$1"; }
+# A warning is printed even under --quiet: running an unsupported version is a
+# choice the operator should see on every boot, not only when asking.
+warn() { printf '%scheck-env warning%s %s\n' "$YEL" "$OFF" "$1" >&2; }
 
 # Read a key's value from the env file, ignoring comments.
 get() {
@@ -81,27 +84,62 @@ for key in COMPOSE_PROJECT_NAME MDB_PROFILES MDB_TZ MDB_BIND_ADDR \
 done
 
 # -----------------------------------------------------------------------------
-# 3. Engine versions must be on the supported menu (SPEC section 4)
+# 3. Engine versions: maintained, or explicitly unsupported (DESIGN.md D-57)
 # -----------------------------------------------------------------------------
-check_menu() {
-    local key="$1" value; shift
-    value="$(get "$key")"
-    [[ -z "$value" ]] && return 0
-    local allowed=" $* "
-    [[ "$allowed" == *" $value "* ]] || err "$key=$value is not on the supported menu: $*"
-}
-# The supported menu comes from each engine's descriptor, so adding an engine
-# or a version does not require editing this file (SPEC section 22.1).
+# The menu in each descriptor is the MAINTAINED versions: the newest supported
+# line and the one before it. Those are built, scanned and verified in CI from
+# a base pinned in images/bases.tsv.
+#
+# Any other version is still allowed, because an operator with a 7.0 cluster to
+# mirror should not have to fork the toolkit. It needs MDB_<ENGINE>_BASE_IMAGE,
+# the upstream image to build or run it from, pinned by digest. That makes the
+# choice explicit and reproducible, and it is reported as UNSUPPORTED on every
+# boot: nothing here builds, scans or verifies it, so there is no scan
+# guarantee. Without the override an off-menu version is an error, as before,
+# so a typo cannot quietly select an unmaintained engine.
+#
+# The menu comes from each engine's descriptor, so adding an engine or a version
+# does not require editing this file (SPEC section 22.1).
 # shellcheck source=engine-lib.sh
 . "$ROOT/scripts/engine-lib.sh"
 
+check_version() {
+    local key="MDB_${1}_VERSION" base_key="MDB_${1}_BASE_IMAGE" value base
+    value="$(get "$key")"
+    base="$(get "$base_key")"
+
+    if [[ -n "$base" ]] && ! engine_valid_base_ref "$base"; then
+        err "$base_key=$base is not pinned by digest; use name:tag@sha256:<digest>"
+        return 0
+    fi
+    [[ -z "$value" ]] && return 0
+
+    if ! engine_valid_version "$value"; then
+        err "$key=$value is not a version number (it names an image tag and a volume)"
+        return 0
+    fi
+
+    if engine_supports_version "$value"; then
+        [[ -z "$base" ]] || warn "$base_key replaces the pinned base for $key=$value.
+       UNSUPPORTED: built from your image, not ours; no scan guarantee (docs/versions.md)."
+        return 0
+    fi
+
+    if [[ -n "$base" ]]; then
+        warn "$key=$value is not a maintained version (maintained: $MDB_ENGINE_VERSIONS).
+       Running it from $base_key. UNSUPPORTED: not built, scanned or verified
+       here; no scan guarantee (docs/versions.md)."
+    else
+        err "$key=$value is not a maintained version (maintained: $MDB_ENGINE_VERSIONS).
+       To run it anyway, set $base_key to its upstream image pinned by
+       digest (name:tag@sha256:<digest>). That is unsupported: no scan
+       guarantee. See docs/versions.md."
+    fi
+}
+
 for _engine in $(engine_list); do
     engine_load "$_engine" || continue
-    _upper="$(printf '%s' "$MDB_ENGINE_NAME" | tr '[:lower:]-' '[:upper:]_')"
-    # Unquoted on purpose: VERSIONS is a space-separated menu and check_menu
-    # takes each version as its own argument.
-    # shellcheck disable=SC2086
-    check_menu "MDB_${_upper}_VERSION" $MDB_ENGINE_VERSIONS
+    check_version "$(printf '%s' "$MDB_ENGINE_NAME" | tr '[:lower:]-' '[:upper:]_')"
 done
 
 # PostgreSQL 18 moved the expected mount point. Up to 17 the data directory is

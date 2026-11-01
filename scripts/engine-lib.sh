@@ -117,12 +117,41 @@ engine_is_heavy()            { [ "${MDB_ENGINE_HEAVY:-false}" = "true" ]; }
 engine_tls_always()          { [ "${MDB_ENGINE_TLS_ALWAYS:-false}" = "true" ]; }
 
 # Is a version on this engine's supported menu?
+#
+# The menu holds MAINTAINED versions only: the newest supported line and the one
+# before it (DESIGN.md D-57, docs/versions.md). A version off the menu is not
+# refused outright. It runs from MDB_<ENGINE>_BASE_IMAGE, unsupported, and
+# check-env says so; see engine_base_override.
 engine_supports_version() {
     local want="$1" v
     for v in ${MDB_ENGINE_VERSIONS:-}; do
         [ "$v" = "$want" ] && return 0
     done
     return 1
+}
+
+# The digest-pinned upstream base for a maintained version, from
+# images/bases.tsv. Prints nothing for a version that is not maintained.
+engine_pinned_base() {
+    awk -v e="$1" -v v="$2" '$1==e && $2==v {print $3; exit}' \
+        "$MDB_ENGINES_DIR/../images/bases.tsv" 2>/dev/null || true
+}
+
+# The name of an engine's base-image override variable: MDB_<ENGINE>_BASE_IMAGE.
+engine_base_override_var() {
+    printf 'MDB_%s_BASE_IMAGE' "$(printf '%s' "$1" | tr '[:lower:]-' '[:upper:]_')"
+}
+
+# Is a base-image override acceptable? It must be pinned by digest, the same
+# rule images/bases.tsv follows, so an unsupported version is still a
+# reproducible one: name[:tag]@sha256:<64 hex>.
+engine_valid_base_ref() {
+    printf '%s' "$1" | grep -qE '^[a-z0-9][a-z0-9._/:-]*@sha256:[0-9a-f]{64}$'
+}
+
+# Is a version string safe to put in an image tag and a volume name?
+engine_valid_version() {
+    printf '%s' "$1" | grep -qE '^[0-9]+(\.[0-9]+)?$'
 }
 
 # Engines whose descriptor says they need an external pooler, for compose

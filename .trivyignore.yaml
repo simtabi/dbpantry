@@ -29,34 +29,17 @@
 vulnerabilities:
 
   # ---------------------------------------------------------------------------
-  # Apache Cassandra -- vendored Java dependencies
+  # Apache Cassandra -- vendored Java dependencies, no waivers
   # ---------------------------------------------------------------------------
   # Cassandra ships its Java dependencies inside lib/. Until 2026-11 the ones
-  # below their security fixes were waived here, because replacing a JAR in
-  # lib/ was treated as an untested configuration. That changed (DESIGN.md
-  # D-55): the image now replaces guava, snappy-java, jackson, netty, lz4-java,
-  # and on 4.1 logback and snakeyaml, with fixed releases pinned by sha256 in
-  # images/cassandra/jars.tsv, checked against Cassandra's own bytecode and
-  # boot-tested on both series. That removed 21 of the 22 waivers that were
-  # here. A new finding in lib/ means a row in jars.tsv needs raising -- do
-  # that, do not add a waiver.
+  # below their security fixes were waived here. The image now replaces guava,
+  # snappy-java, jackson, netty and lz4-java with fixed releases pinned by
+  # sha256 in images/cassandra/jars.tsv (DESIGN.md D-55). A new finding in lib/
+  # means a row in jars.tsv needs raising -- do that, do not add a waiver.
   #
-  # The one left is the one a swap cannot fix.
-
-  - id: CVE-2022-1471
-    purls:
-      - "pkg:maven/org.yaml/snakeyaml@1.33"
-    statement: >-
-      SnakeYAML remote code execution through the unsafe default constructor,
-      fixed only in snakeyaml 2.0. Cassandra 4.1 cannot take 2.x: its
-      YamlConfigurationLoader calls constructors that 2.0 removed, so a 4.1
-      node could not read cassandra.yaml. 4.1 therefore runs 1.33, the last 1.x
-      release (DESIGN.md D-55). Cassandra parses only cassandra.yaml with it,
-      which is operator-supplied and mounted by this toolkit -- an attacker able
-      to change it already controls the container. Cassandra 5.0 ships
-      snakeyaml 2.1 and is not affected. Revisit at the next Cassandra 4.1
-      release.
-    expired_at: 2026-11-09
+  # The last waiver, CVE-2022-1471 for snakeyaml 1.33 on Cassandra 4.1, was
+  # removed with 4.1 itself (DESIGN.md D-57): 4.1 cannot take snakeyaml 2.x,
+  # so it is no longer maintained here rather than shipped under a waiver.
 
   # ---------------------------------------------------------------------------
   # gosu, rclone, postgres_exporter -- no waivers, by construction

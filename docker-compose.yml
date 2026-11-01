@@ -262,7 +262,7 @@ services:
 
   backup-mariadb:
     profiles: [backup]
-    image: ghcr.io/simtabi/dbpantry-mariadb:${MDB_MARIADB_VERSION:-11.4}
+    image: ghcr.io/simtabi/dbpantry-mariadb:${MDB_MARIADB_VERSION:-11.8}
     restart: unless-stopped
     <<: *hardening
     entrypoint: ["/mdb/scripts/backup", "--engine", "mariadb", "--schedule"]

@@ -5,30 +5,29 @@
 # recorded in DESIGN.md section 3. Every entry is confirmed linux/amd64 +
 # linux/arm64. Renovate raises the bumps; never edit a tag without its digest.
 #
+# Only MAINTAINED versions have a row: the newest supported line and the one
+# before it, per engine (DESIGN.md D-57, docs/versions.md). An older version
+# has no row on purpose. It still runs, through MDB_<ENGINE>_BASE_IMAGE, but it
+# is not built, scanned or verified here.
+#
 # engine<TAB>version<TAB>image@digest
 
-pg	15	pgvector/pgvector:0.8.6-pg15@sha256:a20a57d7aa5217a6af0a391ccf69f4a8512406d6c14be08132f801468cc3cc62
-pg	16	pgvector/pgvector:0.8.6-pg16@sha256:a36250871de0833b8757561c72f2477ef1ddd1101afa4e617fb552e0de514c6b
 pg	17	pgvector/pgvector:0.8.6-pg17@sha256:7ae6051efd0e60444282c27c7e141af07f322ce033300e727a49c3dd11075e38
 pg	18	pgvector/pgvector:0.8.6-pg18@sha256:691673308c99d2161ba298736f3147f1f22d79de2fb7ec93ae9b4afcab870b62
 
-mysql	8.0	mysql:8.0.46@sha256:7dcddc01f13bab2f15cde676d44d01f61fc9f99fe7785e86196dfc07d358ae2b
 mysql	8.4	mysql:8.4.11@sha256:b3b90af2a6552ae30c266fdb7d5dd55f3afb72404bb78d37fe8a23eb857fd3fb
 mysql	9.7	mysql:9.7.2@sha256:257388edf9c84dbc04c763625446d5f3fa6ed60d1b0873bc552c614ba0a7ab4e
 
-mariadb	10.11	mariadb:10.11.19@sha256:7db29378d4fdab73f8123bbc2b48905c90d1a4b00cf848b028f1e81e623257f2
-mariadb	11.4	mariadb:11.4.13@sha256:1292844148b311e4ed4300022a996d39083f415a963e970cf47cad1b3b18e3a6
 mariadb	11.8	mariadb:11.8.9@sha256:6422478cb8e159f080fb1d8ccf65101e26fe51385787fde7d16c3b165a331f15
+mariadb	12.3	mariadb:12.3.3@sha256:d46e102fa8b9b72bfcdeb56f9dd538742092119dc8b11f31fe662605cd234cd9
 
 cli	dev	debian:12-slim@sha256:abd67ffcfa541b485a3dff59865ab629aa048a6c613e639d36e7456b0b229241
 
 # MongoDB is SSPL: source-available, NOT OSI open source. A derived image is
 # permitted but must be labelled. See docs/licensing.md and SPEC section 22.5.
-mongodb	7.0	mongo:7.0.39@sha256:35a5926f71f8b6cb19206bee928c5a85f241a8be99f20c81abe35ae78a73415d
-mongodb	8.0	mongo:8.0.28@sha256:98605bfa1bb2a15dd82109e1d78ad31527a9a744909fab4606076fa71a0ae515
-mongodb	8.3	mongo:8.3.7@sha256:2f02e2184c6d91c3208e5ab75a0707d1386a05377b20fdaf49a314815774d863
+mongodb	8.0	mongo:8.0.34@sha256:b9924c330a8bbc5800fe9c69f04a84e221eca7b28fd049a0354147d9908fa142
+mongodb	9.0	mongo:9.0.4@sha256:452bdaf2127b8ff851e31410a267809b9829eded219979f2210e7c7efb85a058
 
-cassandra	4.1	cassandra:4.1.12@sha256:9b33a893b9f92682892a8087caa7e4a95dbdc814cd921a25847df75e67dbded1
 cassandra	5.0	cassandra:5.0.9@sha256:1d18946ead0b0d22ed0371bd7384d86f540465c489f2935e88df35e755073f6b
 
 ferretdb	2	ghcr.io/ferretdb/ferretdb:2@sha256:5706414241eb84f0515512c37b46db0f1b1eac9e5ceb7e4c2523211c184b1985

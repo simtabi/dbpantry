@@ -33,7 +33,9 @@ emit_engine_env() {
     for v in $(grep -oE "^#?MDB_${up}_[A-Z0-9_]+" .env.example 2>/dev/null \
                  | sed 's/^#//' | sort -u); do
         case "$v" in
-            *_VERSION|*_HOST_PORT|*_DATABASES|*_EMBED_EXPORTER|*_EMBED_BACKUP) continue ;;
+            # *_BASE_IMAGE picks what the image is built FROM; the container
+            # has no use for it.
+            *_VERSION|*_HOST_PORT|*_DATABASES|*_EMBED_EXPORTER|*_EMBED_BACKUP|*_BASE_IMAGE) continue ;;
         esac
         printf '      %s: ${%s:-}\n' "$v" "$v"
     done
@@ -96,20 +98,34 @@ for engine in $(engine_list); do
 
     upper="$(printf '%s' "$MDB_ENGINE_NAME" | tr '[:lower:]-' '[:upper:]_')"
 
+    # The base for the version this machine selects: the environment, then the
+    # env file, then the descriptor default -- the order compose itself uses.
+    # A maintained version has a digest-pinned row in images/bases.tsv; any
+    # other has none, and runs only from MDB_<ENGINE>_BASE_IMAGE, which
+    # check-env requires and reports as unsupported (DESIGN.md D-57).
+    vvar="MDB_${upper}_VERSION"
+    resolved="${!vvar:-$(get "$vvar")}"
+    resolved="${resolved:-$MDB_ENGINE_DEFAULT_VERSION}"
+    pinned="$(engine_pinned_base "$MDB_ENGINE_NAME" "$resolved")"
+
     # A referenced engine is not rebuilt under our namespace, so it runs the
     # upstream image directly (SPEC section 22.5). Everything else runs the
     # image we publish.
     if [ "${MDB_ENGINE_PUBLISH:-derive}" = "reference" ]; then
-        image_line="\${MDB_${upper}_IMAGE:-$(awk -v e="$MDB_ENGINE_NAME" -v v="$MDB_ENGINE_DEFAULT_VERSION" \
-            '$1==e && $2==v {print $3; exit}' images/bases.tsv)}"
+        # MDB_<ENGINE>_IMAGE predates the version policy and still wins.
+        image_line="\${MDB_${upper}_IMAGE:-\${MDB_${upper}_BASE_IMAGE:-${pinned}}}"
         build_block=""
     else
         image_line="ghcr.io/simtabi/dbpantry-${MDB_ENGINE_NAME}:\${MDB_${upper}_VERSION:-${MDB_ENGINE_DEFAULT_VERSION}}"
+        # BASE_IMAGE is passed so a compose build of a non-default version
+        # starts from that version's base rather than the Dockerfile's default.
         build_block="    build:
       context: ./images
       dockerfile: ${MDB_ENGINE_NAME}/Dockerfile
       args:
+        BASE_IMAGE: \${MDB_${upper}_BASE_IMAGE:-${pinned}}
         ENGINE_VERSION: \${MDB_${upper}_VERSION:-${MDB_ENGINE_DEFAULT_VERSION}}
+        UNSUPPORTED_VERSION: \${MDB_${upper}_BASE_IMAGE:+true}
 "
     fi
 

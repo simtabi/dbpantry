@@ -12,7 +12,11 @@
 # docs/UPGRADE.md as the manual path; it is not automated here because it
 # mutates the source data directory, which would throw away that guarantee.
 #
-# Usage: scripts/upgrade --engine pg --from 16 --to 17
+# Usage: scripts/upgrade --engine pg --from 17 --to 18
+#
+# FROM may be a version that is no longer maintained (DESIGN.md D-57) -- that is
+# the usual reason to upgrade. Its image then has to be built from
+# MDB_<ENGINE>_BASE_IMAGE first; the error below says how.
 
 set -euo pipefail
 
@@ -38,7 +42,7 @@ while (( $# )); do
 done
 
 [[ -n "$ENGINE" && -n "$FROM" && -n "$TO" ]] \
-    || die "usage: make upgrade ENGINE=pg FROM=16 TO=17"
+    || die "usage: make upgrade ENGINE=pg FROM=17 TO=18"
 [[ "$FROM" != "$TO" ]] || die "FROM and TO are the same version"
 
 case "$ENGINE" in
@@ -47,6 +51,13 @@ case "$ENGINE" in
     mariadb) vol_from="${PROJECT}_mariadb${FROM}_data"; vol_to="${PROJECT}_mariadb${TO}_data" ;;
     *) die "unknown engine: $ENGINE" ;;
 esac
+
+# Where PostgreSQL's data volume mounts. PG 18 moved it one level up, to
+# /var/lib/postgresql, so a dump from 17 restored into 18 at the old path would
+# initialise into an anonymous volume and leave the new one empty.
+pg_mount() {
+    if (( ${1%%.*} >= 18 )); then printf '/var/lib/postgresql'; else printf '/var/lib/postgresql/data'; fi
+}
 
 # tr rather than ${ENGINE^^}: that expansion is bash 4 only and macOS ships
 # bash 3.2, where it is a syntax error (DESIGN.md D-24).
@@ -62,7 +73,9 @@ for v in "$FROM" "$TO"; do
     img="$PREFIX/dbpantry-$ENGINE:$v"
     docker image inspect "$img" >/dev/null 2>&1 \
         || die "image not built: $img
-       Build it first:  MDB_${ENGINE_UPPER}_VERSION=$v scripts/build $ENGINE"
+       Build it first: set MDB_${ENGINE_UPPER}_VERSION=$v in .env and run
+       scripts/build $ENGINE. A version that is no longer maintained also
+       needs MDB_${ENGINE_UPPER}_BASE_IMAGE (docs/versions.md)."
 done
 
 cat <<PLAN
@@ -104,7 +117,7 @@ log "starting $ENGINE $FROM against its existing volume (read only as far as you
 case "$ENGINE" in
     pg)
         docker run -d --name "$old_c" -e POSTGRES_PASSWORD=mdb-throwaway-upgrade \
-            -v "$vol_from:/var/lib/postgresql/data" "$PREFIX/dbpantry-pg:$FROM" >/dev/null \
+            -v "$vol_from:$(pg_mount "$FROM")" "$PREFIX/dbpantry-pg:$FROM" >/dev/null \
             || die "could not start $ENGINE $FROM"
         for _ in $(seq 1 120); do
             docker exec "$old_c" pg_isready -U postgres >/dev/null 2>&1 && break
@@ -151,7 +164,7 @@ log "starting $ENGINE $TO on a fresh volume"
 case "$ENGINE" in
     pg)
         docker run -d --name "$new_c" -e POSTGRES_PASSWORD=mdb-throwaway-upgrade \
-            -v "$vol_to:/var/lib/postgresql/data" "$PREFIX/dbpantry-pg:$TO" >/dev/null \
+            -v "$vol_to:$(pg_mount "$TO")" "$PREFIX/dbpantry-pg:$TO" >/dev/null \
             || die "could not start $ENGINE $TO"
         for _ in $(seq 1 120); do
             docker exec "$new_c" pg_isready -U postgres >/dev/null 2>&1 && break
@@ -188,12 +201,19 @@ fi
 
 log "$count database(s) present on $ENGINE $TO"
 
+extra=""
+if [[ "$ENGINE" == pg && "$(pg_mount "$FROM")" != "$(pg_mount "$TO")" ]]; then
+    extra="     and MDB_PG_DATA_MOUNT=$(pg_mount "$TO") (PG 18 moved the data directory)
+"
+fi
+
 cat <<DONE
 
 ────────────────────────────────────────────────────────────────────────
 Upgrade staged successfully.
 
   1. Set MDB_${ENGINE_UPPER}_VERSION=${TO} in .env
+${extra}     and remove MDB_${ENGINE_UPPER}_BASE_IMAGE if it was set for ${FROM}
   2. make up
   3. Verify your application
 
