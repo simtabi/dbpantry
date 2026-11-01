@@ -61,6 +61,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   under a project of its own.
 - `docs/UPGRADE.md` said `make upgrade` handled MongoDB and Cassandra; it handles PostgreSQL,
   MySQL and MariaDB only.
+- Check 27 (HA failover) could stop without a message when one Patroni probe failed, such as
+  `scripts/ha leader` in the seconds after the leader is killed, because the check runs under
+  `set -e` with pipefail. Its polls now retry within their budget, so it fails only when no
+  new leader is elected in time.
 
 ### Removed
 
