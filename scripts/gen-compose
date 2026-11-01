@@ -268,9 +268,10 @@ for engine in $(engine_list); do
             printf '    volumes:\n'
             printf '      - ./secrets:/run/secrets:ro\n'
             printf '      - ./certs:/certs:ro\n'
-            # Bootstrap scripts are baked into the images now, not mounted
-            # from the repo -- an image that needs a file from the checkout to
-            # start is not the standalone image SPEC section 3 promises.
+            # The ENGINE images bake their bootstrap scripts in (SPEC section 3:
+            # an image must start without the checkout). A pooler is a
+            # third-party image we do not rebuild -- ProxySQL -- so its
+            # bootstrap is the one file still mounted, from config/proxysql/.
             [ -n "${MDB_ENGINE_POOLER_BOOTSTRAP:-}" ] && \
                 printf '      - ./%s:%s:ro\n' \
                     "$MDB_ENGINE_POOLER_BOOTSTRAP" "$MDB_ENGINE_POOLER_CMD"

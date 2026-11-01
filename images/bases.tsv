@@ -3,7 +3,8 @@
 #
 # Digests were resolved from the live registries during step 1 research and are
 # recorded in DESIGN.md section 3. Every entry is confirmed linux/amd64 +
-# linux/arm64. Renovate raises the bumps; never edit a tag without its digest.
+# linux/arm64. Re-pinned by hand (Dependabot does not read this file); never
+# edit a tag without its digest.
 #
 # Only MAINTAINED versions have a row: the newest supported line and the one
 # before it, per engine (DESIGN.md D-57, docs/guides/versions.md). An older version

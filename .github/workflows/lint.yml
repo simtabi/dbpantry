@@ -13,9 +13,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      # Pinned to the commit, not the tag -- a moved tag is how the tj-actions
-      # and trivy-action supply-chain attacks spread. Dependabot's
-      # github-actions ecosystem bumps the SHA and keeps the comment current.
+      # Pinned by tag today, not yet by commit (see .github/dependabot.yml);
+      # a moved tag is how the tj-actions and trivy-action attacks spread, so
+      # re-pinning to a SHA is the open follow-up.
       - uses: actions/checkout@v7
         with:
           # No job in this workflow pushes, so the token has no business
@@ -50,9 +50,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      # Pinned to the commit, not the tag -- a moved tag is how the tj-actions
-      # and trivy-action supply-chain attacks spread. Dependabot's
-      # github-actions ecosystem bumps the SHA and keeps the comment current.
+      # Pinned by tag today, not yet by commit (see .github/dependabot.yml);
+      # a moved tag is how the tj-actions and trivy-action attacks spread, so
+      # re-pinning to a SHA is the open follow-up.
       - uses: actions/checkout@v7
         with:
           # No job in this workflow pushes, so the token has no business

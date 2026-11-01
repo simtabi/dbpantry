@@ -70,7 +70,7 @@ of the box — correcting that is a large part of why this exists.
 | MariaDB | relational | **11.8** · 12.3 (both LTS) | ProxySQL (optional) | GPL-2.0 |
 | MongoDB | document | **7.0** · 8.0 · 9.0 | driver-side | SSPL — [referenced, not published](docs/guides/licensing.md) |
 | Cassandra | wide-column | **5.0** | driver-side | Apache-2.0 |
-| FerretDB | document | **2** | driver-side | Apache-2.0 |
+| FerretDB | document | **2** | driver-side | Apache-2.0 — declared, image not built yet ([why](docs/guides/adding-an-engine.md)) |
 
 Bold is the default. Each engine maintains the newest supported line and the one
 before it; those are the versions built, scanned and verified here. An older

@@ -26,7 +26,6 @@ image, replacing Cassandra's vulnerable vendored JARs rather than waiving them.
   7.0.13 (SERVER-121912), and every Ubuntu 7.0 kernel, GitHub's runners included, reports
   7.0.0 (SERVER-136848).
 - MongoDB 7.0 is repinned to 7.0.45, and 8.0 to 8.0.34.
-
 - **The project is renamed dbpantry** (DESIGN.md D-54). The repository moved from
   `simtabi/multidb-server-docker` to `simtabi/dbpantry`; GitHub redirects the old URL. Images
   are now `dbpantry-<engine>`: run `make build` again, and the next `make up`
@@ -35,6 +34,15 @@ image, replacing Cassandra's vulnerable vendored JARs rather than waiving them.
   so existing `.env` files, containers and volumes carry over unchanged.
 - The README drops the GHCR badge and the hosted-docs link, which pointed at pages that do not
   exist yet.
+- **Files are grouped by how they are used** (DESIGN.md D-59, [the plan](docs/REORGANIZATION_PLAN.md)).
+  `caddy/`, `haproxy/` and `proxysql/` move under `config/`; `docs/` splits into `guides/`,
+  `runbooks/` and `reference/`, and `IMAGE-PROVENANCE.md` becomes
+  `docs/reference/image-provenance.md`. Every link and path is updated. A checkout with
+  rendered files in the old `caddy/` regenerates them on the next `make up`.
+- `make verify` takes `CHECKS=21,28` and `TAGS=pg,backup`; `VERIFY_TAGS` accepts several tags,
+  and a filter that matches nothing fails rather than reporting green.
+- DESIGN.md: the second D-51 (vulnerability waivers) is renumbered D-58, and D-23 and
+  D-52 to D-57, which sat after the end of the document, are back in the decision log.
 
 ### Added
 
@@ -59,6 +67,9 @@ image, replacing Cassandra's vulnerable vendored JARs rather than waiving them.
 - Check 44 fails on any leftover use of the old names outside the history they belong to.
 - Check 45 fails if `images/cassandra/jars.tsv` has a row without a full sha256 or for a
   series that is not built, or if the Cassandra Dockerfile stops running the swap.
+- Check 46 fails on a relative Markdown link that points at nothing.
+- Check 47 fails on a compose bind-mount source, build context or dockerfile that does not
+  exist and is not a known generated file.
 
 ### Fixed
 
@@ -77,6 +88,15 @@ image, replacing Cassandra's vulnerable vendored JARs rather than waiving them.
   `scripts/ha leader` in the seconds after the leader is killed, because the check runs under
   `set -e` with pipefail. Its polls now retry within their budget, so it fails only when no
   new leader is elected in time.
+- `make up PROFILES=ferretdb` failed inside compose on a missing `images/ferretdb/Dockerfile`.
+  FerretDB is declared but not built yet: `gen-compose` now emits no service for an engine
+  without its image, and `check-env` refuses the profile by name.
+- Checks 21, 22 and 28 left their dumps in `backups/`, their `roundtrip` databases, and the
+  readonly secrets of the projects they created. They now remove what they made and nothing
+  else, and 21 and 22 require fresh globals and checksums rather than any on disk.
+- Comments claimed the workflows pin actions by commit; they pin by tag. CONTRIBUTING named
+  Renovate; the repository uses Dependabot. `docs/reference/acceptance.md` said the
+  repository had no remote.
 
 ### Removed
 
@@ -90,14 +110,13 @@ image, replacing Cassandra's vulnerable vendored JARs rather than waiving them.
 - **The last Trivy waiver for Cassandra is gone**: CVE-2022-1471 in snakeyaml 1.33 left with
   Cassandra 4.1, rather than being extended past 2026-11-09. `.trivyignore.yaml` has no
   Cassandra entries.
-
 - **The Cassandra images replace their vulnerable vendored JARs** with fixed releases from
   Maven Central, pinned by sha256 (DESIGN.md D-55): guava 33.7.2-jre, snappy-java 1.1.10.12,
   jackson 2.22.4, lz4-java 1.12.1 and netty 4.1.139.Final on both series, plus logback 1.2.13
   and snakeyaml 1.33 on 4.1. This fixes the guava and snappy-java findings that failed the
   Trivy gate, and removes 21 of the 22 Cassandra waivers. The one left, CVE-2022-1471 in
-  snakeyaml on 4.1, is fixed only in snakeyaml 2.x, which Cassandra 4.1 cannot load; it still
-  expires on 2026-11-09.
+  snakeyaml on 4.1, is fixed only in snakeyaml 2.x, which Cassandra 4.1 cannot load; it left
+  with 4.1 (above).
 - **The Go toolchain moves to 1.27.3**, the latest stable release, with `x/net` at
   v0.60.0, for gosu, rclone and postgres_exporter. This fixes CVE-2026-111943 in
   `crypto/x509`, and CVE-2026-78667, CVE-2026-78669 and CVE-2026-97031, which

@@ -24,7 +24,7 @@ so a green `make verify` is the criteria being met rather than a proxy for it.
 | 8 | Restore drill with row-count verification; `backup-all` produces per-database dumps plus PG globals; `verify-backups` restores the latest set green | `21-backup-restore-roundtrip`, `22-backup-all-and-verify` | Covered |
 | 9 | `make psql` over the shared unix socket; a sidecar mounting the socket volume connects with no TCP | `19-unix-sockets` | Covered |
 | 10 | `sslmode=verify-full` against the toolkit CA succeeds; prod MySQL-family plaintext refused | `12-pg-tls`, `20-tls-enforced-prod` | Covered |
-| 11a | CI matrix green | `.github/workflows/ci.yml` | Written, never run — see below |
+| 11a | CI matrix green | `.github/workflows/ci.yml` | Not verifiable from a local checkout — see below |
 | 11b | trivy clean or waived with notes | `38-trivy-waivers`, CI scan step | Covered |
 | 11c | Repo and image-history grep finds no credential | `03-secret-scan-repo`, `23-image-history-secrets` | Covered |
 
@@ -46,6 +46,8 @@ so a green `make verify` is the criteria being met rather than a proxy for it.
 | No Dockerfile passes a dnf-only flag to microdnf | `43-microdnf-flags` |
 | No leftover old product name outside its history | `44-no-old-name` |
 | Cassandra's replaced JARs are pinned by checksum and installed | `45-cassandra-jars` |
+| Every relative link in the Markdown docs resolves | `46-doc-links-resolve` |
+| Every compose mount source, build context and dockerfile exists or is generated | `47-compose-paths-exist` |
 | The off-site push is wired, authenticated, and fails loudly | `39-offsite-backup` |
 | Configuration reproduces, data persists, recovery data outlives `destroy` | `41-state-survives` |
 | Every image is official, upstream, or justified | `42-image-provenance` |
@@ -58,15 +60,15 @@ one that is openly outstanding.
 
 **CI matrix green (11a).** The workflow is written — the matrix derived from
 the engine descriptors, images built per version per architecture, each scanned
-by trivy — but the repository has no remote, so GitHub Actions has never
-executed it. What is verified locally: the YAML parses, `scripts/ci-matrix`
+by trivy — and the repository now has a GitHub remote, but this local copy
+cannot see whether a run there has gone green. What is verified locally: the YAML parses, `scripts/ci-matrix`
 produces the twelve (engine, version) pairs, the exact build path succeeds for
 a non-default version, and the trivy invocation was run by hand against a built
 image (it found seventeen real findings, now waived with reasons). Calling that
 "green" would still be a claim about something that has not run.
 
-This is the one criterion that cannot be closed from here: it needs a push to
-GitHub, which is the user's to make.
+This is the one criterion that cannot be closed from a local checkout: it is
+proven by a green run on GitHub, not by anything in this repository.
 
 ## Beyond the specification
 
@@ -76,7 +78,7 @@ existed. Recorded here so the harness's size is explained rather than assumed.
 | What | Why | Check |
 |---|---|---|
 | PITR for MySQL and MariaDB | The spec asks only for PostgreSQL. Leaving two engines recoverable only to the last dump, in a toolkit that advertises verified restores, would be a strange asymmetry. | `40` |
-| Vulnerability waivers must justify themselves | "trivy clean **or waived with notes**" — the notes half is what decays, and an ignore file is trivially abused to make a scanner green. An expiry date makes the revisit mechanical rather than a promise (D-51). | `38` |
+| Vulnerability waivers must justify themselves | "trivy clean **or waived with notes**" — the notes half is what decays, and an ignore file is trivially abused to make a scanner green. An expiry date makes the revisit mechanical rather than a promise (D-58). | `38` |
 | Replacing Cassandra's vulnerable JARs | Waiving them made every build depend on a date, for libraries whose fixes Cassandra had not shipped. Replacing them is tested rather than assumed safe (D-55). | `45` |
 | Image provenance | "Use official images" erodes one convenient third-party rebuild at a time, each defensible alone. | `42` |
 | State lifetimes | Configuration, data and recovery data have three different lifetimes and get confused with each other; each confusion has a distinct failure. | `41` |

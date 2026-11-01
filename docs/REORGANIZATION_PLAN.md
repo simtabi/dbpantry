@@ -108,3 +108,15 @@ Each move is one commit with its reference updates, so reverting that commit
 restores the old paths. Generated files at the old paths (`caddy/Caddyfile`,
 `caddy/servers.json`, `caddy/layer4.caddy`) are gitignored and are regenerated at
 the new location by the next `make up`. The old copies are safe to delete.
+
+## Found while executing
+
+- **FerretDB was declared but never built.** `engines/ferretdb/engine.conf`
+  exists, `images/ferretdb/Dockerfile` does not, and `gen-compose` still emitted
+  a build for it, so `make up PROFILES=ferretdb` failed inside compose. Check 47
+  caught it on its first run. The fix makes the state honest (no service, a
+  `check-env` refusal by name, docs say so); building the image itself is
+  open work, not part of a reorganisation.
+- **A local `.env` pinning a version that left the menu** (MariaDB 11.4, removed
+  by D-57) makes every `make up` fail `check-env`, whatever the profiles. That is
+  the intended behaviour; the fix is per machine, in `.env`, not in the repo.

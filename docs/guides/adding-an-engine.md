@@ -14,9 +14,12 @@ Three files, sometimes two:
 | `engines/_family/<family>.sh` | Only for a new family | The handful of operations that genuinely need code |
 | `images/<name>/Dockerfile` | Only when publishing | Absent for engines we reference rather than build |
 
-An engine joining an existing family costs **one file**. FerretDB speaks the
-MongoDB wire protocol, so it declared `MDB_ENGINE_FAMILY=mongodb` and inherited
-`mongosh`, `mongodump` and `mongorestore` without a line of new code.
+An engine joining an existing family costs **one file** to declare. FerretDB
+speaks the MongoDB wire protocol, so it declared `MDB_ENGINE_FAMILY=mongodb` and
+inherited `mongosh`, `mongodump` and `mongorestore` without a line of new code.
+Declaring is not running, though: a derived engine also needs its
+`images/<name>/Dockerfile`, and until it has one `gen-compose` emits no service
+for it and `check-env` refuses its profile. FerretDB is in that state today.
 
 ## 1. Write the descriptor
 
