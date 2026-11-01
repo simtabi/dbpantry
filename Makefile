@@ -34,7 +34,7 @@ all_profiles := --profile '*'
 # Emit a consistent "not implemented" failure. $(1) is the owning phase.
 define unimplemented
 	@printf '\033[33m✗ %s\033[0m is scaffolded but not implemented yet (phase %s).\n' "$@" "$(1)" >&2; \
-	printf '  See docs/KIT.md section 5 for what that phase delivers.\n' >&2; \
+	printf '  See docs/reference/KIT.md section 5 for what that phase delivers.\n' >&2; \
 	exit 1
 endef
 

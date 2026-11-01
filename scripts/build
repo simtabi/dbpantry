@@ -105,7 +105,7 @@ for engine in ${engines[@]+"${engines[@]}"}; do
         base="$(base_for "$engine" "$version")"
         [[ -n "$base" ]] || {
             printf 'no base pinned for %s %s in images/bases.tsv.\n' "$engine" "$version" >&2
-            printf '  %s is not a maintained version (docs/versions.md). To build it anyway, set\n' "$version" >&2
+            printf '  %s is not a maintained version (docs/guides/versions.md). To build it anyway, set\n' "$version" >&2
             printf '  %s in .env to its upstream image pinned by digest; it is then\n' "$(engine_base_override_var "$engine")" >&2
             printf '  unsupported, with no scan guarantee.\n' >&2
             exit 1

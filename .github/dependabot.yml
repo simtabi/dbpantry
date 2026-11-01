@@ -3,7 +3,7 @@
 # Actions are pinned by tag today; each merged bump is the moment to re-pin.
 # Docker base images are pinned by DIGEST in images/bases.tsv, which Dependabot
 # does not read -- repinning those is a deliberate act, described in
-# docs/release.md, because a moved base is a rebuild-and-reverify.
+# docs/guides/release.md, because a moved base is a rebuild-and-reverify.
 version: 2
 updates:
   - package-ecosystem: github-actions

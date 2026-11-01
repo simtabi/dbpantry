@@ -2,7 +2,7 @@
 
 How a version of dbpantry ships, and what a consumer gets.
 
-> **Status:** [`release.yml`](../.github/workflows/release.yml) implements this
+> **Status:** [`release.yml`](../../.github/workflows/release.yml) implements this
 > contract. It has not run yet: v0.1.0 was released by hand, with no images, so
 > the next tag is the first that publishes anything. Until then the images exist
 > only where `make build` built them.
@@ -106,7 +106,7 @@ Every release carries a real description, taken from that version's
 CHANGELOG". The workflow extracts the `## [X.Y.Z]` block and passes it as the
 release body, with the contributor list appended.
 
-[`scripts/release-notes`](../scripts/release-notes) does the extraction, and the
+[`scripts/release-notes`](../../scripts/release-notes) does the extraction, and the
 workflow runs it before anything is built. Preview the next release's notes with:
 
 ```bash
@@ -176,4 +176,4 @@ that matters.
 
 ---
 
-[← Docs index](../README.md#documentation)
+[← Docs index](../../README.md#documentation)

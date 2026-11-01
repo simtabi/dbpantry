@@ -50,7 +50,7 @@ MDB_MTLS=true
 
 `proxy` mode is worth preferring here: one front door is one thing to firewall,
 one thing to audit, and one place a rule can be wrong. It uses Caddy with the
-layer4 module — see [image provenance](../IMAGE-PROVENANCE.md). That module is
+layer4 module — see [image provenance](../reference/image-provenance.md). That module is
 pre-1.0, so if you would rather not have it in the connection path, `direct`
 publishes the same ports without it.
 
@@ -91,7 +91,7 @@ MDB_CASSANDRA_HEAP_NEW=800M
 ## Connection pooling
 
 On a server this stops being optional for PostgreSQL. See
-[Connection pooling](pooling.md) for why, and for what transaction pooling
+[Connection pooling](../guides/pooling.md) for why, and for what transaction pooling
 breaks. Short version:
 
 ```bash
@@ -341,4 +341,4 @@ restoring until you know which problem you have.
 
 ---
 
-[← Docs index](../README.md#documentation)
+[← Docs index](../../README.md#documentation)

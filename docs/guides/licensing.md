@@ -93,4 +93,4 @@ gh attestation verify oci://ghcr.io/simtabi/dbpantry-pg:17 --owner simtabi
 
 ---
 
-[← Docs index](../README.md#documentation)
+[← Docs index](../../README.md#documentation)

@@ -111,7 +111,7 @@ services:
     profiles: [ui, prod]
     # Built here: stock Caddy proxies HTTP, and the database engines speak raw
     # TCP. images/caddy/Dockerfile adds caddy-l4 so ONE front door can own the
-    # host ports for every engine. See IMAGE-PROVENANCE.md.
+    # host ports for every engine. See docs/reference/image-provenance.md.
     build:
       context: ./images
       dockerfile: caddy/Dockerfile

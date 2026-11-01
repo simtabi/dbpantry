@@ -1,6 +1,6 @@
 name: Release
 
-# The contract is docs/release.md: a tag `vX.Y.Z` is the only thing that
+# The contract is docs/guides/release.md: a tag `vX.Y.Z` is the only thing that
 # publishes, and nothing is published from a branch, a pull request or by hand.
 # Pushing the tag is the release decision; this workflow only carries it out.
 on:
@@ -70,7 +70,7 @@ jobs:
         run: scripts/release-notes "$VERSION" > /dev/null
 
       # The same descriptor-derived matrix ci.yml builds, plus the cli image.
-      # MongoDB is referenced, never derived (docs/licensing.md), so ci-matrix
+      # MongoDB is referenced, never derived (docs/guides/licensing.md), so ci-matrix
       # leaves it out; this step fails rather than trusts that.
       - id: matrix
         name: Resolve the images to publish
@@ -104,7 +104,7 @@ jobs:
         arch: [amd64, arm64]
         # Native runners only. There is no emulated build: an image that
         # cannot be built on arm64 fails the release rather than shipping as
-        # a QEMU build (docs/release.md).
+        # a QEMU build (docs/guides/release.md).
         include:
           - arch: amd64
             runner: ubuntu-latest
@@ -165,7 +165,7 @@ jobs:
   # ---------------------------------------------------------------------------
   # Gate 2: the acceptance harness, on both architectures.
   #
-  # `make verify` is the definition of done (docs/release.md). The tagged
+  # `make verify` is the definition of done (docs/guides/release.md). The tagged
   # commit passed it as a pull request, but a release does not rest on a run
   # it cannot see: the bases or the waivers' dates may have moved since.
   # ---------------------------------------------------------------------------
@@ -406,7 +406,7 @@ jobs:
   # The GitHub release, last: it announces images that already exist.
   #
   # The body is the version's CHANGELOG section with the contributors since
-  # the previous tag appended (docs/release.md), and the source tarball is
+  # the previous tag appended (docs/guides/release.md), and the source tarball is
   # attached with its checksum and provenance.
   # ---------------------------------------------------------------------------
   release:

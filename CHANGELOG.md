@@ -15,11 +15,11 @@ image, replacing Cassandra's vulnerable vendored JARs rather than waiving them.
 ### Changed
 
 - **Each engine now maintains its current and latest version only** (DESIGN.md D-57,
-  [Supported versions](docs/versions.md)): the newest supported line and the one before it,
+  [Supported versions](docs/guides/versions.md)): the newest supported line and the one before it,
   confirmed from each project's own end-of-life page. The menu goes from 16 versions to 11:
   PostgreSQL 17 · 18, MySQL 8.4 · 9.7, MariaDB 11.8 · 12.3, MongoDB 7.0 · 8.0 · 9.0, Cassandra 5.0
   and FerretDB 2. A `.env` naming a version that left the menu fails `make check-env` and its
-  volume is untouched; [Upgrade](docs/UPGRADE.md) covers moving it, or keep it through
+  volume is untouched; [Upgrade](docs/runbooks/UPGRADE.md) covers moving it, or keep it through
   `MDB_<ENGINE>_BASE_IMAGE`, unsupported.
 - **The MariaDB default moves from 11.4 to 11.8.** MongoDB keeps 7.0 as its default, the
   one exception to the policy: 8.x and 9.x refuse to start on kernels reporting 6.19 to
@@ -43,9 +43,9 @@ image, replacing Cassandra's vulnerable vendored JARs rather than waiving them.
   digest, and warns on every start that the version is unsupported, with no scan guarantee;
   `scripts/build` labels the image `io.simtabi.dbpantry.support=unsupported`.
 - MariaDB 12.3 (12.3.3) and MongoDB 9.0 (9.0.4).
-- [Supported versions](docs/versions.md): the maintained versions per engine, their upstream
+- [Supported versions](docs/guides/versions.md): the maintained versions per engine, their upstream
   end-of-life dates and sources, and how to run any other.
-- [Upgrade](docs/UPGRADE.md) documents moving off a version that left the menu, and the
+- [Upgrade](docs/runbooks/UPGRADE.md) documents moving off a version that left the menu, and the
   manual MongoDB 7.0 → 8.0 and Cassandra 4.1 → 5.0 migrations, each rehearsed with the old
   volume left intact.
 - **Releases are built and published by CI.** A `vX.Y.Z` tag on `main` runs
@@ -53,7 +53,7 @@ image, replacing Cassandra's vulnerable vendored JARs rather than waiving them.
   proven by the full harness on both before anything is pushed to
   `ghcr.io/simtabi/dbpantry-<engine>`, with an SBOM and build provenance attached.
   Engines are tagged `<major>-<release>`, which never moves, and `<major>`; see
-  [Release](docs/release.md).
+  [Release](docs/guides/release.md).
 - `scripts/release-notes` prints a version's CHANGELOG section, the body of its
   GitHub release; `scripts/release-notes Unreleased` previews the next one.
 - Check 44 fails on any leftover use of the old names outside the history they belong to.

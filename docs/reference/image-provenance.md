@@ -19,10 +19,10 @@ Maintained by Docker in partnership with upstream, on the library namespace.
 | `postgres` (via `pgvector/pgvector`) | PostgreSQL — see below |
 | `mysql` | MySQL engine base |
 | `mariadb` | MariaDB engine base |
-| `mongo` | MongoDB (referenced, not rebuilt — see [licensing](docs/licensing.md)) |
+| `mongo` | MongoDB (referenced, not rebuilt — see [licensing](../guides/licensing.md)) |
 | `cassandra` | Cassandra engine base; vulnerable vendored JARs replaced from Maven Central (see below) |
 | `debian` | the `cli` image base |
-| `golang` | build stage only: rebuilds gosu, rclone and postgres_exporter from their upstream tags ([D-51](DESIGN.md)); never shipped |
+| `golang` | build stage only: rebuilds gosu, rclone and postgres_exporter from their upstream tags ([D-51](../../DESIGN.md)); never shipped |
 | `caddy` | UI front door |
 | `haproxy` | HA routing |
 | `adminer` | SQL UI |
@@ -60,29 +60,29 @@ on both architectures from the PostgreSQL project itself.
 One image changes what its base ships. Cassandra vendors its Java dependencies
 in `lib/`, and where those are below their security fixes with no newer
 Cassandra release to repin to, the image replaces them
-([D-55](DESIGN.md)).
+([D-55](../../DESIGN.md)).
 
 | Image | Replaced from | Pinned in | Checked by |
 |---|---|---|---|
-| `dbpantry-cassandra` | Maven Central, each library's own published release | [`images/cassandra/jars.tsv`](images/cassandra/jars.tsv), by sha256 | `sha256sum` at build, check 45 |
+| `dbpantry-cassandra` | Maven Central, each library's own published release | [`images/cassandra/jars.tsv`](../../images/cassandra/jars.tsv), by sha256 | `sha256sum` at build, check 45 |
 
 A JAR is only replaced when the fixed release is still binary-compatible with
 the Cassandra series that loads it. snakeyaml 2.x is not, for 4.1, which is why
-4.1 is no longer maintained here ([D-57](DESIGN.md)) rather than shipped under a
+4.1 is no longer maintained here ([D-57](../../DESIGN.md)) rather than shipped under a
 waiver. `.trivyignore.yaml` has no Cassandra entries.
 
 ## Pinning
 
 Every reference is pinned by **digest**, not tag, so a moved tag cannot change
-what runs. Engine bases live in [`images/bases.tsv`](images/bases.tsv); check 02
+what runs. Engine bases live in [`images/bases.tsv`](../../images/bases.tsv); check 02
 fails the build on any unpinned reference or floating tag. The JARs replaced
 inside the Cassandra image are pinned by sha256 in `images/cassandra/jars.tsv`.
 
-`images/bases.tsv` holds maintained versions only ([Supported versions](docs/versions.md)).
+`images/bases.tsv` holds maintained versions only ([Supported versions](../guides/versions.md)).
 An older version runs from `MDB_<ENGINE>_BASE_IMAGE`, which must also be
 digest-pinned — `make check-env` refuses a tag — but its provenance is yours to
 judge: this project does not build, scan or verify it.
 
 ---
 
-[← Docs index](README.md#documentation)
+[← Docs index](../../README.md#documentation)

@@ -50,7 +50,7 @@ and untested in CI. If `docker info` fails, stop; nothing here is mocked.
 
 ## Spec gaps
 
-If `docs/SPEC.md` is ambiguous, wrong, or silent on something you need, do not
+If `docs/reference/SPEC.md` is ambiguous, wrong, or silent on something you need, do not
 deviate quietly. Add an entry to the `DESIGN.md` decision log recording what the
 spec said, what you did, and why — then proceed.
 

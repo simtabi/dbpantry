@@ -87,7 +87,7 @@ it would mean shipping a fast path whose failure mode is losing the source.
 ## From a version that is no longer maintained
 
 dbpantry maintains the newest supported line of each engine and the one before
-it ([Supported versions](versions.md)). When a line drops off — PostgreSQL 15 and
+it ([Supported versions](../guides/versions.md)). When a line drops off — PostgreSQL 15 and
 16, MySQL 8.0, MariaDB 10.11 and 11.4, MongoDB 8.3, Cassandra 4.1 in
 0.2.0 — a `.env` still naming it fails `make check-env`, loudly, and nothing
 touches its volume.
@@ -217,4 +217,4 @@ docker volume rm mdb_pg17_data
 
 ---
 
-[← Docs index](../README.md#documentation)
+[← Docs index](../../README.md#documentation)

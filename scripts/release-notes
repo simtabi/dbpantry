@@ -2,7 +2,7 @@
 #
 # Print one version's section of CHANGELOG.md, the body of its GitHub release.
 #
-# docs/release.md: every release carries that version's CHANGELOG section as its
+# docs/guides/release.md: every release carries that version's CHANGELOG section as its
 # description, never auto-generated notes alone and never "see CHANGELOG". The
 # release workflow calls this first, so a tag with no section, or an empty one,
 # fails before anything is built or published.

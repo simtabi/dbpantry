@@ -41,7 +41,7 @@ vinfo "clean template accepted"
 # --- versions: maintained, or unsupported by explicit choice (DESIGN.md D-57) --
 # An off-menu version needs MDB_<ENGINE>_BASE_IMAGE pinned by digest, and is
 # then accepted with a warning. Each half of that is a promise in
-# docs/versions.md, so each is asserted.
+# docs/guides/versions.md, so each is asserted.
 digest="sha256:$(printf '0%.0s' $(seq 1 64))"
 
 cp "$MDB_ROOT/.env.example" "$tmp/.env4"

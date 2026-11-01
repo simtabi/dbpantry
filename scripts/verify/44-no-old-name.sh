@@ -25,7 +25,7 @@ cd "$MDB_ROOT" || exit 1
 
 pattern='multidb[-_]server|db-toolkit|DBTK_'
 
-history_files="CHANGELOG.md DESIGN.md docs/SPEC.md docs/KIT.md docs/archive/KICKOFF-PROMPT.txt
+history_files="CHANGELOG.md DESIGN.md docs/reference/SPEC.md docs/reference/KIT.md docs/archive/KICKOFF-PROMPT.txt
                scripts/verify/44-no-old-name.sh"
 
 # Lines that must keep the old name, matched as fixed strings.

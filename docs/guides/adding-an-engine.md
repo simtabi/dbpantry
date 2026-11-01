@@ -54,7 +54,7 @@ MDB_ENGINE_POOLING_RATIONALE='clients multiplex over one connection'
 
 MDB_ENGINE_LICENSE=RSALv2
 MDB_ENGINE_OSI_APPROVED=false
-MDB_ENGINE_LICENSE_NOTE='Source-available since 7.4. See docs/licensing.md.'
+MDB_ENGINE_LICENSE_NOTE='Source-available since 7.4. See docs/guides/licensing.md.'
 MDB_ENGINE_PUBLISH=reference
 
 MDB_ENGINE_OVERRIDES_DIR=/mdb/overrides
@@ -168,4 +168,4 @@ has a genuine gap and that is worth an issue.
 
 ---
 
-[← Docs index](../README.md#documentation)
+[← Docs index](../../README.md#documentation)

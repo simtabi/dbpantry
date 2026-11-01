@@ -6,7 +6,7 @@
 # linux/arm64. Renovate raises the bumps; never edit a tag without its digest.
 #
 # Only MAINTAINED versions have a row: the newest supported line and the one
-# before it, per engine (DESIGN.md D-57, docs/versions.md). An older version
+# before it, per engine (DESIGN.md D-57, docs/guides/versions.md). An older version
 # has no row on purpose. It still runs, through MDB_<ENGINE>_BASE_IMAGE, but it
 # is not built, scanned or verified here.
 #
@@ -24,7 +24,7 @@ mariadb	12.3	mariadb:12.3.3@sha256:d46e102fa8b9b72bfcdeb56f9dd538742092119dc8b11
 cli	dev	debian:12-slim@sha256:abd67ffcfa541b485a3dff59865ab629aa048a6c613e639d36e7456b0b229241
 
 # MongoDB is SSPL: source-available, NOT OSI open source. A derived image is
-# permitted but must be labelled. See docs/licensing.md and SPEC section 22.5.
+# permitted but must be labelled. See docs/guides/licensing.md and SPEC section 22.5.
 mongodb	7.0	mongo:7.0.45@sha256:8bb4442761a63a8dda452744082cdac9644b429807eb977b42324a63cef59ca4
 mongodb	8.0	mongo:8.0.34@sha256:b9924c330a8bbc5800fe9c69f04a84e221eca7b28fd049a0354147d9908fa142
 mongodb	9.0	mongo:9.0.4@sha256:452bdaf2127b8ff851e31410a267809b9829eded219979f2210e7c7efb85a058
