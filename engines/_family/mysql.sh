@@ -101,11 +101,22 @@ hook_object_count() {
         2>/dev/null | tr -d ' \r'
 }
 
+# An exact count. information_schema.tables.table_rows is an InnoDB estimate,
+# and MySQL 8 caches it for a day: a freshly restored table reports 0 rows, so
+# verify-backups failed a perfectly good MySQL restore as "tables but no rows".
 hook_row_count() {
-    local db="$1"
-    _mysql_run -N -B -e \
-        "SELECT COALESCE(SUM(table_rows), 0) FROM information_schema.tables
-         WHERE table_schema = '$db'" 2>/dev/null | tr -d ' \r'
+    local db="$1" q="" t tables
+    tables="$(_mysql_run -N -B -e \
+        "SELECT table_name FROM information_schema.tables
+         WHERE table_schema = '$db' AND table_type = 'BASE TABLE'" 2>/dev/null | tr -d '\r')" || true
+    while IFS= read -r t; do
+        [ -n "$t" ] || continue
+        q="${q:+$q UNION ALL }SELECT COUNT(*) AS n FROM \`$db\`.\`$t\`"
+    done <<EOF_TABLES
+$tables
+EOF_TABLES
+    [ -n "$q" ] || { printf '0\n'; return 0; }
+    _mysql_run -N -B -e "SELECT COALESCE(SUM(n), 0) FROM ($q) AS c" 2>/dev/null | tr -d ' \r'
 }
 
 hook_auth_enforced() {

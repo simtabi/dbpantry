@@ -120,3 +120,17 @@ the new location by the next `make up`. The old copies are safe to delete.
 - **A local `.env` pinning a version that left the menu** (MariaDB 11.4, removed
   by D-57) makes every `make up` fail `check-env`, whatever the profiles. That is
   the intended behaviour; the fix is per machine, in `.env`, not in the repo.
+- **Three backup bugs surfaced once check 22 stopped relying on check 21's
+  leftovers**: host-side `backup-all` dumped only the first database per
+  engine (`docker compose exec` ate the list on stdin); retention pruned any
+  old file in `backups/`, not only dumps; and the MySQL row count used a
+  cached estimate, failing good restores. All three are fixed, each with an
+  assertion in check 22 that failed first.
+- **The backup-profile checks run retention against the operator's real
+  `backups/`.** Dumps older than `MDB_BACKUP_RETAIN_DAILY` days are pruned by
+  design whenever the sidecar or `backup-all` runs, including under
+  `make verify`. Pointing the harness at a scratch `MDB_BACKUP_DIR` is open
+  work.
+- **GFS retention is documented but only the daily tier exists.**
+  `MDB_BACKUP_RETAIN_WEEKLY` and `MDB_BACKUP_RETAIN_MONTHLY` are read by
+  nothing; OPERATIONS.md now says so. Implementing the tiers is open work.

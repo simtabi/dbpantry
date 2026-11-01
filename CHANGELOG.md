@@ -97,6 +97,16 @@ image, replacing Cassandra's vulnerable vendored JARs rather than waiving them.
 - Comments claimed the workflows pin actions by commit; they pin by tag. CONTRIBUTING named
   Renovate; the repository uses Dependabot. `docs/reference/acceptance.md` said the
   repository had no remote.
+- **`make backup-all` from the host backed up only the first database of each engine.** Each
+  dump is a `docker compose exec`, which read the rest of the database list from stdin. The
+  list is now read before dumping, and an engine with only system schemas says so.
+- **Backup retention deleted every file in `backups/` older than the retention window**, not
+  just dumps: notes, an `.env` copy, `.DS_Store`. It now prunes only
+  `<engine>_<db>_<timestamp>` artefacts.
+- `make verify-backups` failed good MySQL restores as "tables but no rows": the row count read
+  `information_schema.tables.table_rows`, an estimate MySQL 8 caches. It now counts exactly.
+- Check 22 relied on databases check 21 left behind; it seeds its own, and asserts every seeded
+  database is dumped and that retention spares non-dump files.
 
 ### Removed
 

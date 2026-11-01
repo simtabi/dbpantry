@@ -114,6 +114,13 @@ MDB_BACKUP_RETAIN_MONTHLY=6
 MDB_BACKUP_NOTIFY_URL=https://...
 ```
 
+Each backup run, scheduled or `make backup-all`, prunes dumps
+(`<engine>_<db>_<timestamp>.*`) older than `MDB_BACKUP_RETAIN_DAILY` days. Other
+files in the directory are left alone. That includes the backup checks in
+`make verify`, which run against this same directory. Only the daily window is
+enforced today: `MDB_BACKUP_RETAIN_WEEKLY` and `MDB_BACKUP_RETAIN_MONTHLY` are
+read by nothing yet.
+
 Two things that are not optional on a server:
 
 **Get them off the machine.** A backup on the machine that failed is not a

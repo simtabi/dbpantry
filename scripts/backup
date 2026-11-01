@@ -172,12 +172,25 @@ backup_globals() {
 # -----------------------------------------------------------------------------
 prune() {
     local daily; daily="$(get MDB_BACKUP_RETAIN_DAILY)"; daily="${daily:-7}"
-    local removed=0
+    local removed=0 old base e ours
     # Any artefact, whatever extension the engine's descriptor declares --
     # .dump, .sql, .archive, .tar. Matching a fixed list here would silently
     # stop pruning the moment a new engine was added.
+    #
+    # But ONLY artefacts: <engine>_<db>_<YYYYMMDDTHHMMSSZ>.<ext>. Age alone once
+    # decided, so anything else an operator kept in backups/ (notes, an .env
+    # copy, Finder's .DS_Store) was deleted after a week too.
     while IFS= read -r old; do
         [[ -z "$old" ]] && continue
+        base="${old##*/}"
+        ours=0
+        for e in $(engine_list); do
+            if [[ "$base" == "${e}_"* ]] \
+                && printf '%s' "$base" | grep -Eq '_[0-9]{8}T[0-9]{6}Z\.'; then
+                ours=1; break
+            fi
+        done
+        (( ours )) || continue
         rm -f "$old" "$old.sha256"
         removed=$(( removed + 1 ))
     done < <(find "$BACKUP_DIR" -maxdepth 1 -type f \
@@ -258,9 +271,22 @@ run_engine_backup() {
     if [ -n "$db" ]; then
         backup_one_database "$db"
     else
+        # Read the whole list BEFORE dumping anything. From the host each dump
+        # is a `docker compose exec`, which reads stdin; inside a
+        # `while read ... < <(list)` loop it swallowed the rest of the list, so
+        # only the first database of each engine was ever backed up.
+        local n=0 dbs
+        dbs="$(hook_list_databases)" || true
         while IFS= read -r d; do
-            [ -n "$d" ] && backup_one_database "$d"
-        done < <(hook_list_databases)
+            [ -n "$d" ] || continue
+            backup_one_database "$d" </dev/null
+            n=$((n + 1))
+        done <<EOF_DBS
+$dbs
+EOF_DBS
+        # Say so, rather than finishing silently: an engine with only system
+        # schemas is a legitimate state, but it must not look like a skipped run.
+        [ "$n" -gt 0 ] || log "$engine: no user databases to dump"
     fi
     backup_globals
 }
