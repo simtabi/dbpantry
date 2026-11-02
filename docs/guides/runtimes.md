@@ -71,10 +71,20 @@ optional. To add a backend you add a file, and neither the core nor any caller
 changes. Check 48 plugs in a fake adapter to prove it. The interface is in
 [scripts/runtimes/README.md](../../scripts/runtimes/README.md).
 
+## Backends: how the stack is deployed
+
+The runtime above is the container CLI. A second setting, `MDB_BACKEND` in
+`.env`, chooses how the stack is deployed (design.md D-62). `compose`, the
+default, runs the Compose files on whichever runtime you picked. Scripts never
+call `compose exec` themselves; they ask the backend to run a command in a
+service, so the same `make backup`, `make psql` or `make new-project` works on
+any backend that implements the verbs in
+[scripts/backends/README.md](../../scripts/backends/README.md).
+`scripts/runtime backend` prints the one in use.
+
 ## Planned
 
-These backends will be added as adapters in a follow-up. They aren't
-selectable yet:
+These backends are being added on top of that layer:
 
 - **Kubernetes**, including the clusters built into OrbStack, Docker Desktop
   and Rancher Desktop. A local cluster already runs fine next to dbpantry.
