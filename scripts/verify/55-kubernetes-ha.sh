@@ -60,6 +60,13 @@ for want in '^kubernetes:$' '^  namespace: ns$' '^  role_label: role$' '^  leade
     grep -qE "$want" "$tmp/patroni.yml" || vfail "patroni.yml (kubernetes) lacks $want"
 done
 grep -q '^etcd3:' "$tmp/patroni.yml" && vfail "the kubernetes DCS config still names etcd3"
+# pg_hba belongs to postgresql:, which Patroni rewrites on every start. Under
+# bootstrap: it is written once, and the image's start-up hardening (30-certs)
+# then replaces it on the next restart with rules that have no replication
+# entry for other hosts: after a failover nothing can follow the restarted
+# member, on Compose and Kubernetes alike.
+sect="$(awk '/^[a-z]/ { top = $1 } /^  pg_hba:/ { print top }' "$tmp/patroni.yml")"
+[[ "$sect" == "postgresql:" ]] || vfail "pg_hba is under '${sect:-nothing}' in patroni.yml, not postgresql:"
 # Patroni hands its global namespace to the DCS, where it overrides
 # kubernetes.namespace: the members then query /api/v1/namespaces//multidb-server//
 # and never elect a leader.

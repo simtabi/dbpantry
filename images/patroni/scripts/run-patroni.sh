@@ -188,19 +188,6 @@ bootstrap:
     - auth-host: scram-sha-256
     - auth-local: peer
 
-  # pg_hba as Patroni writes it on bootstrap. Same shape the standalone image
-  # generates, plus the replication rules the cluster needs.
-  pg_hba:
-    - local   all             postgres                    peer
-    - local   all             all                         scram-sha-256
-    - hostssl all             all         127.0.0.1/32    scram-sha-256
-    - hostssl all             all         ::1/128         scram-sha-256
-    - hostssl all             all         0.0.0.0/0       scram-sha-256
-    - hostssl replication     replicator  0.0.0.0/0       scram-sha-256
-    # Pod networks may be IPv6 (or dual-stack) on Kubernetes.
-    - hostssl all             all         ::/0            scram-sha-256
-    - hostssl replication     replicator  ::/0            scram-sha-256
-
 postgresql:
   listen: 0.0.0.0:5432
   connect_address: ${connect_host}:5432
@@ -216,6 +203,23 @@ postgresql:
       password: '${repl_pw}'
   parameters:
     shared_buffers: ${MDB_PG_SHARED_BUFFERS:-256MB}
+  # pg_hba, which Patroni writes every time it starts PostgreSQL. Same shape
+  # the standalone image generates, plus the replication rules the cluster
+  # needs. Here and not under bootstrap:, where it is written once: the
+  # image's start-up hardening (30-certs.sh) regenerates pg_hba.conf on every
+  # container start without them, so a member that restarts -- the old
+  # primary after a failover, or any pod Kubernetes reschedules -- and later
+  # leads would refuse every replica.
+  pg_hba:
+    - local   all             postgres                    peer
+    - local   all             all                         scram-sha-256
+    - hostssl all             all         127.0.0.1/32    scram-sha-256
+    - hostssl all             all         ::1/128         scram-sha-256
+    - hostssl all             all         0.0.0.0/0       scram-sha-256
+    - hostssl replication     replicator  0.0.0.0/0       scram-sha-256
+    # Pod networks may be IPv6 (or dual-stack) on Kubernetes.
+    - hostssl all             all         ::/0            scram-sha-256
+    - hostssl replication     replicator  ::/0            scram-sha-256
 
 tags:
   nofailover: false
