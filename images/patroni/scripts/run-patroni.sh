@@ -45,6 +45,9 @@ case "$dcs" in
         dcs_yaml="etcd3:
   hosts:
 ${etcd_hosts_yaml}"
+        # The old product name stays: a new namespace orphans an existing
+        # cluster (D-54).
+        global_ns="namespace: /multidb-server/"
         ;;
     kubernetes)
         k8s_ns="${MDB_PATRONI_K8S_NAMESPACE:?MDB_PATRONI_K8S_NAMESPACE is required for the kubernetes DCS}"
@@ -68,6 +71,10 @@ ${etcd_hosts_yaml}"
   ports:
     - name: db
       port: 5432"
+        # No global namespace: Patroni copies it into the DCS config, where it
+        # replaces kubernetes.namespace and every API call goes to a namespace
+        # called /multidb-server/.
+        global_ns=""
         ;;
     *) die "MDB_PATRONI_DCS must be etcd3 or kubernetes, not $dcs" ;;
 esac
@@ -124,8 +131,7 @@ stage "writing $conf for node $name in scope $scope"
 cat > "$conf" <<YAML
 scope: ${scope}
 name: ${name}
-# The old product name stays: a new namespace orphans an existing cluster (D-54).
-namespace: /multidb-server/
+${global_ns}
 
 restapi:
   listen: 0.0.0.0:8008

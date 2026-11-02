@@ -285,10 +285,22 @@ spec:
               mountPath: /dev/shm
             {{- end }}
       volumes:
+        # The Secret is mounted at /run/secrets, which is also where
+        # /var/run/secrets/kubernetes.io/serviceaccount (Patroni's hard-coded
+        # token path) lands. A read-only Secret volume cannot grow that
+        # mountpoint, so the projection carries an empty-looking directory for
+        # it; the service account token is then mounted over it.
         - name: secrets
-          secret:
-            secretName: {{ $root.Values.global.secretName }}
+          projected:
             defaultMode: 0400
+            sources:
+              - secret:
+                  name: {{ $root.Values.global.secretName }}
+              - downwardAPI:
+                  items:
+                    - path: kubernetes.io/serviceaccount/.mountpoint
+                      fieldRef:
+                        fieldPath: metadata.namespace
         # Patroni enables TLS and needs /certs/pg/server.{crt,key}: not optional.
         - name: certs
           secret:

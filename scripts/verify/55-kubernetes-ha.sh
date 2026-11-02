@@ -59,11 +59,16 @@ for want in '^kubernetes:$' '^  namespace: ns$' '^  role_label: role$' '^  leade
     grep -qE "$want" "$tmp/patroni.yml" || vfail "patroni.yml (kubernetes) lacks $want"
 done
 grep -q '^etcd3:' "$tmp/patroni.yml" && vfail "the kubernetes DCS config still names etcd3"
+# Patroni hands its global namespace to the DCS, where it overrides
+# kubernetes.namespace: the members then query /api/v1/namespaces//multidb-server//
+# and never elect a leader.
+grep -q '^namespace:' "$tmp/patroni.yml" && vfail "the kubernetes DCS config sets a global namespace, which overrides the pod namespace"
 env -i PATH="$PATH" PATRONI_NAME=patroni1 PATRONI_ETCD3_HOSTS="'etcd1:2379','etcd2:2379'" \
     bash "$rp" 2>"$tmp/err" || vfail "run-patroni.sh (etcd3) failed: $(cat "$tmp/err")"
 if ! grep -qx '    - etcd2:2379' "$tmp/patroni.yml" || ! grep -qx '  connect_address: patroni1:8008' "$tmp/patroni.yml"; then
     vfail "the Compose (etcd3) config changed: $(sed -n '/^etcd3/,/^$/p' "$tmp/patroni.yml")"
 fi
+grep -qx 'namespace: /multidb-server/' "$tmp/patroni.yml" || vfail "the Compose (etcd3) config lost its D-54 namespace"
 vinfo "run-patroni.sh writes the kubernetes DCS with the role labels the Services use, and etcd3 as before"
 
 # --- 3. the chart ------------------------------------------------------------------
@@ -82,6 +87,14 @@ awk '/^kind: Service$/{s=1} s&&/^  name: pg-ro$/{n=1} n&&/role: replica/{print "
     || vfail "Service pg-ro does not select role=replica"
 grep -q 'value: kubernetes' "$tmp/patroni.yaml" || vfail "the members are not told to use the kubernetes DCS"
 grep -q 'allowPrivilegeEscalation: false' "$tmp/patroni.yaml" || vfail "the HA members lost the hardening"
+# The Secret sits at /run/secrets, the parent of Patroni's hard-coded token
+# path; without a directory for it in the projection the kubelet cannot mount
+# the token and every member fails with "read-only file system".
+grep -q 'path: kubernetes.io/serviceaccount/' "$tmp/patroni.yaml" \
+    || vfail "the secrets volume has no mountpoint for the service account token"
+# The bundle is bigger than the 256 KiB last-applied annotation.
+grep -q 'apply --server-side.*-f -' scripts/backends/kubernetes.sh \
+    || vfail "the backup bundle is applied client-side, which fails past 256 KiB"
 
 helm template r "$chart" "${ha[@]}" --set engines.pg.ha.provider=cnpg >/dev/null 2>"$tmp/err" \
     && vfail "CloudNativePG rendered without its operator's API"
