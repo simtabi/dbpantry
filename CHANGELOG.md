@@ -115,6 +115,14 @@ image, replacing Cassandra's vulnerable vendored JARs rather than waiving them.
   exist and is not a known generated file.
 
 ### Fixed
+- **The metrics exporters crash-looped on Linux hosts.** `pg-exporter` and `mysqld-exporter` run
+  as `nobody`, which cannot open a 0600 password file inside the 0700 `secrets/` directory, so
+  both exited at start and `restart: unless-stopped` hid it. Docker Desktop and OrbStack ignore
+  those permissions, so it only showed on Linux (CI). They now run as root with every capability
+  dropped except `DAC_READ_SEARCH` (read, not write), and check 24 replays each exporter's user
+  and capabilities against real Linux permissions on any host.
+- **Check 48 used the host's real runtimes.** Its stub PATH still included `/usr/bin`, so on a
+  host with docker there (every GitHub Ubuntu runner) a "podman only" case resolved to docker.
 - **`make restore` no longer restores a dump it cannot verify.** A dump with no `.sha256` beside
   it only logged a warning and was restored over the live database. It is now refused before
   anything is touched; `MDB_RESTORE_ALLOW_UNVERIFIED=yes` restores a hand-made dump you trust.
