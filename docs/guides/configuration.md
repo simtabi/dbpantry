@@ -63,7 +63,7 @@ it, gives no scan guarantee, and `make check-env` warns on every start.
 data directory — it gets its own, and 16's is untouched. That is not caution,
 it is necessity: PostgreSQL refuses to start against a foreign major, and a
 scheme that shared one volume would produce a container that will not boot and
-appears to have eaten your data. To actually migrate, see [Upgrade](../runbooks/UPGRADE.md).
+appears to have eaten your data. To actually migrate, see [Upgrade](../runbooks/upgrade.md).
 
 ### Ports and exposure
 
@@ -96,7 +96,7 @@ almost always what you want.
 
 `MDB_BIND_ADDR` defaults to loopback. Changing it to `0.0.0.0` publishes every
 enabled engine to your network — do not do that as a convenience for a colleague
-on the same wifi. On a server, see [Operations](../runbooks/OPERATIONS.md).
+on the same wifi. On a server, see [Operations](../runbooks/operations.md).
 
 ### Projects
 
@@ -196,4 +196,4 @@ overrides/mysql/99-local.cnf
 
 ---
 
-[← Docs index](../../README.md#documentation)
+[← Docs index](../../readme.md#documentation)

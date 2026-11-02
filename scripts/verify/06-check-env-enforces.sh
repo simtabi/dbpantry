@@ -38,7 +38,7 @@ MDB_ENV_FILE="$tmp/.env3" "$MDB_ROOT/scripts/check-env" >/dev/null 2>&1 \
     || vfail "check-env rejected the unmodified .env.example template"
 vinfo "clean template accepted"
 
-# --- versions: maintained, or unsupported by explicit choice (DESIGN.md D-57) --
+# --- versions: maintained, or unsupported by explicit choice (design.md D-57) --
 # An off-menu version needs MDB_<ENGINE>_BASE_IMAGE pinned by digest, and is
 # then accepted with a warning. Each half of that is a promise in
 # docs/guides/versions.md, so each is asserted.

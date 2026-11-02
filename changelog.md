@@ -13,20 +13,23 @@ project to dbpantry and fixes the findings that failed the Trivy gate on every
 image, replacing Cassandra's vulnerable vendored JARs rather than waiving them.
 
 ### Changed
+- Markdown files use lowercase slug names (design.md D-61): `readme.md`, `changelog.md`, `design.md`,
+  `docs/runbooks/*.md`, `docs/reference/spec.md`, `kit.md` and others. `CLAUDE.md`, `CONTRIBUTING.md`,
+  `SECURITY.md` and `CODE_OF_CONDUCT.md` keep the names their tools look for.
 
-- **Each engine now maintains its current and latest version only** (DESIGN.md D-57,
+- **Each engine now maintains its current and latest version only** (design.md D-57,
   [Supported versions](docs/guides/versions.md)): the newest supported line and the one before it,
   confirmed from each project's own end-of-life page. The menu goes from 16 versions to 11:
   PostgreSQL 17 · 18, MySQL 8.4 · 9.7, MariaDB 11.8 · 12.3, MongoDB 7.0 · 8.0 · 9.0, Cassandra 5.0
   and FerretDB 2. A `.env` naming a version that left the menu fails `make check-env` and its
-  volume is untouched; [Upgrade](docs/runbooks/UPGRADE.md) covers moving it, or keep it through
+  volume is untouched; [Upgrade](docs/runbooks/upgrade.md) covers moving it, or keep it through
   `MDB_<ENGINE>_BASE_IMAGE`, unsupported.
 - **The MariaDB default moves from 11.4 to 11.8.** MongoDB keeps 7.0 as its default, the
   one exception to the policy: 8.x and 9.x refuse to start on kernels reporting 6.19 to
   7.0.13 (SERVER-121912), and every Ubuntu 7.0 kernel, GitHub's runners included, reports
   7.0.0 (SERVER-136848).
 - MongoDB 7.0 is repinned to 7.0.45, and 8.0 to 8.0.34.
-- **The project is renamed dbpantry** (DESIGN.md D-54). The repository moved from
+- **The project is renamed dbpantry** (design.md D-54). The repository moved from
   `simtabi/multidb-server-docker` to `simtabi/dbpantry`; GitHub redirects the old URL. Images
   are now `dbpantry-<engine>`: run `make build` again, and the next `make up`
   regenerates the compose files with the new names. The `MDB_` variables, the `mdb`
@@ -34,18 +37,18 @@ image, replacing Cassandra's vulnerable vendored JARs rather than waiving them.
   so existing `.env` files, containers and volumes carry over unchanged.
 - The README drops the GHCR badge and the hosted-docs link, which pointed at pages that do not
   exist yet.
-- **Files are grouped by how they are used** (DESIGN.md D-59, [the plan](docs/REORGANIZATION_PLAN.md)).
+- **Files are grouped by how they are used** (design.md D-59, [the plan](docs/reorganization-plan.md)).
   `caddy/`, `haproxy/` and `proxysql/` move under `config/`; `docs/` splits into `guides/`,
   `runbooks/` and `reference/`, and `IMAGE-PROVENANCE.md` becomes
   `docs/reference/image-provenance.md`. Every link and path is updated. A checkout with
   rendered files in the old `caddy/` regenerates them on the next `make up`.
 - `make verify` takes `CHECKS=21,28` and `TAGS=pg,backup`; `VERIFY_TAGS` accepts several tags,
   and a filter that matches nothing fails rather than reporting green.
-- DESIGN.md: the second D-51 (vulnerability waivers) is renumbered D-58, and D-23 and
+- design.md: the second D-51 (vulnerability waivers) is renumbered D-58, and D-23 and
   D-52 to D-57, which sat after the end of the document, are back in the decision log.
 
 ### Added
-- **dbpantry runs on any OCI runtime with Compose** (DESIGN.md D-60,
+- **dbpantry runs on any OCI runtime with Compose** (design.md D-60,
   [Container runtimes](docs/guides/runtimes.md)): Docker, OrbStack, Colima, Rancher Desktop,
   Podman (rootless included) and nerdctl.
   - `CONTAINER_RUNTIME=auto|docker|podman|nerdctl` chooses the runtime and `MDB_COMPOSE`
@@ -68,7 +71,7 @@ image, replacing Cassandra's vulnerable vendored JARs rather than waiving them.
 - MariaDB 12.3 (12.3.3) and MongoDB 9.0 (9.0.4).
 - [Supported versions](docs/guides/versions.md): the maintained versions per engine, their upstream
   end-of-life dates and sources, and how to run any other.
-- [Upgrade](docs/runbooks/UPGRADE.md) documents moving off a version that left the menu, and the
+- [Upgrade](docs/runbooks/upgrade.md) documents moving off a version that left the menu, and the
   manual MongoDB 7.0 → 8.0 and Cassandra 4.1 → 5.0 migrations, each rehearsed with the old
   volume left intact.
 - **Releases are built and published by CI.** A `vX.Y.Z` tag on `main` runs
@@ -110,7 +113,7 @@ image, replacing Cassandra's vulnerable vendored JARs rather than waiving them.
   version's image against that version's volume. The image now follows the version.
 - Check 29 removed the default project's `mdb_pg17_data` volume when it started; it now runs
   under a project of its own.
-- `docs/UPGRADE.md` said `make upgrade` handled MongoDB and Cassandra; it handles PostgreSQL,
+- `docs/upgrade.md` said `make upgrade` handled MongoDB and Cassandra; it handles PostgreSQL,
   MySQL and MariaDB only.
 - Check 27 (HA failover) could stop without a message when one Patroni probe failed, such as
   `scripts/ha leader` in the seconds after the leader is killed, because the check runs under
@@ -138,7 +141,7 @@ image, replacing Cassandra's vulnerable vendored JARs rather than waiving them.
 
 ### Removed
 
-- **Cassandra 4.1** (DESIGN.md D-57). It vendors snakeyaml 1.x, open to CVE-2022-1471, and
+- **Cassandra 4.1** (design.md D-57). It vendors snakeyaml 1.x, open to CVE-2022-1471, and
   cannot load the 2.x line that fixes it. D-57 records when it comes back.
 - PostgreSQL 15 and 16, MySQL 8.0, MariaDB 10.11 and 11.4, MongoDB 8.3 from the
   maintained menu. Each still runs through `MDB_<ENGINE>_BASE_IMAGE`, unsupported.
@@ -149,7 +152,7 @@ image, replacing Cassandra's vulnerable vendored JARs rather than waiving them.
   Cassandra 4.1, rather than being extended past 2026-11-09. `.trivyignore.yaml` has no
   Cassandra entries.
 - **The Cassandra images replace their vulnerable vendored JARs** with fixed releases from
-  Maven Central, pinned by sha256 (DESIGN.md D-55): guava 33.7.2-jre, snappy-java 1.1.10.12,
+  Maven Central, pinned by sha256 (design.md D-55): guava 33.7.2-jre, snappy-java 1.1.10.12,
   jackson 2.22.4, lz4-java 1.12.1 and netty 4.1.139.Final on both series, plus logback 1.2.13
   and snakeyaml 1.33 on 4.1. This fixes the guava and snappy-java findings that failed the
   Trivy gate, and removes 21 of the 22 Cassandra waivers. The one left, CVE-2022-1471 in
@@ -161,7 +164,7 @@ image, replacing Cassandra's vulnerable vendored JARs rather than waiving them.
   failed the Trivy gate on every engine image.
 - **gosu, rclone and postgres_exporter are rebuilt from their release tags on a
   patched Go toolchain**, with gRPC, `x/net` and `x/crypto` raised past their
-  fixes (DESIGN.md D-51). This removes 26 Trivy waivers that were due to expire
+  fixes (design.md D-51). This removes 26 Trivy waivers that were due to expire
   on 2026-11-09 and fail every build. The toolchain is pinned in
   `images/bases.tsv`, and check 02 fails if a Dockerfile's `GO_IMAGE` default
   drifts from it.
@@ -205,12 +208,12 @@ topology. 42 acceptance checks; every claim below is one of them.
   waivers that must carry a reason and a revisit condition.
 
 
-- Repository scaffold per `docs/SPEC.md` section 15.
+- Repository scaffold per `docs/spec.md` section 15.
 - The complete `make verify` acceptance harness, written before the features it
   checks so every subsequent phase has something to heal against.
-- `DESIGN.md`: pinned versions with digests, the arm64 extension matrix, the
+- `design.md`: pinned versions with digests, the arm64 extension matrix, the
   capacity truth table, and the decision log.
-- `docs/SPEC.md` section 21 (scale, HA, sync) as an approved amendment.
+- `docs/spec.md` section 21 (scale, HA, sync) as an approved amendment.
 - `scripts/check-env`, enforcing sentinel rejection, the `_FILE` convention,
   supported version menus, port-collision detection, and the prod guards
   (mandatory pooling, UI basic auth, 3-node etcd quorum).
@@ -233,7 +236,7 @@ topology. 42 acceptance checks; every claim below is one of them.
 ### Fixed
 
 - All shell is bash 3.2 compatible, so the toolkit runs on stock macOS
-  (see `DESIGN.md` D-24).
+  (see `design.md` D-24).
 - PostgreSQL now shuts down cleanly under s6 via a per-service `down-signal`,
   so the next boot performs no crash recovery (D-09, D-27).
 - `pg_graphql`'s packaged symlinks are flattened, which also protects against

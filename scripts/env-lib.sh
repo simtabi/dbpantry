@@ -46,18 +46,26 @@ mdb_env_get() {
     mdb_env_unquote "${raw#*=}"
 }
 
+# Bare values may use only the characters a dotenv parser can never misread:
+# letters, digits and _ . / : @ % + = -. Anything else (whitespace, a comma
+# list such as pg,ui, quotes, $, #, ;) is quoted. The same allow-list as the
+# owner's global sim-standards pre-commit hook, so the two never disagree.
+_mdb_env_unsafe() {
+    local re='[^A-Za-z0-9_./:@%+=-]'
+    [[ "$1" =~ $re ]]
+}
+
 # A value as it should be WRITTEN: double-quoted, with " \ $ ` escaped, when
-# it contains whitespace or a special character; bare otherwise. Anything that
+# it contains anything outside the safe set below; bare otherwise. Anything that
 # emits KEY=value lines (new-project's block, renderers) goes through this.
 mdb_env_quote() {
     local v="$1"
-    case "$v" in
-        *[[:space:]\#\"\'\$\`\\\;\&\|\<\>\(\)\*\?\[\]\{\}\!\~]*)
-            v="${v//\\/\\\\}"; v="${v//\"/\\\"}"; v="${v//\$/\\\$}"; v="${v//\`/\\\`}"
-            printf '"%s"\n' "$v"
-            ;;
-        *) printf '%s\n' "$v" ;;
-    esac
+    if _mdb_env_unsafe "$v"; then
+        v="${v//\\/\\\\}"; v="${v//\"/\\\"}"; v="${v//\$/\\\$}"; v="${v//\`/\\\`}"
+        printf '"%s"\n' "$v"
+    else
+        printf '%s\n' "$v"
+    fi
 }
 
 # Does a raw value (everything after the first =) follow the convention?
@@ -65,8 +73,7 @@ mdb_env_quote() {
 mdb_env_needs_quotes() {
     local v="$1"
     case "$v" in \"*\"*|\'*\'*|'') return 1 ;; esac
-    case "$v" in *[[:space:]\#\"\'\$\`\\\;\&\|\<\>\(\)\*\?\[\]\{\}\!\~]*) return 0 ;; esac
-    return 1
+    _mdb_env_unsafe "$v"
 }
 
-export -f mdb_env_unquote mdb_env_get mdb_env_quote mdb_env_needs_quotes 2>/dev/null || true
+export -f _mdb_env_unsafe mdb_env_unquote mdb_env_get mdb_env_quote mdb_env_needs_quotes 2>/dev/null || true

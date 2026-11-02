@@ -13,7 +13,7 @@ cd "$MDB_ROOT" || exit 1
 # the rows, and — the half that matters when an upgrade goes wrong at 2am —
 # that the old major is still sitting there, complete, to roll back to.
 #
-# 17 -> 18 are the two maintained majors (DESIGN.md D-57), and the pair crosses
+# 17 -> 18 are the two maintained majors (design.md D-57), and the pair crosses
 # PG 18's move of the data mount to /var/lib/postgresql, which `make upgrade`
 # has to get right on each side.
 

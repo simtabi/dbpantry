@@ -7,7 +7,7 @@
 #
 #   # verify: one-line description of what this proves
 #   # tags:   space-separated (fast, pg, mysql, mariadb, tls, backup, ha, ...)
-#   # phase:  the KIT.md phase that makes this check pass
+#   # phase:  the kit.md phase that makes this check pass
 #
 # Usage:
 #   run.sh                    run everything

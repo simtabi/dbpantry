@@ -2,7 +2,7 @@
 
 dbpantry runs on any OCI container runtime that has a Compose implementation.
 Every script, make target and verify check reaches the runtime through one
-layer, `scripts/runtime-lib.sh` (DESIGN.md D-60). No script calls `docker`
+layer, `scripts/runtime-lib.sh` (design.md D-60). No script calls `docker`
 directly, and check 48 enforces that.
 
 ```bash

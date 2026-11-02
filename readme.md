@@ -107,22 +107,22 @@ Read once, to learn how the toolkit works and how to set it up.
 
 Followed step by step, often under pressure.
 
-- [Operations](docs/runbooks/OPERATIONS.md) — VPS, exposure, tuning, HA
-- [Restore](docs/runbooks/RESTORE.md) — the 2am runbook
-- [Upgrade](docs/runbooks/UPGRADE.md) — guided major-version migration
-- [Onboarding](docs/runbooks/ONBOARDING.md) — migrate existing native databases in
-- [Windows](docs/runbooks/WINDOWS.md) — WSL2 and git-bash notes
+- [Operations](docs/runbooks/operations.md) — VPS, exposure, tuning, HA
+- [Restore](docs/runbooks/restore.md) — the 2am runbook
+- [Upgrade](docs/runbooks/upgrade.md) — guided major-version migration
+- [Onboarding](docs/runbooks/onboarding.md) — migrate existing native databases in
+- [Windows](docs/runbooks/windows.md) — WSL2 and git-bash notes
 
 ### Reference — `docs/reference/`
 
 Looked up to check the contract, the evidence, or a fact.
 
-- [Specification](docs/reference/SPEC.md) — the build contract
+- [Specification](docs/reference/spec.md) — the build contract
 - [Acceptance](docs/reference/acceptance.md) — every criterion mapped to the check that proves it
 - [Image provenance](docs/reference/image-provenance.md) — every image, its publisher, and why
-- [Design](DESIGN.md) — pinned versions, capacity table, decision log
-- [Row-level security kit](rls/README.md) — database-enforced multi-tenancy
-- [Repository layout](docs/REORGANIZATION_PLAN.md) — where each file lives, and why
+- [Design](design.md) — pinned versions, capacity table, decision log
+- [Row-level security kit](rls/readme.md) — database-enforced multi-tenancy
+- [Repository layout](docs/reorganization-plan.md) — where each file lives, and why
 
 ## Name
 
@@ -137,7 +137,7 @@ volumes and integrations depend on them:
 - two strings written into existing data: the PostgreSQL `# multidb-server include` marker and
   the Patroni `/multidb-server/` namespace.
 
-The decision is [D-54](DESIGN.md#7-decision-log). Check 44 fails on any other use of the old
+The decision is [D-54](design.md#7-decision-log). Check 44 fails on any other use of the old
 names.
 
 ## Community

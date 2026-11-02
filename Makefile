@@ -24,7 +24,7 @@ COMPOSE_PROJECT_NAME ?= $(or $(env_project),mdb)
 export COMPOSE_PROJECT_NAME
 ENV_FILE_PROD ?= .env.prod
 # Every container call goes through scripts/runtime, which picks Docker, Podman
-# or nerdctl (CONTAINER_RUNTIME=auto|docker|podman|nerdctl; DESIGN.md D-60).
+# or nerdctl (CONTAINER_RUNTIME=auto|docker|podman|nerdctl; design.md D-60).
 RUNTIME  := scripts/runtime
 COMPOSE  := $(RUNTIME) compose
 
@@ -47,7 +47,7 @@ all_profiles := --profile '*'
 # Emit a consistent "not implemented" failure. $(1) is the owning phase.
 define unimplemented
 	@printf '\033[33m✗ %s\033[0m is scaffolded but not implemented yet (phase %s).\n' "$@" "$(1)" >&2; \
-	printf '  See docs/reference/KIT.md section 5 for what that phase delivers.\n' >&2; \
+	printf '  See docs/reference/kit.md section 5 for what that phase delivers.\n' >&2; \
 	exit 1
 endef
 

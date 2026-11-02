@@ -53,7 +53,7 @@ for f in "${files[@]}"; do
     [[ -f "$f" ]] || continue
     case "$f" in
         # Prose that quotes variable names is documentation, not configuration.
-        docs/reference/SPEC.md|docs/reference/KIT.md|DESIGN.md|docs/archive/KICKOFF-PROMPT.txt|CHANGELOG.md) continue ;;
+        docs/reference/spec.md|docs/reference/kit.md|design.md|docs/archive/KICKOFF-PROMPT.txt|changelog.md) continue ;;
         scripts/verify/03-secret-scan-repo.sh) continue ;;
     esac
 

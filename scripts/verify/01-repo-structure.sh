@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# verify: repository layout matches SPEC.md section 15
+# verify: repository layout matches spec.md section 15
 # tags: fast structure
 # phase: 1
 
@@ -15,8 +15,8 @@ for d in images/pg images/mysql images/mariadb images/cli \
 done
 
 for f in Makefile .env.example .gitignore .gitattributes .editorconfig \
-         README.md CONTRIBUTING.md SECURITY.md CODE_OF_CONDUCT.md CHANGELOG.md LICENSE \
-         CLAUDE.md DESIGN.md docs/reference/SPEC.md docs/reference/KIT.md; do
+         readme.md CONTRIBUTING.md SECURITY.md CODE_OF_CONDUCT.md changelog.md LICENSE \
+         CLAUDE.md design.md docs/reference/spec.md docs/reference/kit.md; do
     need_file "$MDB_ROOT/$f"
 done
 
@@ -29,8 +29,8 @@ if [[ -f docker-compose.yml ]]; then
 fi
 
 # The org convention forbids a second README acting as a docs index.
-if [[ -f docs/README.md ]]; then
-    vfail "docs/README.md exists; the docs index is README.md's Documentation section"
+if [[ -f docs/readme.md ]]; then
+    vfail "docs/readme.md exists; the docs index is readme.md's Documentation section"
 fi
 
 # Engine services live in the GENERATED compose.engines.yml, which reaches a

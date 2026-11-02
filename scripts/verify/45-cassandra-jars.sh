@@ -6,7 +6,7 @@
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
 # images/cassandra/jars.tsv swaps vulnerable JARs in Cassandra's lib/ for fixed
-# releases from Maven Central (DESIGN.md D-55). A download is only as safe as
+# releases from Maven Central (design.md D-55). A download is only as safe as
 # the checksum that pins it, so this fails on any row without a full sha256,
 # on a series images/bases.tsv does not build, and on a Dockerfile that no
 # longer runs the swap -- the case where the manifest still looks like
@@ -62,7 +62,7 @@ grep -q 'replace-jars' "$dockerfile" \
 
 if [[ -n "$errors" ]]; then
     printf '%s' "$errors" >&2
-    vfail "$manifest is not a complete, checksum-pinned manifest (DESIGN.md D-55)"
+    vfail "$manifest is not a complete, checksum-pinned manifest (design.md D-55)"
 fi
 
 vinfo "$rows replaced JAR(s) across $(wc -l <<< "$series_built" | tr -d ' ') Cassandra series, each pinned by sha256"

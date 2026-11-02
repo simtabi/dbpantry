@@ -128,7 +128,7 @@ engine_implemented() {
 # Is a version on this engine's supported menu?
 #
 # The menu holds MAINTAINED versions only: the newest supported line and the one
-# before it (DESIGN.md D-57, docs/guides/versions.md). A version off the menu is not
+# before it (design.md D-57, docs/guides/versions.md). A version off the menu is not
 # refused outright. It runs from MDB_<ENGINE>_BASE_IMAGE, unsupported, and
 # check-env says so; see engine_base_override.
 engine_supports_version() {

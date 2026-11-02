@@ -229,7 +229,7 @@ case "$verb" in
         printf 'This STOPS PostgreSQL and REPLACES its data directory with a recovery\n'
         printf 'to: %s\n\n' "$TARGET"
         printf 'Everything written after that point is discarded. If you are not sure the\n'
-        printf 'target is right, restore into a copy instead -- see docs/runbooks/RESTORE.md.\n\n'
+        printf 'target is right, restore into a copy instead -- see docs/runbooks/restore.md.\n\n'
         printf 'Type the stanza name (%s) to continue: ' "$stanza"
         read -r answer
         [[ "$answer" == "$stanza" ]] || die "confirmation did not match; nothing was changed"

@@ -10,7 +10,7 @@
 #
 # Runs as root on purpose: the official entrypoint re-executes itself as the
 # postgres user via gosu, and letting it do that keeps first-run behaviour
-# byte-for-byte compatible with the official image (DESIGN.md D-19).
+# byte-for-byte compatible with the official image (design.md D-19).
 
 MDB_STAGE=mdb-postgres
 export MDB_STAGE

@@ -10,7 +10,7 @@
 # What it converges is the pooler's own account. ProxySQL cannot use root:
 # root is restricted to the local socket, which is correct hardening and
 # deliberately not relaxed here. It gets a narrow account instead, the same way
-# pgBouncer does on the PostgreSQL side (DESIGN.md D-35):
+# pgBouncer does on the PostgreSQL side (design.md D-35):
 #
 #   * SELECT on mysql.user, to read password VERIFIERS -- never cleartext;
 #   * REPLICATION CLIENT, for ProxySQL's monitor module.

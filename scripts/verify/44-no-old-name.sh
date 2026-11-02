@@ -6,7 +6,7 @@
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
 # The project was db-toolkit-docker, then multidb-server, and is now dbpantry
-# (DESIGN.md D-54). A rename is finished only when nothing new says the old
+# (design.md D-54). A rename is finished only when nothing new says the old
 # name, and a grep is the only reviewer that reads every file every time.
 #
 # Two kinds of old-name text are correct and stay:
@@ -25,7 +25,7 @@ cd "$MDB_ROOT" || exit 1
 
 pattern='multidb[-_]server|db-toolkit|DBTK_'
 
-history_files="CHANGELOG.md DESIGN.md docs/reference/SPEC.md docs/reference/KIT.md docs/archive/KICKOFF-PROMPT.txt
+history_files="changelog.md design.md docs/reference/spec.md docs/reference/kit.md docs/archive/KICKOFF-PROMPT.txt
                scripts/verify/44-no-old-name.sh"
 
 # Lines that must keep the old name, matched as fixed strings.
@@ -66,7 +66,7 @@ if [[ -n "$offenders" ]]; then
     printf '%s' "$offenders" >&2
     vfail "an old product name is still in use. Say dbpantry (images: dbpantry-<engine>),
        or, if the line is history or a string already written into user data,
-       add it to this check with the reason (DESIGN.md D-54)."
+       add it to this check with the reason (design.md D-54)."
 fi
 
 vinfo "$scanned tracked file(s): no old product name outside history"

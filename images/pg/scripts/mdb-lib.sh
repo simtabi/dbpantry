@@ -6,7 +6,7 @@
 set -euo pipefail
 
 # Generated state lives under /run, which is tmpfs. That is what lets the
-# container run with a read-only root filesystem (SPEC section 9, DESIGN.md
+# container run with a read-only root filesystem (SPEC section 9, design.md
 # D-18) without a bespoke tmpfs mount for every directory we write to.
 MDB_CONF_DIR=/run/mdb/conf.d
 MDB_CERT_DIR=/run/mdb/certs

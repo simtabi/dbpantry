@@ -1,9 +1,9 @@
-# CLAUDE.md is a tracked build contract in this repo (KIT.md section 2).
+# CLAUDE.md is a tracked build contract in this repo (kit.md section 2).
 # The user's global excludes file ignores it; this negation wins because a
 # repo .gitignore takes precedence over core.excludesFile.
 !CLAUDE.md
 
-# Generated secrets and certificates: never committed (SPEC.md section 15).
+# Generated secrets and certificates: never committed (spec.md section 15).
 # Ignore the contents but keep the directories, so a fresh clone still has
 # somewhere for `make init` and `make certs` to write.
 secrets/*

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Replace vendored JARs in Cassandra's lib/ with the fixed releases pinned in
-# jars.tsv (DESIGN.md D-55).
+# jars.tsv (design.md D-55).
 #
 #   replace-jars.sh <manifest> <series> <libdir>
 #

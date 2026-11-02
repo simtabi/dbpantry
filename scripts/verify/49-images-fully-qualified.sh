@@ -11,7 +11,7 @@ source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 # that is not in its alias table -- pgvector/pgvector, proxysql/proxysql --
 # fails to pull, or prompts for a registry and then fails without a TTY. A
 # fully-qualified name means the same image on Docker, Podman and nerdctl
-# (DESIGN.md D-60).
+# (design.md D-60).
 
 cd "$MDB_ROOT" || exit 1
 scripts/gen-compose >/dev/null 2>&1 || vfail "scripts/gen-compose failed"

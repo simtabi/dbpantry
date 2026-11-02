@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Print one version's section of CHANGELOG.md, the body of its GitHub release.
+# Print one version's section of changelog.md, the body of its GitHub release.
 #
 # docs/guides/release.md: every release carries that version's CHANGELOG section as its
 # description, never auto-generated notes alone and never "see CHANGELOG". The
@@ -17,7 +17,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-CHANGELOG="${MDB_CHANGELOG:-$ROOT/CHANGELOG.md}"
+CHANGELOG="${MDB_CHANGELOG:-$ROOT/changelog.md}"
 
 label="${1:-}"
 label="${label#v}"
@@ -36,7 +36,7 @@ notes="$(awk -v want="[$label]" '
 ' "$CHANGELOG" | sed -e '/./,$!d' | sed -e ':a' -e '/^\n*$/{$d;N;ba' -e '}')"
 
 if [[ -z "$notes" ]]; then
-    printf 'release-notes: CHANGELOG.md has no section, or an empty one, for [%s]\n' "$label" >&2
+    printf 'release-notes: changelog.md has no section, or an empty one, for [%s]\n' "$label" >&2
     exit 1
 fi
 

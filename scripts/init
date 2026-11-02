@@ -145,7 +145,7 @@ if (( PROD )); then
     # BSD and GNU sed disagree about -i, so edit through a temporary file.
     tmp="$(mktemp)"
     sed -e 's|^MDB_TLS_ENFORCE=.*|MDB_TLS_ENFORCE=true|' \
-        -e 's|^MDB_PROFILES=.*|MDB_PROFILES=pg,prod,backup|' \
+        -e 's|^MDB_PROFILES=.*|MDB_PROFILES="pg,prod,backup"|' \
         -e 's|^MDB_PG_SLOW_MS=.*|MDB_PG_SLOW_MS=0|' \
         -e 's|^MDB_MYSQL_SLOW_SECONDS=.*|MDB_MYSQL_SLOW_SECONDS=0|' \
         -e 's|^MDB_MARIADB_SLOW_SECONDS=.*|MDB_MARIADB_SLOW_SECONDS=0|' \

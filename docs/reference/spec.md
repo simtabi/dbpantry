@@ -1,6 +1,6 @@
 # Complete DB Toolkit, design doc and build prompt
 
-One document, two jobs. Sections 1-16 are the design spec. Section 17 is the build contract. Hand the whole file to the builder; the builder produces DESIGN.md, stops for approval, then implements. Answer section 19 before starting.
+One document, two jobs. Sections 1-16 are the design spec. Section 17 is the build contract. Hand the whole file to the builder; the builder produces design.md, stops for approval, then implements. Answer section 19 before starting.
 
 Architecture, in three layers, and one correction that matters: this is a toolkit STACK, not a single toolkit image, since one container runs one concern. Layer 1: per-engine build stages producing multidb-server-pg, multidb-server-mysql, and multidb-server-mariadb, each a derived image with comprehensive configuration, provisioning, healthchecks, and the full tool suite baked in, supervised by s6-overlay as PID 1. Layer 2: every engine image is standalone-complete, fully usable via docker run alone, including optional embedded helpers (metrics, backup cron) behind env toggles. Layer 3: a thin docker-compose orchestrator that fires up whichever engines the user selects. Baked-in means baked-in defaults only; env vars and optional mounts override everything, so images stay twelve-factor. What makes it "one tool" is one repo, one .env, one Makefile, one command. Project name: multidb-server (repo laranail/multidb-server; images multidb-server-pg, multidb-server-mysql, multidb-server-mariadb, multidb-server-cli). Env prefix: MDB_. KISS and DRY govern everything; nothing hardcoded.
 
@@ -53,14 +53,14 @@ Split. Servers are processes with lifecycles: one healthcheck, one restart polic
   - MariaDB: 10.11 LTS, 11.4 LTS (default), latest 11.x
 - MDB_PG_VERSION / MDB_MYSQL_VERSION / MDB_MARIADB_VERSION select image tag AND data volume name. Switching majors starts a fresh versioned volume; the old one stays intact for rollback or migration.
 - PG 18+ image change: data mounts at /var/lib/postgresql (major-version-specific subdirs) rather than /var/lib/postgresql/data; the compose handles both paths by version so pg_upgrade --link works.
-- make upgrade ENGINE=pg FROM=16 TO=17: guided dump/restore (default) or pg_upgrade path; equivalents for mysql (in-place minor, dump for major) and mariadb documented in UPGRADE.md.
+- make upgrade ENGINE=pg FROM=16 TO=17: guided dump/restore (default) or pg_upgrade path; equivalents for mysql (in-place minor, dump for major) and mariadb documented in upgrade.md.
 - Running two majors of the same engine simultaneously (e.g. pg16 and pg17 during a migration window) is a documented compose-override recipe (second service with distinct port and volume), not a core toggle.
 - SQLite note: needs no server; the toolkit only documents client tips. Redis/Mongo/etc. are explicitly out of scope v1, listed under Future.
 
 ## 5. The PostgreSQL image (full suite)
 
 - FROM pgvector/pgvector:<ver>-pg${PG_MAJOR}, pinned digest; PGDG apt for the rest in one layer.
-- Included and enabled-ready: vector, postgis (+ topology, raster), pg_cron, pgaudit, pg_stat_statements, pg_trgm, uuid-ossp, pgcrypto, citext, hstore, pg_repack, pg_partman, pgtap, http, pgjwt, pgsodium, pg_net, pg_graphql. Where no PGDG/apt package exists for an arch, build from source in a builder stage; if one is genuinely unavailable on arm64, document the gap in DESIGN.md rather than silently dropping it.
+- Included and enabled-ready: vector, postgis (+ topology, raster), pg_cron, pgaudit, pg_stat_statements, pg_trgm, uuid-ossp, pgcrypto, citext, hstore, pg_repack, pg_partman, pgtap, http, pgjwt, pgsodium, pg_net, pg_graphql. Where no PGDG/apt package exists for an arch, build from source in a builder stage; if one is genuinely unavailable on arm64, document the gap in design.md rather than silently dropping it.
 - plpython3u available behind MDB_PG_PLPYTHON=true (superuser-only, off by default; it is an untrusted language).
 - shared_preload_libraries assembled from env; MDB_PG_INIT_EXTENSIONS per-database CREATE EXTENSION at provision time.
 - Tags: multidb-server-pg:17 (full, the default) and :17-slim (official base + vector + contrib essentials only, no PostGIS or supabase-family extensions); matrix 15-18.
@@ -111,7 +111,7 @@ Caddy is the web front door. In dev it hostname-routes the UIs (adminer.db.local
 
 Port mapping contract: internal container ports are fixed and never change (5432, 3306, 80, and so on); everything host-side is .env-driven. Every published binding is written as ${MDB_<SERVICE>_HOST_PORT:-default}:internal, so resolving any port collision on any machine is a one-line .env change, never a compose edit.
 
-Runtime knobs that are always forgotten and therefore specified here: MDB_PG_SHM (shm_size for the PG service, default 256m; parallel HNSW index builds need shm at least maintenance_work_mem); MDB_STOP_GRACE (stop_grace_period per engine, default 60s, because the docker default of 10s force-kills a database mid-checkpoint); nofile ulimits set for the MySQL family; COMPOSE_PROJECT_NAME pinned to mdb so container, network, and volume names are stable across machines; vm.overcommit and swappiness guidance for VPS hosts lives in OPERATIONS.md.
+Runtime knobs that are always forgotten and therefore specified here: MDB_PG_SHM (shm_size for the PG service, default 256m; parallel HNSW index builds need shm at least maintenance_work_mem); MDB_STOP_GRACE (stop_grace_period per engine, default 60s, because the docker default of 10s force-kills a database mid-checkpoint); nofile ulimits set for the MySQL family; COMPOSE_PROJECT_NAME pinned to mdb so container, network, and volume names are stable across machines; vm.overcommit and swappiness guidance for VPS hosts lives in operations.md.
 
 ## 8. Multi-project provisioning
 
@@ -142,7 +142,7 @@ Runtime knobs that are always forgotten and therefore specified here: MDB_PG_SHM
 
 - Default publish: nothing. Apps join the mdb network by service name.
 - Dev exposure per engine: MDB_PG_PUBLISH=5432 etc., bound to MDB_BIND_ADDR (default 127.0.0.1).
-- Prod access recipes in OPERATIONS.md, in order: Tailscale/WireGuard sidecar (network_mode: service:ts, DB never on public internet), SSH tunnel, public port as last resort with ufw allowlist + TLS-only + fail2ban note.
+- Prod access recipes in operations.md, in order: Tailscale/WireGuard sidecar (network_mode: service:ts, DB never on public internet), SSH tunnel, public port as last resort with ufw allowlist + TLS-only + fail2ban note.
 
 ### 10.1 Unix socket connections
 
@@ -157,7 +157,7 @@ Runtime knobs that are always forgotten and therefore specified here: MDB_PG_SHM
 - Sidecar jobs per enabled engine (DB01 pg, DB02 mysql, DB03 mariadb), nightly, zstd, checksums, retention env with GFS tiers (dailies kept N days, weeklies M weeks, monthlies K months), S3-compatible target env-ready (S3/R2/B2/Wasabi/MinIO). Backup encryption is ON by default in the prod profile, optional in dev. Failure notifications wired via sidecar env (email/webhook), so backups never fail silently.
 - make backup-all dumps every database on every enabled engine plus PG globals in one command; make backup / make restore ENGINE=x DB=y FILE=z handle the single cases, restore guided and confirmed.
 - One dump helper, two callers: the scheduled sidecar jobs and the make targets invoke the same script from scripts/, so flags can never drift between the nightly path and the manual path.
-- Verification is automated, not aspirational: make verify-backups restores the latest backup set into throwaway containers and asserts row counts; it runs weekly via CI or cron, and RESTORE.md remains the 2am runbook. A backup that has never been restored is a hope, not a backup.
+- Verification is automated, not aspirational: make verify-backups restores the latest backup set into throwaway containers and asserts row counts; it runs weekly via CI or cron, and restore.md remains the 2am runbook. A backup that has never been restored is a hope, not a backup.
 - Beyond logical dumps: PG PITR via pgBackRest in the prod profile (WAL to the same S3 target), and pg_basebackup documented as the physical path for large datasets where logical restore times stop being acceptable.
 
 ## 12. Logging and metrics
@@ -197,9 +197,9 @@ multidb-server/
   secrets/          # gitignored; make init writes generated password files here
   scripts/          # init, env-render, backup, restore, new-project, check-env, upgrade
   rls/
-  docs/             # OPERATIONS.md RESTORE.md UPGRADE.md WINDOWS.md ONBOARDING.md (migrate existing native/homebrew databases into the toolkit)
+  docs/             # operations.md restore.md upgrade.md windows.md onboarding.md (migrate existing native/homebrew databases into the toolkit)
   .github/workflows/
-  README.md CONTRIBUTING.md SECURITY.md CHANGELOG.md LICENSE (MIT)
+  readme.md CONTRIBUTING.md SECURITY.md changelog.md LICENSE (MIT)
 ```
 - Data safety in the Makefile: make down never touches data; make destroy removes volumes only after typed confirmation naming the volume. make self-update upgrades the toolkit itself (git pull, image pull, CHANGELOG migration notes surfaced) without touching project data.
 
@@ -218,7 +218,7 @@ multidb-server/
 | make backup / backup-all | One dump / every DB on every enabled engine + PG globals |
 | make restore ENGINE= DB= FILE= | Guided, confirmed restore |
 | make verify-backups | Restore latest set into throwaway containers, assert row counts |
-| make import / export | Move data in/out (files, existing native DBs per ONBOARDING.md) |
+| make import / export | Move data in/out (files, existing native DBs per onboarding.md) |
 | make upgrade ENGINE= FROM= TO= | Guided major-version migration |
 | make test-profile | Boot the tmpfs speed profile and run its checks |
 | make verify / verify-fast | Full acceptance harness / inner-loop subset |
@@ -234,7 +234,7 @@ multidb-server/
 ## 17. Build contract (the prompt)
 
 You are a senior database and DevOps engineer building the Complete DB Toolkit for Simtabi's Laranail ecosystem. In order, without skipping the gate:
-1. Read this document fully. Produce DESIGN.md: final service map, full env table (name, default, description, profile), decision log including anything you'd change from sections 2-16 with reasons, and any extension you cannot ship on arm64 with the workaround. STOP for approval.
+1. Read this document fully. Produce design.md: final service map, full env table (name, default, description, profile), decision log including anything you'd change from sections 2-16 with reasons, and any extension you cannot ship on arm64 with the workaround. STOP for approval.
 2. Implement smallest-working-core first: PG image, compose with pg+ui profiles, provisioning, certs, versioned volumes. Then mysql/mariadb profiles and phpMyAdmin. Then backup, prod, metrics. Then scripts, docs, CI.
 3. Everything configurable; no secret in any layer, file, or log; make check-env enforces.
 4. Docs are runbooks: exact commands, verification steps, written for a tired reader at 2am.
@@ -295,7 +295,7 @@ Dev-stack prior art: https://laravel.com/docs/12.x/sail  |  https://ddev.readthe
 
 ## 21. Scale, HA, and sync
 
-Amendment authored during step 1 and approved before implementation: the kickoff prompt required a section 21 that the design doc did not contain. Written from the verified HA research baseline; DESIGN.md decision log entry D-01 records the gap. Requirements below are folded into services, env, commands, CI, and acceptance like any other section.
+Amendment authored during step 1 and approved before implementation: the kickoff prompt required a section 21 that the design doc did not contain. Written from the verified HA research baseline; design.md decision log entry D-01 records the gap. Requirements below are folded into services, env, commands, CI, and acceptance like any other section.
 
 ### 21.1 Vertical first, and the capacity truth table
 
@@ -309,7 +309,7 @@ Scale up before scaling out. A single well-tuned engine on adequate RAM serves t
 | prod-large | 16 GB | 4 GB | 300 | ~3.0 GB | 100 | ~5000 |
 | anti-pattern | any | any | 500 direct | ~5.0 GB before a single query runs | none | context-switch thrashing |
 
-Roughly 10 MB per direct PostgreSQL connection is the planning figure: ~500 direct connections cost about 5 GB of RAM before a single query executes. That is the whole argument for pooling. **Connection pooling is mandatory in the prod profile**, not optional, and pgBouncer moves from "optional" in section 7 to required whenever MDB_PROFILES contains prod. Transaction-pooling caveats (no session state, no prepared statements outside the transaction, no LISTEN/NOTIFY) are documented in OPERATIONS.md next to the Laravel/Octane/Horizon guidance in section 14.
+Roughly 10 MB per direct PostgreSQL connection is the planning figure: ~500 direct connections cost about 5 GB of RAM before a single query executes. That is the whole argument for pooling. **Connection pooling is mandatory in the prod profile**, not optional, and pgBouncer moves from "optional" in section 7 to required whenever MDB_PROFILES contains prod. Transaction-pooling caveats (no session state, no prepared statements outside the transaction, no LISTEN/NOTIFY) are documented in operations.md next to the Laravel/Octane/Horizon guidance in section 14.
 
 ### 21.2 PostgreSQL high availability
 
@@ -321,7 +321,7 @@ PostgreSQL has no built-in automatic failover; something outside the engine must
 - **pgBackRest** against a shared repository (the same S3 target as section 11) providing PITR and, critically, replica bootstrap without dumping the primary.
 - **Client fallback**: libpq multi-host connection strings with `target_session_attrs=read-write` reach the current leader with no proxy at all. This is the documented path for teams that would rather not operate HAProxy.
 
-**Named SPOF, with mitigations, because pretending otherwise is how HA stacks lie**: a single HAProxy container, or a single shared pgBouncer, is itself a single point of failure — the cluster survives a database loss and dies at the proxy. Mitigations, in ascending order of effort: client-side libpq multi-host (removes the proxy entirely); two HAProxy instances behind a keepalived VIP; or DNS/anycast fronting. OPERATIONS.md states plainly which one a given deployment chose. Single-host `docker compose` HA is a **rehearsal topology only** — it demonstrates election and failover but shares a kernel, a disk, and a power supply, and must never be presented as production HA.
+**Named SPOF, with mitigations, because pretending otherwise is how HA stacks lie**: a single HAProxy container, or a single shared pgBouncer, is itself a single point of failure — the cluster survives a database loss and dies at the proxy. Mitigations, in ascending order of effort: client-side libpq multi-host (removes the proxy entirely); two HAProxy instances behind a keepalived VIP; or DNS/anycast fronting. operations.md states plainly which one a given deployment chose. Single-host `docker compose` HA is a **rehearsal topology only** — it demonstrates election and failover but shares a kernel, a disk, and a power supply, and must never be presented as production HA.
 
 ### 21.3 Replication and sync
 

@@ -7,7 +7,7 @@ source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
 need_runtime
 
-# DESIGN.md section 4 verified each of these is obtainable on arm64. This check
+# design.md section 4 verified each of these is obtainable on arm64. This check
 # proves they are actually installed and creatable, not merely available.
 
 img="$(image_name pg)"

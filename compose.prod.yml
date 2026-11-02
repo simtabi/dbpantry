@@ -75,7 +75,7 @@ services:
   pgbouncer:
     profiles: [prod, ha]
     # The official pgbouncer image is amd64-only and stuck at 1.15.0; this one
-    # is multi-arch and current (DESIGN.md D-10).
+    # is multi-arch and current (design.md D-10).
     image: ghcr.io/simtabi/dbpantry-pgbouncer:dev
     restart: unless-stopped
     security_opt:

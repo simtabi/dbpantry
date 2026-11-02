@@ -147,7 +147,7 @@ One consequence is not obvious and cost real debugging time: s6 stops services
 with SIGTERM, which PostgreSQL reads as a *smart* shutdown — wait for every
 client to disconnect. It hangs, gets SIGKILLed, and the next boot runs crash
 recovery, all while the container appears to have stopped cleanly. The engine's
-s6 service therefore carries a `down-signal` of SIGINT. See `DESIGN.md` D-09.
+s6 service therefore carries a `down-signal` of SIGINT. See `design.md` D-09.
 
 ## Adding an engine
 
@@ -158,4 +158,4 @@ gap — report it, because that is a bug in this design rather than in your engi
 
 ---
 
-[← Docs index](../../README.md#documentation)
+[← Docs index](../../readme.md#documentation)

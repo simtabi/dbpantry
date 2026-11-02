@@ -7,7 +7,7 @@ source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
 # A bind mount whose source is missing does not fail loudly. Docker creates an
 # empty DIRECTORY in its place, so a config file that moved (config/ grouping,
-# DESIGN.md D-59) turns into a container reading an empty directory where its
+# design.md D-59) turns into a container reading an empty directory where its
 # Caddyfile or haproxy.cfg should be, and the error surfaces three layers away.
 # This reads every ./ source and every build context and asks the filesystem.
 #

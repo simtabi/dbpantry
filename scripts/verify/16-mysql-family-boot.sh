@@ -10,7 +10,7 @@ need_runtime
 # SPEC section 18: "Both MySQL and MariaDB run concurrently". They use the same
 # internal port, so this also proves the port-mapping contract in section 7.
 #
-# DESIGN.md D-17: these two images do NOT share a base OS (MySQL is Oracle
+# design.md D-17: these two images do NOT share a base OS (MySQL is Oracle
 # Linux 9, MariaDB is Ubuntu 24.04), so each is checked on its own terms.
 
 check_engine() {

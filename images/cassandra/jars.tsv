@@ -1,4 +1,4 @@
-# Java libraries replaced inside Apache Cassandra's lib/ (DESIGN.md D-55).
+# Java libraries replaced inside Apache Cassandra's lib/ (design.md D-55).
 #
 # Cassandra vendors its dependencies, and 5.0 ships guava, snappy-java,
 # jackson, netty and lz4-java below their security fixes, with no newer
@@ -19,7 +19,7 @@
 # base repin that already moved a library stops here rather than leaving two
 # versions on the classpath. Check 45 validates this file.
 #
-# 4.1 has no rows: it is no longer maintained here (DESIGN.md D-57). Its
+# 4.1 has no rows: it is no longer maintained here (design.md D-57). Its
 # snakeyaml could not move past 1.33, because 4.1's YamlConfigurationLoader
 # calls constructors snakeyaml 2.0 removed, so CVE-2022-1471 stayed open.
 

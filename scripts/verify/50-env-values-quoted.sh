@@ -69,6 +69,12 @@ for v in 'pg,ui' 'landlord panel api socket queue' 'p@ss$word"x' 'semi;colon' '1
 done
 vinfo "mdb_env_quote output reads back unchanged"
 
+# The safe set is the owner's sim-standards hook's: a comma list is quoted,
+# a host:port or path is not.
+[[ "$(mdb_env_quote 'pg,ui')" == '"pg,ui"' ]] || vfail "mdb_env_quote left a comma list bare"
+[[ "$(mdb_env_quote 'db:5432')" == 'db:5432' ]] || vfail "mdb_env_quote quoted a host:port"
+vinfo "comma lists are quoted, host:port and paths stay bare"
+
 # The same file is what Compose and `set -a; . file` see: they must agree.
 printf 'TENANTS="landlord panel api socket queue"\nMDB_PROFILES="pg,ui"\n' > "$t"
 # shellcheck disable=SC2016  # expanded by the inner bash
