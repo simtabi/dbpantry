@@ -139,4 +139,9 @@ grep -q 'no-xattrs' scripts/backends/kubernetes.sh || vfail "the backup bundle c
 helm template r "$chart" --set engines.pg.enabled=true --set backup.enabled=true --set backup.createClaims=false \
     >"$tmp/noclaim.yaml" 2>"$tmp/err" || vfail "helm template (createClaims=false): $(cat "$tmp/err")"
 grep -q '^kind: PersistentVolumeClaim' "$tmp/noclaim.yaml" && vfail "backup.createClaims=false still rendered a claim"
+# CloudNativePG's PostgreSQL listens on /controller/run (its pods set PGHOST),
+# not /var/run/postgresql: a shell that names the socket directory outright
+# cannot reach it. make psql stays socket-first by honouring PGHOST.
+recipe="$(make -s -n psql 2>/dev/null)"
+[[ "$recipe" == *'PGHOST:-/var/run/postgresql'* ]] || vfail "make psql ignores the pod's PGHOST socket directory: $recipe"
 vinfo "Patroni is namespace-scoped with pg/pg-ro on the role labels; cnpg needs its operator; each backup job prunes only its own volume"
