@@ -109,6 +109,10 @@ image, replacing Cassandra's vulnerable vendored JARs rather than waiving them.
   exist and is not a known generated file.
 
 ### Fixed
+- **`scripts/restore` reported success when the restore failed.** Its pipe ended in `|| true`
+  and it logged "complete" either way, so a corrupt or truncated dump left an empty or partial
+  database behind a success message. It now prints the client's last lines and exits non-zero,
+  saying the database was already recreated (check 56, which runs in a scratch checkout).
 - Patroni HA (Compose too): `pg_hba` was under `bootstrap:`, so after any member restart the image's
   hardening rewrote it without replication rules and replicas were refused. Members also lacked the
   root to postgres `pg_ident` map, so host-side `make backup`, restore and psql failed with peer auth.

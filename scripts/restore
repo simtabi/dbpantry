@@ -5,6 +5,11 @@
 # A restore overwrites a live database, so it asks before it does. CONFIRM=yes
 # skips the prompt for automation; there is no flag that skips the checksum.
 #
+# The exit status is the restore's. It used to end in `|| true` and log
+# "complete" whatever happened, so a corrupt or truncated dump left an empty
+# database behind a success message. A failure now prints the client's last
+# lines and exits non-zero, saying the database was already recreated.
+#
 # Usage: scripts/restore --engine pg --db mydb --file backups/pg_mydb_...zst
 #        CONFIRM=yes scripts/restore ...
 
@@ -107,7 +112,15 @@ decompress() {
 log "recreating database $DB"
 hook_recreate_database "$DB" || die "could not recreate $DB"
 
+# The client's stderr is kept for the failure path: the reason is in it, and
+# nothing else records it.
 log "restoring"
-decompress | hook_restore_database "$DB" >/dev/null 2>&1 || true
+errlog="$(mktemp "${TMPDIR:-/tmp}/mdb-restore.XXXXXX")"
+trap 'rm -f "$errlog"' EXIT
+if ! decompress 2>"$errlog" | hook_restore_database "$DB" >/dev/null 2>>"$errlog"; then
+    tail -20 "$errlog" | sed 's/^/[restore]   /' >&2
+    die "restore of $DB FAILED. $DB was dropped and recreated first, so it is now
+       empty or partial. Fix the cause above and restore again."
+fi
 
 log "restore of $DB complete"
