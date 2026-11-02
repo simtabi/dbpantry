@@ -159,6 +159,19 @@ for key in MDB_BACKEND $(grep -ohE '(^|[^_A-Z])MDB_K8S_[A-Z_]+' scripts/backends
 done
 vinfo "MDB_BACKEND and every MDB_K8S_ setting are documented in .env.example"
 
+# make destroy keeps recovery volumes unless --include-recovery. On Kubernetes
+# the scheduled dumps live in a PVC (<release>-backups-<engine>), and a destroy
+# that took them with the data would repeat the incident the scratch-backup
+# rules exist for: the data and every dump of it gone in one command.
+eval "$(sed -n '/^is_recovery_volume()/,/^}/p' scripts/destroy)"
+for v in proj-backups-pg proj-backups-mysql pitr-proj-pg-0 proj_pg_pitr; do
+    is_recovery_volume "$v" || vfail "make destroy --all would delete $v (a recovery volume)"
+done
+for v in data-proj-pg-0 proj_pg_data proj-pg-1; do
+    is_recovery_volume "$v" && vfail "$v is a data volume but destroy treats it as recovery"
+done
+vinfo "destroy --all keeps the backup and pitr volumes"
+
 # --- 3. the chart -----------------------------------------------------------------
 command -v helm >/dev/null 2>&1 || vskip "helm is not installed; the chart was not linted"
 chart=deploy/helm/dbpantry

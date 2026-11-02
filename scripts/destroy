@@ -39,7 +39,8 @@ list_volumes() {
     mdb_be_volumes "$PROJECT"
 }
 
-# Recovery repositories -- the pgBackRest repo and the binary logs.
+# Recovery repositories -- the pgBackRest repo and the binary logs, and on
+# Kubernetes the PVC the scheduled dumps are written to (<release>-backups-*).
 #
 # These are EXCLUDED from --all, because a command that destroys the data and
 # the means of recovering from it in one step is the worst possible default:
@@ -47,7 +48,7 @@ list_volumes() {
 # They live in separate volumes precisely so this distinction can exist, and
 # --include-recovery is the way to say you meant it.
 is_recovery_volume() {
-    case "$1" in *_pitr|pitr-*) return 0 ;; *) return 1 ;; esac
+    case "$1" in *_pitr|pitr-*|*-backups-*) return 0 ;; *) return 1 ;; esac
 }
 
 volumes="$(list_volumes)"
