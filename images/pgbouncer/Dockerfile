@@ -10,7 +10,7 @@
 # package, which is maintained by the PostgreSQL project. Nothing in the
 # toolkit now depends on a community rebuild.
 
-ARG BASE_IMAGE=debian:12-slim
+ARG BASE_IMAGE=docker.io/library/debian:12-slim
 FROM ${BASE_IMAGE}
 
 ARG PGBOUNCER_VERSION

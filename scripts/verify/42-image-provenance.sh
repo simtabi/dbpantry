@@ -35,6 +35,11 @@ while IFS= read -r ref; do
 
     checked=$(( checked + 1 ))
 
+    # References are fully qualified so Podman resolves them without a search
+    # list (DESIGN.md D-60). docker.io/library/x is the Official Image x, and
+    # docker.io/ns/x is ns/x; judge the publisher, not the spelling.
+    repo="${repo#docker.io/library/}"; repo="${repo#docker.io/}"
+
     # A Docker Official Image has no namespace: "mysql", not "someone/mysql".
     case "$repo" in
         */*) ;;
