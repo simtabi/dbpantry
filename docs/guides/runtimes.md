@@ -54,6 +54,7 @@ The Compose command is resolved like this:
 | Podman 4.7+ (rootless or rootful), with docker-compose v2 | podman | Supported, tested on a rootful podman machine (macOS) | [Podman](runtime-podman.md) |
 | Podman with podman-compose | podman | Best effort | [Podman](runtime-podman.md#podman-compose) |
 | nerdctl / containerd (incl. Rancher Desktop containerd, Colima containerd) | nerdctl | Best effort, untested | [nerdctl](runtime-nerdctl.md) |
+| Apple container (macOS 26) through socktainer | docker | Supported for local development, tested on macOS 27.2 (PG, MySQL, MariaDB); needs `compose.apple.yml` | [Apple container](runtime-apple-container.md) |
 
 OrbStack, Colima, Docker Desktop and Rancher Desktop (moby) all expose the
 Docker API. To dbpantry they are just `docker`, so they share Docker's code
@@ -89,7 +90,10 @@ These backends are being added on top of that layer:
 - **Kubernetes**, including the clusters built into OrbStack, Docker Desktop
   and Rancher Desktop. A local cluster already runs fine next to dbpantry.
 - **LXC / LXD / Incus.**
-- **Apple's `container` tool** (macOS 26).
+
+Apple's `container` tool (macOS 26) needed no backend of its own: socktainer
+serves the Docker API on top of it, so it is the docker runtime with a memory
+overlay ([Apple container](runtime-apple-container.md)).
 
 None of these speaks the Compose Specification, so each adapter will also need
 its own deployment path, mapping services to manifests, instances or
