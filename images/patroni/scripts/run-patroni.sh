@@ -211,7 +211,7 @@ postgresql:
   # primary after a failover, or any pod Kubernetes reschedules -- and later
   # leads would refuse every replica.
   pg_hba:
-    - local   all             postgres                    peer
+    - local   all             postgres                    peer map=mdb
     - local   all             all                         scram-sha-256
     - hostssl all             all         127.0.0.1/32    scram-sha-256
     - hostssl all             all         ::1/128         scram-sha-256
@@ -220,6 +220,13 @@ postgresql:
     # Pod networks may be IPv6 (or dual-stack) on Kubernetes.
     - hostssl all             all         ::/0            scram-sha-256
     - hostssl replication     replicator  ::/0            scram-sha-256
+  # kubectl exec and docker exec run as root: map root (and postgres) to the
+  # postgres role on the socket, as the standalone image does, so host-side
+  # make backup, restore and psql work against a member. Peer still checks a
+  # real OS identity; this names exactly which ones.
+  pg_ident:
+    - mdb        root              postgres
+    - mdb        postgres          postgres
 
 tags:
   nofailover: false

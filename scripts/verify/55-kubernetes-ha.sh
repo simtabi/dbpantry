@@ -67,6 +67,14 @@ grep -q '^etcd3:' "$tmp/patroni.yml" && vfail "the kubernetes DCS config still n
 # member, on Compose and Kubernetes alike.
 sect="$(awk '/^[a-z]/ { top = $1 } /^  pg_hba:/ { print top }' "$tmp/patroni.yml")"
 [[ "$sect" == "postgresql:" ]] || vfail "pg_hba is under '${sect:-nothing}' in patroni.yml, not postgresql:"
+# Host-side maintenance (make backup, restore, psql) execs into the member as
+# root, as kubectl exec and docker exec both do. Plain peer then refuses
+# "postgres"; the standalone image maps root to postgres with pg_ident, and the
+# Patroni members must carry the same map or every host-side verb fails.
+grep -qE '^    - local +all +postgres +peer map=mdb$' "$tmp/patroni.yml" \
+    || vfail "patroni.yml local postgres rule lacks 'peer map=mdb'"
+grep -qE '^  pg_ident:' "$tmp/patroni.yml" && grep -qE '^    - mdb +root +postgres$' "$tmp/patroni.yml" \
+    || vfail "patroni.yml has no pg_ident map from root to postgres"
 # Patroni hands its global namespace to the DCS, where it overrides
 # kubernetes.namespace: the members then query /api/v1/namespaces//multidb-server//
 # and never elect a leader.
