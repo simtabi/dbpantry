@@ -63,6 +63,9 @@ printf '$t %s\n' "\$*" >> "\$STUB_LOG"
 case "\$*" in
     *"get pods"*) printf '%b' "\${STUB_PODS:-}" ;;
     *"get pvc "*) [[ -z "\${STUB_NO_PVC:-}" ]] || exit 1 ;;
+    *"-pg-superuser "*)
+        for a in "\$@"; do [[ "\$a" == --from-file=password=* ]] && cat "\${a#--from-file=password=}" > "\$STUB_LOG.superpw"; done
+        printf 'kind: Secret\n' ;;
     *"create -f -"*) cat >> "\$STUB_LOG.stdin" ;;
     *--dry-run=client*) printf 'kind: Secret\n' ;;
     *" apply "*) cat >/dev/null ;;
@@ -128,6 +131,11 @@ kube ctx 'mdb_be_secrets_sync' >/dev/null
 grep -q 'create secret generic dbpantry-secrets .*pg_superuser_password.txt' "$log" || vfail "secrets/ was not synced"
 grep -q 'create secret generic dbpantry-certs-pg ' "$log" || vfail "certs/pg was not synced"
 grep -q 'ca.key' "$log" && vfail "the CA private key was sent to the cluster"
+# CloudNativePG uses the basic-auth password byte for byte: the file's trailing
+# newline became part of it, and every client sending the file's contents was
+# refused ("password authentication failed for user postgres").
+[[ "$(od -c < "$log.superpw" 2>/dev/null | head -1)" == "$(printf pw | od -c | head -1)" ]] \
+    || vfail "the CloudNativePG superuser Secret password is not the file without its newline: $(od -c < "$log.superpw" 2>/dev/null | head -1)"
 kube kind-dev 'mdb_be_image_load img:1' >/dev/null
 grep -qx 'kind load docker-image img:1 --name dev' "$log" || vfail "a kind context did not kind-load the image"
 kube orbstack 'mdb_be_image_load img:1' >/dev/null

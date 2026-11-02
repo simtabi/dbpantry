@@ -185,12 +185,16 @@ _mdb_be_kubernetes_secrets_sync() {
     (( ${#args[@]} )) || { _mdb_rt_err "secrets/ has no *.txt files; run make init"; return 1; }
     _mdb_k8s_kubectl create secret generic dbpantry-secrets "${args[@]}" --dry-run=client -o yaml \
         | _mdb_k8s_kubectl apply -f - >/dev/null || return
-    # CloudNativePG takes the superuser password as a basic-auth Secret.
+    # CloudNativePG takes the superuser password as a basic-auth Secret, and
+    # uses it byte for byte: without the file's trailing newline (as every
+    # dbpantry client reads it), or nothing can log in. Through stdin, so the
+    # password is never on a command line.
     if [[ -f "$root/secrets/pg_superuser_password.txt" ]]; then
-        _mdb_k8s_kubectl create secret generic "$(_mdb_k8s_release)-pg-superuser" --type=kubernetes.io/basic-auth \
-            --from-literal=username=postgres \
-            --from-file=password="$root/secrets/pg_superuser_password.txt" \
-            --dry-run=client -o yaml | _mdb_k8s_kubectl apply -f - >/dev/null || return
+        tr -d '\n' < "$root/secrets/pg_superuser_password.txt" \
+            | _mdb_k8s_kubectl create secret generic "$(_mdb_k8s_release)-pg-superuser" --type=kubernetes.io/basic-auth \
+                --from-literal=username=postgres \
+                --from-file=password=/dev/stdin \
+                --dry-run=client -o yaml | _mdb_k8s_kubectl apply -f - >/dev/null || return
     fi
     _mdb_k8s_backup_bundle || return
     for eng in pg mysql mariadb mongodb cassandra; do
