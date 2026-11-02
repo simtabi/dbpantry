@@ -55,6 +55,7 @@ so a green `make verify` is the criteria being met rather than a proxy for it.
 | Scripts reach services only through the backend layer, every backend implements the verb contract, and the Compose backend runs the same commands as before | `52-backend-layer` |
 | Apple container through socktainer is detected, refused without compose.apple.yml, and builds load into its image store | `53-apple-container` |
 | The Kubernetes backend renders .env to Helm values, keeps the verb contract pinned to MDB_K8S_CONTEXT, and the chart renders every engine hardened | `54-kubernetes-backend` |
+| Kubernetes HA renders Patroni (Kubernetes DCS, pg/pg-ro on role labels, pg_hba and pg_ident under postgresql:) or a CloudNativePG Cluster only with its operator, and backup CronJobs wait for the database and prune only their own claim | `55-kubernetes-ha` |
 | The off-site push is wired, authenticated, and fails loudly | `39-offsite-backup` |
 | Configuration reproduces, data persists, recovery data outlives `destroy` | `41-state-survives` |
 | Every image is official, upstream, or justified | `42-image-provenance` |

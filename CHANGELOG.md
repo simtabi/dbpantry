@@ -54,6 +54,11 @@ image, replacing Cassandra's vulnerable vendored JARs rather than waiving them.
   configured from `.env` (`scripts/helm-values`) and deployed only to `MDB_K8S_CONTEXT`. `make up`,
   `down`, `psql`, `backup`, `restore` and `destroy` work through `kubectl exec`; volumes outlive
   `make down`; `scripts/runtime forward` port-forwards the engines. Tested on OrbStack and kind.
+- **PostgreSQL HA and scheduled backups on Kubernetes** (design.md D-65, [Kubernetes](docs/guides/kubernetes.md#high-availability)):
+  the `ha` profile runs Patroni with the Kubernetes API as its DCS (no etcd or HAProxy), or a
+  CloudNativePG Cluster with `MDB_K8S_HA_PROVIDER=cnpg`. Either way `pg` follows the primary and `pg-ro`
+  the replicas. The `backup` profile adds one CronJob per engine (pg, mysql, mariadb) that writes to
+  its own claim and prunes only there. Tested on OrbStack and kind, CloudNativePG 1.30.1 included.
 - **Apple container (macOS 26) through socktainer** (design.md D-63,
   [Apple container](docs/guides/runtime-apple-container.md)): detected as a Docker provider;
   `compose.apple.yml` sizes each engine's VM and is required there; builds pass `--load`.
@@ -104,6 +109,10 @@ image, replacing Cassandra's vulnerable vendored JARs rather than waiving them.
   exist and is not a known generated file.
 
 ### Fixed
+- Patroni HA (Compose too): `pg_hba` was under `bootstrap:`, so after any member restart the image's
+  hardening rewrote it without replication rules and replicas were refused. Members also lacked the
+  root to postgres `pg_ident` map, so host-side `make backup`, restore and psql failed with peer auth.
+- `make destroy --all` keeps the Kubernetes backups claim (`<release>-backups-*`) as a recovery volume.
 - The verify harness leaked one network per run of checks 12 and 33: it removed the network before
   the container still attached to it. Networks are now removed last (`track_network`), and check 01
   rejects the old pattern.
