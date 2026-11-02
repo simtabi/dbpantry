@@ -1,0 +1,153 @@
+#!/usr/bin/env bash
+#
+# Render a Helm values file for deploy/helm/dbpantry from .env, so .env stays
+# the one place a checkout is configured on every backend (design.md D-64).
+#
+#   scripts/helm-values            values YAML on stdout
+#   scripts/helm-values -o FILE    write it to FILE (mode 0600)
+#
+# What it maps:
+#   MDB_PROFILES                 which engines are enabled (pg, mysql, mariadb,
+#                                mongodb, cassandra; other profiles are not on
+#                                Kubernetes yet and are reported on stderr)
+#   MDB_<ENGINE>_VERSION         the image tag
+#   MDB_MONGODB_IMAGE / _BASE_IMAGE  MongoDB's image reference
+#   MDB_<ENGINE>_MEM_LIMIT / _CPU_LIMIT  memory and cpu (requests and limits)
+#   MDB_PG_SHM                   the size of PostgreSQL's /dev/shm
+#   MDB_K8S_STORAGE_CLASS        global.storageClass
+#   every variable the engine's Compose service passes (its environment:
+#   block in compose.engines.yml), resolved the way Compose resolves it: the
+#   environment, then .env, then the ${VAR:-default} default. Empty values are
+#   left out, and the /run/secrets password files come from the chart.
+#
+# Every value is emitted double-quoted, so YAML never retypes one (a version
+# such as 8.4, or "false", stays a string).
+
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# shellcheck source=env-lib.sh
+. "$ROOT/scripts/env-lib.sh"
+
+ENGINES="pg mysql mariadb mongodb cassandra"
+COMPOSE_ENGINES="${MDB_HELM_COMPOSE_FILE:-$ROOT/compose.engines.yml}"
+ENV_FILE="${MDB_HELM_ENV_FILE:-$ROOT/.env}"
+out=""
+
+while (( $# )); do
+    case "$1" in
+        -o) out="${2:?-o needs a file}"; shift 2 ;;
+        -h|--help) sed -n '2,22p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+        *) printf 'helm-values: unknown argument: %s\n' "$1" >&2; exit 2 ;;
+    esac
+done
+
+[[ -f "$COMPOSE_ENGINES" ]] || { printf 'helm-values: %s not found (run scripts/gen-compose)\n' "$COMPOSE_ENGINES" >&2; exit 1; }
+
+# A setting as Compose sees it: the environment wins over .env.
+setting() {
+    local key="$1"
+    if [[ -n "${!key+x}" ]]; then printf '%s' "${!key}"; return; fi
+    mdb_env_get "$key" "$ENV_FILE"
+}
+
+# YAML double-quoted scalar.
+q() {
+    local v="$1"
+    v="${v//\\/\\\\}"
+    v="${v//\"/\\\"}"
+    printf '"%s"' "$v"
+}
+
+upper() { printf '%s' "$1" | tr '[:lower:]' '[:upper:]'; }
+
+# KEY<TAB>EXPRESSION for every entry of one service's environment: block.
+service_env() {
+    awk -v svc="$1" '
+        $0 ~ "^  " svc ":$" { insvc = 1; next }
+        insvc && /^  [a-zA-Z0-9_-]+:$/ { exit }
+        insvc && /^    environment:$/ { inenv = 1; next }
+        inenv && /^    [a-z_]+:/ { exit }
+        inenv && /^      [A-Za-z_][A-Za-z0-9_]*:/ {
+            line = $0; sub(/^      /, "", line)
+            key = line; sub(/:.*/, "", key)
+            val = line; sub(/^[^:]*:[ ]*/, "", val)
+            printf "%s\t%s\n", key, val
+        }
+    ' "$COMPOSE_ENGINES"
+}
+
+# Resolve one Compose value: ${VAR:-default}, ${VAR}, or a literal.
+resolve() {
+    local expr="$1" var def v
+    if [[ "$expr" =~ ^\$\{([A-Za-z_][A-Za-z0-9_]*)(:-(.*))?\}$ ]]; then
+        var="${BASH_REMATCH[1]}"; def="${BASH_REMATCH[3]}"
+        v="$(setting "$var")"
+        printf '%s' "${v:-$def}"
+        return
+    fi
+    expr="${expr#\"}"; expr="${expr%\"}"
+    printf '%s' "$expr"
+}
+
+# The same precedence as scripts/render-config.
+profiles="${COMPOSE_PROFILES:-$(setting MDB_PROFILES)}"
+profiles="${profiles:-pg,ui}"
+profiles=",${profiles// /},"
+
+render() {
+    local sc eng ENG enabled v mem cpu key expr val
+    printf '# Rendered by scripts/helm-values from %s. Do not edit: change .env.\n' "$(basename "$ENV_FILE")"
+    sc="$(setting MDB_K8S_STORAGE_CLASS)"
+    printf 'global:\n'
+    printf '  storageClass: %s\n' "$(q "$sc")"
+    printf 'engines:\n'
+    for eng in $ENGINES; do
+        ENG="$(upper "$eng")"
+        enabled=false
+        case "$profiles" in *",$eng,"*) enabled=true ;; esac
+        printf '  %s:\n' "$eng"
+        printf '    enabled: %s\n' "$enabled"
+        if [[ "$eng" == mongodb ]]; then
+            v="$(setting MDB_MONGODB_IMAGE)"; [[ -n "$v" ]] || v="$(setting MDB_MONGODB_BASE_IMAGE)"
+            [[ -z "$v" ]] || printf '    imageRef: %s\n' "$(q "$v")"
+        else
+            v="$(setting "MDB_${ENG}_VERSION")"
+            [[ -z "$v" ]] || printf '    tag: %s\n' "$(q "$v")"
+        fi
+        mem="$(setting "MDB_${ENG}_MEM_LIMIT")"
+        cpu="$(setting "MDB_${ENG}_CPU_LIMIT")"
+        [[ -z "$mem" ]] || printf '    memory: %s\n' "$(q "$mem")"
+        [[ -z "$cpu" ]] || printf '    cpu: %s\n' "$(q "$cpu")"
+        if [[ "$eng" == pg ]]; then
+            v="$(setting MDB_PG_SHM)"
+            [[ -z "$v" ]] || printf '    shm: %s\n' "$(q "$v")"
+        fi
+        printf '    env:\n'
+        while IFS=$'\t' read -r key expr; do
+            [[ -n "$key" ]] || continue
+            # The chart sets the memory variable from memory, and mounts the
+            # password files itself.
+            [[ "$key" == "MDB_${ENG}_MEM_LIMIT" ]] && continue
+            val="$(resolve "$expr")"
+            [[ -n "$val" ]] || continue
+            [[ "$val" == /run/secrets/* ]] && continue
+            printf '      %s: %s\n' "$key" "$(q "$val")"
+        done < <(service_env "$eng")
+    done
+}
+
+# Profiles that have no Kubernetes workload yet.
+skipped=""
+IFS=, read -r -a plist <<<"${profiles//,,/,}"
+for p in ${plist[@]+"${plist[@]}"}; do
+    [[ -n "$p" ]] || continue
+    case " $ENGINES " in *" $p "*) ;; *) skipped="${skipped:+$skipped, }$p" ;; esac
+done
+[[ -z "$skipped" ]] || printf 'helm-values: not deployed on Kubernetes yet: %s (docs/guides/kubernetes.md)\n' "$skipped" >&2
+
+if [[ -n "$out" ]]; then
+    ( umask 077; render >"$out" )
+else
+    render
+fi

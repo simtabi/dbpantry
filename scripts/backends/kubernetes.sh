@@ -1,0 +1,302 @@
+#!/usr/bin/env bash
+# shellcheck shell=bash
+# Backend: Kubernetes, through the Helm chart in deploy/helm/dbpantry
+# (design.md D-64, docs/guides/kubernetes.md).
+#
+# Settings (environment, then .env):
+#   MDB_K8S_CONTEXT        kubeconfig context to deploy to. REQUIRED: dbpantry
+#                          never deploys to whatever context happens to be
+#                          current.
+#   MDB_K8S_NAMESPACE      namespace (default: the project name)
+#   MDB_K8S_RELEASE        Helm release (default: the project name)
+#   MDB_K8S_STORAGE_CLASS  StorageClass for the volumes (default: the cluster's)
+#   MDB_K8S_VALUES         extra values files, colon-separated, applied last
+#   MDB_K8S_LOAD_IMAGES    auto | true | false: copy the locally built images
+#                          into the cluster (auto: on kind-* contexts only)
+#
+# Services are the chart's StatefulSets, found by the label
+# app.kubernetes.io/component=<service>; volumes are the release's
+# PersistentVolumeClaims. kubectl and helm must be on PATH; KUBECONFIG is
+# honoured as usual.
+
+_mdb_k8s_var() { _mdb_rt_compose_var "$1"; }
+
+_mdb_k8s_ctx() {
+    local c
+    c="$(_mdb_k8s_var MDB_K8S_CONTEXT)"
+    [[ -n "$c" ]] || { _mdb_rt_err "MDB_BACKEND=kubernetes needs MDB_K8S_CONTEXT (a kubeconfig context; see kubectl config get-contexts)"; return 2; }
+    printf '%s' "$c"
+}
+_mdb_k8s_ns() {
+    local n; n="$(_mdb_k8s_var MDB_K8S_NAMESPACE)"
+    printf '%s' "${n:-$(mdb_project_name)}"
+}
+_mdb_k8s_release() {
+    local r; r="$(_mdb_k8s_var MDB_K8S_RELEASE)"
+    printf '%s' "${r:-$(mdb_project_name)}"
+}
+
+_mdb_k8s_tools() {
+    local t
+    for t in kubectl helm; do
+        command -v "$t" >/dev/null 2>&1 || { _mdb_rt_err "MDB_BACKEND=kubernetes needs $t on PATH"; return 127; }
+    done
+}
+
+# kubectl and helm, always pinned to the configured context and namespace.
+_mdb_k8s_kubectl() {
+    local ctx ns
+    ctx="$(_mdb_k8s_ctx)" || return
+    ns="$(_mdb_k8s_ns)"
+    kubectl --context "$ctx" --namespace "$ns" "$@"
+}
+_mdb_k8s_helm() {
+    local ctx ns
+    ctx="$(_mdb_k8s_ctx)" || return
+    ns="$(_mdb_k8s_ns)"
+    helm --kube-context "$ctx" --namespace "$ns" "$@"
+}
+
+_mdb_k8s_sel() {
+    local s
+    s="app.kubernetes.io/name=dbpantry,app.kubernetes.io/instance=$(_mdb_k8s_release)"
+    [[ -z "${1:-}" ]] || s="$s,app.kubernetes.io/component=$1"
+    printf '%s' "$s"
+}
+
+# "<component> <pod> <phase> <True|False|Terminating>" for every pod of the
+# release. A pod being deleted still reports Running and Ready, so it is
+# marked Terminating: nothing may treat it as up (make destroy checks this).
+_MDB_K8S_PODS_TPL='{{range .items}}{{index .metadata.labels "app.kubernetes.io/component"}} {{.metadata.name}} {{.status.phase}} {{if .metadata.deletionTimestamp}}Terminating{{else}}{{range .status.conditions}}{{if eq .type "Ready"}}{{.status}}{{end}}{{end}}{{end}}{{"\n"}}{{end}}'
+_mdb_k8s_pods() {
+    _mdb_k8s_ctx >/dev/null || return
+    _mdb_k8s_kubectl get pods -l "$(_mdb_k8s_sel "${1:-}")" -o go-template="$_MDB_K8S_PODS_TPL" 2>/dev/null
+}
+
+# The pod serving SVC: the first Ready one, else the first one.
+_mdb_k8s_pod() {
+    local svc="$1" pods pod
+    pods="$(_mdb_k8s_pods "$svc")" || return
+    pod="$(printf '%s\n' "$pods" | awk '$4=="True" {print $2; exit}')"
+    [[ -n "$pod" ]] || pod="$(printf '%s\n' "$pods" | awk 'NF {print $2; exit}')"
+    [[ -n "$pod" ]] || { _mdb_rt_err "service $svc is not running in $(_mdb_k8s_ns)/$(_mdb_k8s_release)"; return 1; }
+    printf '%s' "$pod"
+}
+
+# Run "$@" as USER inside the pod: kubectl exec has no -u, so drop privileges
+# with whatever the image has (s6-setuidgid in the dbpantry images, gosu in
+# the upstream ones, setpriv from util-linux otherwise).
+# shellcheck disable=SC2016  # expanded by the pod's sh, not here
+_MDB_K8S_ASUSER='u="$1"; shift
+if command -v s6-setuidgid >/dev/null 2>&1; then exec s6-setuidgid "$u" "$@"
+elif command -v gosu >/dev/null 2>&1; then exec gosu "$u" "$@"
+elif command -v setpriv >/dev/null 2>&1; then exec setpriv --reuid="$u" --regid="$u" --init-groups "$@"
+else echo "no way to switch to user $u in this image" >&2; exit 126; fi'
+
+_mdb_k8s_exec() {
+    local tty="$1"; shift
+    _mdb_svc_args "$@" || return; shift "$_MDB_SVC_SHIFT"
+    local pod flags=(-i)
+    pod="$(_mdb_k8s_pod "$_MDB_SVC")" || return
+    [[ "$tty" == 1 ]] && [[ -t 0 && -t 1 ]] && flags=(-it)
+    if [[ -n "$_MDB_SVC_USER" ]]; then
+        _mdb_k8s_kubectl exec "${flags[@]}" "$pod" -c "$_MDB_SVC" -- sh -c "$_MDB_K8S_ASUSER" sh "$_MDB_SVC_USER" "$@"
+    else
+        _mdb_k8s_kubectl exec "${flags[@]}" "$pod" -c "$_MDB_SVC" -- "$@"
+    fi
+}
+
+_mdb_be_kubernetes_exec()     { _mdb_k8s_exec 0 "$@"; }
+_mdb_be_kubernetes_exec_tty() { _mdb_k8s_exec 1 "$@"; }
+
+_mdb_be_kubernetes_running() {
+    local pods
+    pods="$(_mdb_k8s_pods)" || return
+    printf '%s\n' "$pods" | awk '$3=="Running" && $4=="True" {print $1}' | sort -u
+}
+
+_mdb_be_kubernetes_health() {
+    local line phase ready
+    line="$(_mdb_k8s_pods "$1")" || return
+    line="$(printf '%s\n' "$line" | awk 'NF' | head -1)"
+    if [[ -z "$line" ]]; then printf 'absent\n'; return 0; fi
+    read -r _ _ phase ready <<<"$line"
+    case "$phase/${ready:-}" in
+        Running/True) printf 'healthy\n' ;;
+        */Terminating) printf 'absent\n' ;;
+        Running/*|Pending/*) printf 'starting\n' ;;
+        *) printf 'unhealthy\n' ;;
+    esac
+}
+
+_mdb_be_kubernetes_cp() {
+    local src="$1" dest="$2" pod
+    pod="$(_mdb_k8s_pod "${src%%:*}")" || return
+    [[ -d "$dest" ]] && dest="$dest/$(basename "${src#*:}")"
+    _mdb_k8s_kubectl exec -i "$pod" -c "${src%%:*}" -- cat "${src#*:}" >"$dest"
+}
+
+_mdb_be_kubernetes_volumes() {
+    _mdb_k8s_ctx >/dev/null || return
+    _mdb_k8s_kubectl get pvc -l "$(_mdb_k8s_sel)" -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}' 2>/dev/null | awk 'NF' | sort
+}
+
+_mdb_be_kubernetes_volume_rm() {
+    _mdb_k8s_kubectl delete pvc "$1" --wait=true
+}
+
+# Publish secrets/*.txt as the chart's Secret, certs/ as one TLS Secret per
+# engine and overrides/<engine>/ as ConfigMaps. kubectl apply, so a rotation
+# is the same command. The CA key never leaves the checkout.
+_mdb_be_kubernetes_secrets_sync() {
+    local root="$MDB_RT_ROOT" ns f args=() eng d
+    ns="$(_mdb_k8s_ns)"
+    _mdb_k8s_ctx >/dev/null || return
+    if ! _mdb_k8s_kubectl get namespace "$ns" >/dev/null 2>&1; then
+        _mdb_k8s_kubectl create namespace "$ns" >/dev/null || return
+    fi
+    for f in "$root"/secrets/*.txt; do
+        [[ -f "$f" ]] && args+=(--from-file="$f")
+    done
+    (( ${#args[@]} )) || { _mdb_rt_err "secrets/ has no *.txt files; run make init"; return 1; }
+    _mdb_k8s_kubectl create secret generic dbpantry-secrets "${args[@]}" --dry-run=client -o yaml \
+        | _mdb_k8s_kubectl apply -f - >/dev/null || return
+    for eng in pg mysql mariadb mongodb cassandra; do
+        d="$root/certs/$eng"
+        if [[ -f "$d/server.crt" && -f "$d/server.key" && -f "$root/certs/ca.crt" ]]; then
+            _mdb_k8s_kubectl create secret generic "dbpantry-certs-$eng" \
+                --from-file=server.crt="$d/server.crt" --from-file=server.key="$d/server.key" \
+                --from-file=ca.crt="$root/certs/ca.crt" --dry-run=client -o yaml \
+                | _mdb_k8s_kubectl apply -f - >/dev/null || return
+        fi
+        d="$root/overrides/$eng"
+        args=()
+        for f in "$d"/*; do
+            [[ -f "$f" ]] && args+=(--from-file="$f")
+        done
+        if (( ${#args[@]} )); then
+            _mdb_k8s_kubectl create configmap "dbpantry-overrides-$eng" "${args[@]}" --dry-run=client -o yaml \
+                | _mdb_k8s_kubectl apply -f - >/dev/null || return
+        fi
+    done
+}
+
+# Make a locally built image visible to the cluster. kind has its own image
+# store; OrbStack and Docker Desktop share the Docker one; a real cluster
+# pulls from the registry, so it is up to you to push there.
+_mdb_be_kubernetes_image_load() {
+    local ref="$1" ctx mode
+    ctx="$(_mdb_k8s_ctx)" || return
+    mode="$(_mdb_k8s_var MDB_K8S_LOAD_IMAGES)"
+    case "${mode:-auto}/$ctx" in
+        false/*|auto/orbstack|auto/docker-desktop) return 0 ;;
+        auto/kind-*|true/kind-*)
+            command -v kind >/dev/null 2>&1 || { _mdb_rt_err "context $ctx is kind, but kind is not on PATH"; return 127; }
+            kind load docker-image "$ref" --name "${ctx#kind-}" ;;
+        true/*) _mdb_rt_err "MDB_K8S_LOAD_IMAGES=true only knows kind contexts; push $ref to your registry instead"; return 2 ;;
+        *) return 0 ;;
+    esac
+}
+
+# The images the release will run that are built here (MongoDB's is upstream).
+_mdb_k8s_local_images() {
+    local values="$1"
+    awk '
+        /^  [a-z]+:$/ { eng = $1; sub(/:/, "", eng); en = 0; tag = "" }
+        /^    enabled: true$/ { en = 1 }
+        /^    tag: / { tag = $2; gsub(/"/, "", tag) }
+        /^    env:$/ && en && tag != "" { print "ghcr.io/simtabi/dbpantry-" eng ":" tag }
+    ' "$values"
+}
+
+_mdb_be_kubernetes_up() {
+    _mdb_k8s_tools || return
+    local ctx release ns values extra img chart="$MDB_RT_ROOT/deploy/helm/dbpantry" vf=() v rc
+    ctx="$(_mdb_k8s_ctx)" || return
+    release="$(_mdb_k8s_release)"; ns="$(_mdb_k8s_ns)"
+    values="$(mktemp "${TMPDIR:-/tmp}/dbpantry-values.XXXXXX")" || return
+    "$MDB_RT_ROOT/scripts/helm-values" -o "$values" || { rm -f "$values"; return 1; }
+    _mdb_be_kubernetes_secrets_sync || { rm -f "$values"; return 1; }
+    while IFS= read -r img; do
+        [[ -n "$img" ]] || continue
+        _mdb_be_kubernetes_image_load "$img" || { rm -f "$values"; return 1; }
+    done < <(_mdb_k8s_local_images "$values")
+    extra="$(_mdb_k8s_var MDB_K8S_VALUES)"
+    if [[ -n "$extra" ]]; then
+        IFS=: read -r -a vf <<<"$extra"
+    fi
+    local args=(-f "$values")
+    for v in ${vf[@]+"${vf[@]}"}; do
+        [[ -n "$v" ]] && args+=(-f "$v")
+    done
+    printf 'dbpantry: deploying release %s to %s/%s\n' "$release" "$ctx" "$ns"
+    _mdb_k8s_helm upgrade --install "$release" "$chart" "${args[@]}" \
+        --wait --timeout "${MDB_WAIT_TIMEOUT:-300}s" "$@"
+    rc=$?
+    rm -f "$values"
+    return "$rc"
+}
+
+# PersistentVolumeClaims survive `helm uninstall`; only make destroy deletes them.
+_mdb_be_kubernetes_down() {
+    _mdb_k8s_tools || return
+    local release
+    release="$(_mdb_k8s_release)"
+    if _mdb_k8s_helm status "$release" >/dev/null 2>&1; then
+        _mdb_k8s_helm uninstall "$release" --wait "$@" || return
+        # helm returns once the objects are deleted, not once the pods have
+        # stopped; a database is down only when its pod is gone.
+        _mdb_k8s_kubectl wait --for=delete pod -l "$(_mdb_k8s_sel)" --timeout="${MDB_WAIT_TIMEOUT:-300}s" >/dev/null 2>&1 || true
+    else
+        printf 'dbpantry: release %s is not installed in %s\n' "$release" "$(_mdb_k8s_ns)"
+    fi
+}
+
+_mdb_be_kubernetes_status() {
+    _mdb_k8s_kubectl get statefulsets,pods,services,pvc -l "$(_mdb_k8s_sel)" "$@"
+}
+
+_mdb_be_kubernetes_logs() {
+    _mdb_k8s_kubectl logs -l "$(_mdb_k8s_sel)" --prefix --all-containers --max-log-requests=20 "$@"
+}
+
+# kubectl port-forward every running engine to its MDB_<ENGINE>_HOST_PORT (or
+# its standard port) on 127.0.0.1, until interrupted.
+_mdb_be_kubernetes_forward() {
+    local svc port hp ENG pids=() pid
+    while IFS= read -r svc; do
+        [[ -n "$svc" ]] || continue
+        port="$(_mdb_k8s_kubectl get service "$svc" -o jsonpath='{.spec.ports[0].port}' 2>/dev/null)"
+        [[ -n "$port" ]] || port="$(_mdb_k8s_kubectl get service "$(_mdb_k8s_release)-$svc" -o jsonpath='{.spec.ports[0].port}' 2>/dev/null)"
+        [[ -n "$port" ]] || continue
+        ENG="$(printf '%s' "$svc" | tr '[:lower:]-' '[:upper:]_')"
+        hp="$(_mdb_k8s_var "MDB_${ENG}_HOST_PORT")"
+        printf 'dbpantry: %s on 127.0.0.1:%s\n' "$svc" "${hp:-$port}"
+        _mdb_k8s_kubectl port-forward --address 127.0.0.1 "pod/$(_mdb_k8s_pod "$svc")" "${hp:-$port}:$port" >/dev/null &
+        pids+=("$!")
+    done < <(_mdb_be_kubernetes_running)
+    (( ${#pids[@]} )) || { _mdb_rt_err "nothing is running to forward"; return 1; }
+    trap 'kill "${pids[@]}" 2>/dev/null' INT TERM EXIT
+    for pid in "${pids[@]}"; do wait "$pid"; done
+}
+
+_mdb_be_kubernetes_info() {
+    local ctx
+    ctx="$(_mdb_k8s_ctx)" || return
+    printf 'backend:   kubernetes (MDB_BACKEND=%s)\n' "$MDB_BACKEND"
+    printf 'context:   %s\n' "$ctx"
+    printf 'namespace: %s\n' "$(_mdb_k8s_ns)"
+    printf 'release:   %s\n' "$(_mdb_k8s_release)"
+    if command -v kubectl >/dev/null 2>&1; then
+        printf 'kubectl:   %s\n' "$(kubectl version --client 2>/dev/null | head -1)"
+    else
+        printf 'kubectl:   NOT on PATH\n'
+    fi
+    if command -v helm >/dev/null 2>&1; then
+        printf 'helm:      %s\n' "$(helm version --short 2>/dev/null)"
+    else
+        printf 'helm:      NOT on PATH\n'
+    fi
+}
+
+mdb_backend_register kubernetes

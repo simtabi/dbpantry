@@ -27,10 +27,12 @@
 #   mdb_be_image_load REF      make a locally built image visible to the backend
 #   mdb_be_secrets_sync        publish secrets/ to the backend
 #   mdb_be_info                one line per fact, for `scripts/runtime info`
+#   mdb_be_forward             reach the services from this machine, until
+#                              interrupted (backends without host ports)
 #
 # A backend file calls `mdb_backend_register <name>` and defines
 # _mdb_be_<name>_<verb> for the verbs above (up down status running logs exec
-# exec_tty health cp volumes volume_rm image_load secrets_sync info; up, down,
+# exec_tty health cp volumes volume_rm image_load secrets_sync info forward; up, down,
 # running, exec, health and volumes are required). A verb a backend lacks fails with a
 # message naming the backend, rather than falling through to Compose.
 #
@@ -119,6 +121,7 @@ mdb_be_volume_rm()    { _mdb_be_call volume_rm "$@"; }
 mdb_be_image_load()   { _mdb_be_call image_load "$@"; }
 mdb_be_secrets_sync() { _mdb_be_call secrets_sync "$@"; }
 mdb_be_info()         { _mdb_be_call info "$@"; }
+mdb_be_forward()      { _mdb_be_call forward "$@"; }
 
 # Split "[-u USER] SVC CMD..." for backends: sets _MDB_SVC_USER and _MDB_SVC,
 # and leaves the command in "$@" of the caller via _MDB_SVC_SHIFT.
@@ -142,4 +145,4 @@ _mdb_be_load
 export -f mdb_backend_register mdb_backend_init _mdb_be_call mdb_backend_require _mdb_be_load \
     mdb_be_up mdb_be_down mdb_be_status mdb_be_running mdb_be_logs mdb_svc_exec mdb_svc_exec_tty mdb_svc_health \
     mdb_svc_healthy mdb_svc_cp mdb_be_volumes mdb_be_volume_rm mdb_be_image_load \
-    mdb_be_secrets_sync mdb_be_info _mdb_svc_args 2>/dev/null || true
+    mdb_be_secrets_sync mdb_be_info mdb_be_forward _mdb_svc_args 2>/dev/null || true
