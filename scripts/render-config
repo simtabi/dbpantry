@@ -14,7 +14,7 @@ cd "$ROOT" || exit 1
 ENV_FILE="${MDB_ENV_FILE:-$ROOT/.env}"
 [[ -f "$ENV_FILE" ]] || ENV_FILE="$ROOT/.env.example"
 
-profiles="${COMPOSE_PROFILES:-$(grep -E '^MDB_PROFILES=' "$ENV_FILE" 2>/dev/null | tail -1 | cut -d= -f2- || true)}"
+profiles="${COMPOSE_PROFILES:-$(mdb_env_get MDB_PROFILES "$ENV_FILE")}"
 profiles="${profiles:-pg,ui}"
 
 # Dev and prod are separate templates rather than one file full of

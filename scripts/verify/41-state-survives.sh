@@ -92,7 +92,10 @@ vinfo "init refuses to overwrite an existing environment file"
 # the development machine -- which is disk pressure, which is what makes Docker
 # reclaim IMAGES mid-run. The harness was breaking itself, and the symptom
 # appeared as unrelated checks failing to find images they had just built.
-leaky="$(grep -rn 'docker rm -f -v "' "$MDB_ROOT/scripts" 2>/dev/null | grep -v -- '-f -v' || true)"
+# The pattern used to require -v and then exclude every line containing -v, so
+# it could never report anything. It now looks for the removal WITHOUT -v.
+leaky="$(grep -rnE '(mdb_ctr|docker) rm -f +[^-]' "$MDB_ROOT/scripts" 2>/dev/null \
+    | grep -vE '^[^:]+:[0-9]+:[[:space:]]*#' || true)"
 if [[ -n "$leaky" ]]; then
     printf '      %s\n' "$leaky" >&2
     vfail "a container is removed without -v; its anonymous volumes would leak.

@@ -32,8 +32,11 @@ containers in `config/`, and documentation in `docs/guides/`,
 `docs/runbooks/` and `docs/reference/`. The reasoning is in
 [docs/REORGANIZATION_PLAN.md](docs/REORGANIZATION_PLAN.md).
 
-Docker is required — Docker Desktop, OrbStack, or colima. Podman is best-effort
-and untested in CI. If `docker info` fails, stop; nothing here is mocked.
+A container runtime is required: Docker (Desktop, OrbStack, Colima, Rancher
+Desktop) or Podman; nerdctl is best effort. CI runs on Docker. Check yours with
+`scripts/runtime info`, and if no engine is reachable, stop; nothing here is
+mocked. Scripts reach the runtime only through `scripts/runtime-lib.sh`; see
+[Container runtimes](docs/guides/runtimes.md).
 
 ## Conventions
 

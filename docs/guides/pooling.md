@@ -117,7 +117,7 @@ Two consequences worth knowing:
 
 **It mirrors on start.** A user created after the pooler booted is not known to
 it until it restarts. `make new-project` followed by
-`docker compose restart mysql-pooler` is the sequence.
+`scripts/runtime compose restart mysql-pooler` is the sequence.
 
 **ProxySQL gets its own narrow account**, not root — root stays restricted to
 the local socket. The account has exactly two privileges: `SELECT` on

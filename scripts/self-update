@@ -10,6 +10,8 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# shellcheck source=runtime-lib.sh
+. "$ROOT/scripts/runtime-lib.sh"
 cd "$ROOT" || exit 1
 
 log() { printf '[self-update] %s\n' "$*"; }
@@ -62,7 +64,7 @@ fi
 # Images. Pulling and rebuilding touches no volume, so project data is safe.
 # -----------------------------------------------------------------------------
 log "pulling upstream images"
-docker compose --profile '*' pull --quiet 2>/dev/null || log "some images could not be pulled (they may be built locally)"
+mdb_compose --profile '*' pull --quiet 2>/dev/null || log "some images could not be pulled (they may be built locally)"
 
 log "rebuilding local images"
 scripts/build || die "image build failed"

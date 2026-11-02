@@ -58,7 +58,7 @@ while IFS= read -r hit; do
     # variable, not this script's.
     # shellcheck disable=SC2016
     case "$hit" in
-        *'docker compose'*|*'$(COMPOSE)'*|*'${COMPOSE}'*) ;;
+        *'mdb_compose'*|*'scripts/runtime'*|*'$(COMPOSE)'*|*'${COMPOSE}'*) ;;
         *) continue ;;
     esac
     offenders+="        ${hit}"$'\n'

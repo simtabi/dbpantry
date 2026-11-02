@@ -20,7 +20,7 @@ when the application also applies it.
 ## Apply it
 
 ```bash
-docker compose exec -T pg psql -U postgres -d mydb < rls/rls-template.sql
+scripts/runtime compose exec -T pg psql -U postgres -d mydb < rls/rls-template.sql
 ```
 
 ## The two mistakes that make RLS silently do nothing

@@ -5,7 +5,7 @@
 
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
-need_docker
+need_runtime
 
 # SPEC section 18: "a sidecar container mounting the sockets volume connects
 # with no TCP". Section 10.1 is explicit that container-to-container sockets
@@ -20,24 +20,24 @@ name="mdb-verify-sockpg-$$"
 track_container "$name"
 track_volume "$sockvol"
 
-docker volume create "$sockvol" >/dev/null
+mdb_ctr volume create "$sockvol" >/dev/null
 
-docker run -d --name "$name" \
+mdb_ctr run -d --name "$name" \
     -e POSTGRES_PASSWORD=mdb-throwaway-verify \
     -e MDB_SOCKETS=true \
     -v "$sockvol:/var/run/postgresql" \
     "$img" >/dev/null || vfail "container failed to start with MDB_SOCKETS=true"
 
-wait_ready 60 "postgres to accept connections" docker exec "$name" pg_isready -U postgres
+wait_ready 60 "postgres to accept connections" mdb_ctr exec "$name" pg_isready -U postgres
 
 # The socket file must exist in the shared volume.
-docker exec "$name" test -S /var/run/postgresql/.s.PGSQL.5432 \
+mdb_ctr exec "$name" test -S /var/run/postgresql/.s.PGSQL.5432 \
     || vfail "no socket at /var/run/postgresql/.s.PGSQL.5432"
 vinfo "socket present in the shared volume"
 
 # A separate container, with NO network at all, must be able to connect. Using
 # --network none is what makes "no TCP" an assertion rather than a claim.
-out="$(docker run --rm --network none \
+out="$(mdb_ctr run --rm --network none \
     -v "$sockvol:/var/run/postgresql" \
     -e PGPASSWORD=mdb-throwaway-verify \
     "$img" \

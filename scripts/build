@@ -15,6 +15,8 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# shellcheck source=runtime-lib.sh
+. "$ROOT/scripts/runtime-lib.sh"
 cd "$ROOT" || exit 1
 
 ENV_FILE="${MDB_ENV_FILE:-$ROOT/.env}"
@@ -22,7 +24,7 @@ ENV_FILE="${MDB_ENV_FILE:-$ROOT/.env}"
 
 PREFIX="${MDB_IMAGE_PREFIX:-ghcr.io/simtabi}"
 
-get() { grep -E "^${1}=" "$ENV_FILE" 2>/dev/null | tail -1 | cut -d= -f2- || true; }
+get() { mdb_env_get "$1" "$ENV_FILE"; }
 
 # shellcheck source=engine-lib.sh
 . "$ROOT/scripts/engine-lib.sh"
@@ -120,7 +122,7 @@ for engine in ${engines[@]+"${engines[@]}"}; do
     }
 
     printf 'building %s\n  from %s\n' "$tag" "$base"
-    docker build \
+    mdb_build \
         -f "$ROOT/images/$engine/Dockerfile" \
         --build-arg "BASE_IMAGE=$base" \
         --build-arg "GO_IMAGE=$go_image" \
@@ -158,8 +160,8 @@ case " $explicit_derived " in *" patroni "*)   build_patroni=1   ;; *) build_pat
 
 if (( build_pgbouncer )) && [[ -f "$ROOT/images/pgbouncer/Dockerfile" ]]; then
     tag="$PREFIX/dbpantry-pgbouncer:dev"
-    printf 'building %s\n  from debian:12-slim + PGDG\n' "$tag"
-    docker build -f "$ROOT/images/pgbouncer/Dockerfile" -t "$tag" "$ROOT/images"
+    printf 'building %s\n  from docker.io/library/debian:12-slim + PGDG\n' "$tag"
+    mdb_build -f "$ROOT/images/pgbouncer/Dockerfile" -t "$tag" "$ROOT/images"
     derived=$(( derived + 1 ))
 fi
 
@@ -167,7 +169,7 @@ if (( build_patroni )) && [[ -f "$ROOT/images/patroni/Dockerfile" ]]; then
     pg_version="$(version_for pg)"
     tag="$PREFIX/dbpantry-patroni:$pg_version"
     printf 'building %s\n  from %s/dbpantry-pg:%s\n' "$tag" "$PREFIX" "$pg_version"
-    docker build \
+    mdb_build \
         -f "$ROOT/images/patroni/Dockerfile" \
         --build-arg "ENGINE_VERSION=$pg_version" \
         --build-arg "IMAGE_PREFIX=$PREFIX" \

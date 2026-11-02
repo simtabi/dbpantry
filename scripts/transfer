@@ -17,6 +17,8 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# shellcheck source=runtime-lib.sh
+. "$ROOT/scripts/runtime-lib.sh"
 cd "$ROOT" || exit 1
 
 log() { printf '[transfer] %s\n' "$*"; }
@@ -76,14 +78,14 @@ if [[ -n "$FROM_HOST" ]]; then
         pg)
             # Runs from the cli image so no client needs to be installed on the
             # host doing the migration.
-            docker run --rm -i --network host \
+            mdb_ctr run --rm -i --network host \
                 -v "$ROOT/backups:/backups" \
                 ghcr.io/simtabi/dbpantry-cli:dev \
                 pg_dump -h "$FROM_HOST" -U "$FROM_USER" -Fc "$DB" > "$FILE" \
                 || die "could not dump from $FROM_HOST"
             ;;
         mysql|mariadb)
-            docker run --rm -i --network host \
+            mdb_ctr run --rm -i --network host \
                 -v "$ROOT/backups:/backups" \
                 ghcr.io/simtabi/dbpantry-cli:dev \
                 mariadb-dump -h "$FROM_HOST" -u "$FROM_USER" -p \

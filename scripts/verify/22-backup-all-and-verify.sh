@@ -5,7 +5,7 @@
 
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
-need_docker
+need_runtime
 cd "$MDB_ROOT" || exit 1
 
 # SPEC section 18: "make backup-all produces per-database dumps plus PG
@@ -24,9 +24,9 @@ need_file "$MDB_ROOT/scripts/backup"
 # nothing, and only stale dumps from earlier runs had kept this check green.
 # Cleanups run in the order registered: drop the seeded databases, then down.
 cleanup_new_backups
-add_cleanup "docker compose exec -T pg psql -U postgres -q -c 'DROP DATABASE IF EXISTS backupall;'"
+add_cleanup "mdb_compose exec -T pg psql -U postgres -q -c 'DROP DATABASE IF EXISTS backupall;'"
 for e in mysql mariadb; do
-    add_cleanup "docker compose exec -T $e $e -uroot -p\"\$(cat secrets/${e}_root_password.txt)\" -e 'DROP DATABASE IF EXISTS backupall;'"
+    add_cleanup "mdb_compose exec -T $e $e -uroot -p\"\$(cat secrets/${e}_root_password.txt)\" -e 'DROP DATABASE IF EXISTS backupall;'"
 done
 add_cleanup 'make down'
 mdb_up PROFILES=pg,mysql,mariadb,backup || vfail "make up failed"
@@ -34,16 +34,16 @@ mdb_up PROFILES=pg,mysql,mariadb,backup || vfail "make up failed"
 for e in pg mysql mariadb; do
     # shellcheck disable=SC2016  # evaluated by the subshell, not here
     wait_for 120 "$e healthy" bash -c \
-        "[[ \$(docker compose ps --format '{{.Health}}' $e) == healthy ]]"
+        "mdb_service_healthy $e"
 done
 
-if ! docker compose exec -T pg psql -U postgres -q -c "CREATE DATABASE backupall;" >/dev/null 2>&1 \
-    || ! docker compose exec -T pg psql -U postgres -d backupall -q -c "
+if ! mdb_compose exec -T pg psql -U postgres -q -c "CREATE DATABASE backupall;" >/dev/null 2>&1 \
+    || ! mdb_compose exec -T pg psql -U postgres -d backupall -q -c "
         CREATE TABLE items(id int primary key); INSERT INTO items VALUES (1);" >/dev/null 2>&1; then
     vfail "could not seed the PG backupall database"
 fi
 for e in mysql mariadb; do
-    docker compose exec -T "$e" "$e" -uroot -p"$(cat "secrets/${e}_root_password.txt")" -e "
+    mdb_compose exec -T "$e" "$e" -uroot -p"$(cat "secrets/${e}_root_password.txt")" -e "
         CREATE DATABASE IF NOT EXISTS backupall;
         CREATE TABLE IF NOT EXISTS backupall.items(id INT PRIMARY KEY);
         INSERT IGNORE INTO backupall.items VALUES (1);" >/dev/null 2>&1 \

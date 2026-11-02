@@ -52,14 +52,14 @@ fi
 vinfo "off-menu version without an override rejected"
 
 cp "$tmp/.env4" "$tmp/.env5"
-printf 'MDB_MARIADB_BASE_IMAGE=mariadb:10.6\n' >> "$tmp/.env5"
+printf 'MDB_MARIADB_BASE_IMAGE=docker.io/library/mariadb:10.6\n' >> "$tmp/.env5"
 if MDB_ENV_FILE="$tmp/.env5" "$MDB_ROOT/scripts/check-env" >/dev/null 2>&1; then
     vfail "check-env accepted MDB_MARIADB_BASE_IMAGE without a digest"
 fi
 vinfo "override without a digest rejected"
 
 cp "$tmp/.env4" "$tmp/.env6"
-printf 'MDB_MARIADB_BASE_IMAGE=mariadb:10.6.25@%s\n' "$digest" >> "$tmp/.env6"
+printf 'MDB_MARIADB_BASE_IMAGE=docker.io/library/mariadb:10.6.25@%s\n' "$digest" >> "$tmp/.env6"
 out="$(MDB_ENV_FILE="$tmp/.env6" "$MDB_ROOT/scripts/check-env" 2>&1)" \
     || vfail "check-env rejected an off-menu version with a digest-pinned override"
 grep -q 'UNSUPPORTED' <<<"$out" \

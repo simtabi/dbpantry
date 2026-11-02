@@ -5,7 +5,7 @@
 
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
-need_docker
+need_runtime
 
 # This check exists because of DESIGN.md D-09, which is the most dangerous
 # integration hazard found in step 1.
@@ -28,16 +28,16 @@ vol="mdb-verify-s6-vol-$$"
 track_container "$name"
 track_volume "$vol"
 
-docker volume create "$vol" >/dev/null
+mdb_ctr volume create "$vol" >/dev/null
 
-docker run -d --name "$name" -e POSTGRES_PASSWORD=mdb-throwaway-verify \
+mdb_ctr run -d --name "$name" -e POSTGRES_PASSWORD=mdb-throwaway-verify \
     -v "$vol:/var/lib/postgresql/data" "$img" >/dev/null \
     || vfail "container failed to start"
 
-wait_ready 60 "postgres to accept connections" docker exec "$name" pg_isready -U postgres
+wait_ready 60 "postgres to accept connections" mdb_ctr exec "$name" pg_isready -U postgres
 
 # --- init stage ordering ------------------------------------------------------
-logs="$(docker logs "$name" 2>&1)"
+logs="$(mdb_ctr logs "$name" 2>&1)"
 stage_order=$(printf '%s' "$logs" | grep -oE 'mdb-(perms|conf|certs|provision|postgres)' | awk '!seen[$0]++' | paste -sd, -)
 vinfo "s6 stage order: ${stage_order:-<none observed>}"
 
@@ -52,35 +52,35 @@ expected='mdb-perms,mdb-conf,mdb-certs,mdb-provision,mdb-postgres'
 # --- clean shutdown (D-09) ----------------------------------------------------
 # Hold a client connection open. Under SIGTERM/smart shutdown this connection
 # is precisely what makes PostgreSQL refuse to exit.
-docker exec -d "$name" psql -U postgres -c "SELECT pg_sleep(120)" || true
+mdb_ctr exec -d "$name" psql -U postgres -c "SELECT pg_sleep(120)" || true
 sleep 2
 
 start=$(date +%s)
-docker stop -t 30 "$name" >/dev/null 2>&1 || vfail "docker stop failed"
+mdb_ctr stop -t 30 "$name" >/dev/null 2>&1 || vfail "mdb_ctr stop failed"
 elapsed=$(( $(date +%s) - start ))
 vinfo "container stopped in ${elapsed}s with a client still connected"
 
 (( elapsed < 25 )) || vfail "shutdown took ${elapsed}s; it is hanging on smart shutdown (see D-09: needs down-signal=SIGINT)"
 
-exit_code="$(docker inspect -f '{{.State.ExitCode}}' "$name" 2>/dev/null || echo unknown)"
+exit_code="$(mdb_ctr inspect -f '{{.State.ExitCode}}' "$name" 2>/dev/null || echo unknown)"
 vinfo "exit code $exit_code"
 
-shutdown_logs="$(docker logs "$name" 2>&1 | tail -30)"
+shutdown_logs="$(mdb_ctr logs "$name" 2>&1 | tail -30)"
 printf '%s' "$shutdown_logs" | grep -qi 'shutting down' \
     || vfail "no clean shutdown message; PostgreSQL was likely killed"
 
 # --- the proof: next boot must not perform crash recovery ---------------------
-docker rm -f -v "$name" >/dev/null 2>&1 || true
+mdb_ctr rm -f -v "$name" >/dev/null 2>&1 || true
 name2="mdb-verify-s6-restart-$$"
 track_container "$name2"
 
-docker run -d --name "$name2" -e POSTGRES_PASSWORD=mdb-throwaway-verify \
+mdb_ctr run -d --name "$name2" -e POSTGRES_PASSWORD=mdb-throwaway-verify \
     -v "$vol:/var/lib/postgresql/data" "$img" >/dev/null
 
-wait_ready 60 "postgres to accept connections after restart" docker exec "$name2" pg_isready -U postgres
+wait_ready 60 "postgres to accept connections after restart" mdb_ctr exec "$name2" pg_isready -U postgres
 
-if docker logs "$name2" 2>&1 | grep -qiE 'database system was not properly shut down|automatic recovery in progress'; then
-    docker logs "$name2" 2>&1 | grep -iE 'not properly shut down|recovery in progress' >&2
+if mdb_ctr logs "$name2" 2>&1 | grep -qiE 'database system was not properly shut down|automatic recovery in progress'; then
+    mdb_ctr logs "$name2" 2>&1 | grep -iE 'not properly shut down|recovery in progress' >&2
     vfail "the previous shutdown was unclean: next boot ran crash recovery (D-09)"
 fi
 

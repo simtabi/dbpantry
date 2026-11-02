@@ -5,7 +5,7 @@
 
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
-need_docker
+need_runtime
 
 # SPEC decision 2 exists because pointing a new PG major at an old data
 # directory fails hard ("database files are incompatible with server").
@@ -28,50 +28,50 @@ c17="mdb-verify-sw17-$$"
 c18="mdb-verify-sw18-$$"
 
 cleanup() {
-    docker rm -f -v "$c17" "$c18" >/dev/null 2>&1 || true
-    docker volume rm -f "$vol17" "$vol18" >/dev/null 2>&1 || true
+    mdb_ctr rm -f -v "$c17" "$c18" >/dev/null 2>&1 || true
+    mdb_ctr volume rm -f "$vol17" "$vol18" >/dev/null 2>&1 || true
 }
 add_cleanup cleanup
 
-docker volume create "$vol17" >/dev/null
-docker volume create "$vol18" >/dev/null
+mdb_ctr volume create "$vol17" >/dev/null
+mdb_ctr volume create "$vol18" >/dev/null
 
 # --- start on 17 and write a marker row --------------------------------------
-docker run -d --name "$c17" -e POSTGRES_PASSWORD=mdb-throwaway-verify \
+mdb_ctr run -d --name "$c17" -e POSTGRES_PASSWORD=mdb-throwaway-verify \
     -v "$vol17:/var/lib/postgresql/data" "$old_img" >/dev/null \
     || vfail "PG 17 container failed to start"
-wait_ready 60 "PG 17 to accept connections" docker exec "$c17" pg_isready -U postgres
+wait_ready 60 "PG 17 to accept connections" mdb_ctr exec "$c17" pg_isready -U postgres
 
-docker exec "$c17" psql -U postgres -q \
+mdb_ctr exec "$c17" psql -U postgres -q \
     -c "CREATE TABLE marker(v text); INSERT INTO marker VALUES ('pg17-data');" >/dev/null 2>&1 \
     || vfail "could not write the marker row on PG 17"
 
-major17="$(docker exec "$c17" psql -U postgres -tAc "SHOW server_version_num" | cut -c1-2)"
+major17="$(mdb_ctr exec "$c17" psql -U postgres -tAc "SHOW server_version_num" | cut -c1-2)"
 vinfo "PG 17 running (server_version_num prefix $major17), marker row written"
-docker stop -t 30 "$c17" >/dev/null
+mdb_ctr stop -t 30 "$c17" >/dev/null
 
 # --- switch to 18, which must use a DIFFERENT volume -------------------------
-docker run -d --name "$c18" -e POSTGRES_PASSWORD=mdb-throwaway-verify \
+mdb_ctr run -d --name "$c18" -e POSTGRES_PASSWORD=mdb-throwaway-verify \
     -v "$vol18:/var/lib/postgresql" "$new_img" >/dev/null \
     || vfail "PG 18 container failed to start on its own volume"
-wait_ready 60 "PG 18 to accept connections" docker exec "$c18" pg_isready -U postgres
+wait_ready 60 "PG 18 to accept connections" mdb_ctr exec "$c18" pg_isready -U postgres
 
-ver18="$(docker exec "$c18" psql -U postgres -tAc "SHOW server_version_num")"
+ver18="$(mdb_ctr exec "$c18" psql -U postgres -tAc "SHOW server_version_num")"
 [[ "${ver18:0:2}" == "18" ]] || vfail "expected PG 18, got server_version_num=$ver18"
 vinfo "PG 18 running on a fresh volume"
 
 # The new major must NOT see the old data (proving volumes are separate).
-if docker exec "$c18" psql -U postgres -tAc \
+if mdb_ctr exec "$c18" psql -U postgres -tAc \
     "SELECT 1 FROM information_schema.tables WHERE table_name='marker'" 2>/dev/null | grep -q 1; then
     vfail "PG 18 sees PG 17's data; the volumes are not per-major"
 fi
 vinfo "PG 18 volume is independent of PG 17"
 
 # --- the reversibility half: old data must still be intact -------------------
-docker start "$c17" >/dev/null
-wait_ready 60 "PG 17 to accept connections again" docker exec "$c17" pg_isready -U postgres
+mdb_ctr start "$c17" >/dev/null
+wait_ready 60 "PG 17 to accept connections again" mdb_ctr exec "$c17" pg_isready -U postgres
 
-val="$(docker exec "$c17" psql -U postgres -tAc "SELECT v FROM marker" 2>/dev/null | tr -d ' ')"
+val="$(mdb_ctr exec "$c17" psql -U postgres -tAc "SELECT v FROM marker" 2>/dev/null | tr -d ' ')"
 [[ "$val" == "pg17-data" ]] || vfail "PG 17 data was lost or altered by the switch (got '$val')"
 
 vinfo "PG 17 volume still intact and readable: rollback is possible"

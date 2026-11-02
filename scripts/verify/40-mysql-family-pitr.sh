@@ -5,7 +5,7 @@
 
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
-need_docker
+need_runtime
 
 # SPEC section 18, criterion 7c, for the MySQL family.
 #
@@ -34,14 +34,14 @@ for engine in ${MDB_PITR_ENGINE:-mysql mariadb}; do
     vol="mdb-verify-mypitr-binlog-${engine}-$$"
     track_container "$name"
 
-    docker volume rm -f "$vol" >/dev/null 2>&1 || true
-    docker volume create "$vol" >/dev/null
+    mdb_ctr volume rm -f "$vol" >/dev/null 2>&1 || true
+    mdb_ctr volume create "$vol" >/dev/null
     track_volume "$vol"
 
     upper="$(printf '%s' "$engine" | tr '[:lower:]' '[:upper:]')"
     pw=mdb-throwaway-mypitr
 
-    docker run -d --name "$name" \
+    mdb_ctr run -d --name "$name" \
         -e "${upper}_ROOT_PASSWORD=$pw" \
         -e "MDB_${upper}_PITR=true" \
         -v "$vol:/var/lib/mdb-binlog" \
@@ -49,12 +49,12 @@ for engine in ${MDB_PITR_ENGINE:-mysql mariadb}; do
 
     client="$( [[ "$engine" == mariadb ]] && printf 'mariadb' || printf 'mysql' )"
     binlog_tool="$( [[ "$engine" == mariadb ]] && printf 'mariadb-binlog' || printf 'mysqlbinlog' )"
-    run_sql() { docker exec -i "$name" "$client" --protocol=socket -uroot -p"$pw" -N -B -e "$1" 2>/dev/null; }
+    run_sql() { mdb_ctr exec -i "$name" "$client" --protocol=socket -uroot -p"$pw" -N -B -e "$1" 2>/dev/null; }
 
     if ! wait_ready 180 "the engine to accept connections" \
-            docker exec "$name" bash -c "$client --protocol=socket -uroot -p'$pw' -e 'SELECT 1'"; then
+            mdb_ctr exec "$name" bash -c "$client --protocol=socket -uroot -p'$pw' -e 'SELECT 1'"; then
         # The engine's own log says why; a bare timeout does not.
-        docker logs "$name" 2>&1 | tail -12 >&2
+        mdb_ctr logs "$name" 2>&1 | tail -12 >&2
         vfail "$engine never accepted connections"
     fi
 
@@ -123,7 +123,8 @@ gone="$(run_sql "SELECT COUNT(*) FROM information_schema.schemata WHERE schema_n
 [[ "$gone" == "0" ]] || vfail "could not drop the database to simulate data loss"
 
 # Files up to AND INCLUDING the target's file; --stop-position bounds the last.
-docker exec "$name" bash -c '
+# shellcheck disable=SC2016  # expanded by the container shell
+mdb_ctr exec "$name" bash -c '
     set -e
     set -o pipefail
     dir=/var/lib/mdb-binlog
@@ -156,6 +157,6 @@ vinfo "$engine PITR is active and recovers to a point in time"
 
     # Each engine gets a clean slate; the next iteration must not inherit this
     # one's container, volume or cleanup entries.
-    docker rm -f -v "$name" >/dev/null 2>&1 || true
-    docker volume rm -f "$vol" >/dev/null 2>&1 || true
+    mdb_ctr rm -f -v "$name" >/dev/null 2>&1 || true
+    mdb_ctr volume rm -f "$vol" >/dev/null 2>&1 || true
 done

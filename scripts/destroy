@@ -12,9 +12,11 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# shellcheck source=runtime-lib.sh
+. "$ROOT/scripts/runtime-lib.sh"
 cd "$ROOT" || exit 1
 
-PROJECT="${COMPOSE_PROJECT_NAME:-mdb}"
+PROJECT="$(mdb_project_name)"
 
 log() { printf '[destroy] %s\n' "$*"; }
 die() { printf '[destroy] ERROR: %s\n' "$*" >&2; exit 1; }
@@ -32,7 +34,7 @@ while (( $# )); do
 done
 
 list_volumes() {
-    docker volume ls --format '{{.Name}}' | grep -E "^${PROJECT}_" | sort || true
+    mdb_ctr volume ls --format '{{.Name}}' | grep -E "^${PROJECT}_" | sort || true
 }
 
 # Recovery repositories -- the pgBackRest repo and the binary logs.
@@ -51,7 +53,7 @@ volumes="$(list_volumes)"
 
 # Destroying a volume out from under a running engine corrupts it rather than
 # removing it cleanly, so the stack has to be down first.
-running="$(docker compose ps --format '{{.Service}}' 2>/dev/null | grep -c . || true)"
+running="$(mdb_running_services | grep -c . || true)"
 if [[ "${running:-0}" != "0" ]]; then
     die "the stack is still running. Run 'make down' first, then destroy."
 fi
@@ -60,7 +62,7 @@ printf '\n'
 printf 'Data volumes for project %s:\n\n' "$PROJECT"
 while IFS= read -r v; do
     [[ -z "$v" ]] && continue
-    size="$(docker volume inspect "$v" --format '{{.Mountpoint}}' >/dev/null 2>&1 && echo "" || echo "")"
+    size="$(mdb_ctr volume inspect "$v" --format '{{.Mountpoint}}' >/dev/null 2>&1 && echo "" || echo "")"
     printf '  %s%s\n' "$v" "$size"
 done <<< "$volumes"
 printf '\n'
@@ -92,7 +94,7 @@ if (( ALL )); then
 
     while IFS= read -r v; do
         [[ -z "$v" ]] && continue
-        docker volume rm "$v" >/dev/null && log "deleted $v"
+        mdb_ctr volume rm "$v" >/dev/null && log "deleted $v"
     done <<< "$targets"
     if [[ -n "$kept" ]]; then
         log "recovery repositories kept; restore with: make pitr-info"
@@ -112,5 +114,5 @@ printf 'Type the volume name to continue: '
 read -r answer
 [[ "$answer" == "$TARGET" ]] || die "confirmation did not match; nothing was deleted"
 
-docker volume rm "$TARGET" >/dev/null
+mdb_ctr volume rm "$TARGET" >/dev/null
 log "deleted $TARGET"

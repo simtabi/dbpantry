@@ -17,6 +17,8 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# shellcheck source=runtime-lib.sh
+. "$ROOT/scripts/runtime-lib.sh"
 cd "$ROOT" || exit 1
 
 log() { printf '[certs-renew] %s\n' "$*"; }
@@ -36,7 +38,7 @@ log "new pg certificate expires: $after"
 # The certificates are mounted read-only into the engines, so the new files are
 # already visible inside the containers. All that remains is to make each
 # engine re-read them.
-running() { docker compose ps --format '{{.Service}}' 2>/dev/null | grep -qx "$1"; }
+running() { mdb_service_running "$1"; }
 
 reloaded=0
 
@@ -44,8 +46,8 @@ if running pg; then
     # The image copies mounted certs into place during its mdb-certs stage, so
     # a reload alone would still serve the old pair. Re-running that stage
     # first is what makes this a genuine rotation rather than a no-op.
-    docker compose exec -T pg /usr/local/lib/mdb/30-certs.sh >/dev/null 2>&1 || true
-    docker compose exec -T pg psql -U postgres -tAc "SELECT pg_reload_conf()" >/dev/null 2>&1 \
+    mdb_compose exec -T pg /usr/local/lib/mdb/30-certs.sh >/dev/null 2>&1 || true
+    mdb_compose exec -T pg psql -U postgres -tAc "SELECT pg_reload_conf()" >/dev/null 2>&1 \
         || die "PostgreSQL did not reload its configuration"
     log "pg reloaded via pg_reload_conf()"
     reloaded=$(( reloaded + 1 ))
@@ -53,8 +55,8 @@ fi
 
 if running mysql; then
     pw="$(cat secrets/mysql_root_password.txt)"
-    docker compose exec -T mysql /usr/local/lib/mdb/30-certs.sh >/dev/null 2>&1 || true
-    docker compose exec -T mysql mysql -uroot -p"$pw" --protocol=socket \
+    mdb_compose exec -T mysql /usr/local/lib/mdb/30-certs.sh >/dev/null 2>&1 || true
+    mdb_compose exec -T mysql mysql -uroot -p"$pw" --protocol=socket \
         -e "ALTER INSTANCE RELOAD TLS;" >/dev/null 2>&1 \
         || die "MySQL did not reload TLS"
     log "mysql reloaded via ALTER INSTANCE RELOAD TLS"
@@ -63,8 +65,8 @@ fi
 
 if running mariadb; then
     pw="$(cat secrets/mariadb_root_password.txt)"
-    docker compose exec -T mariadb /usr/local/lib/mdb/30-certs.sh >/dev/null 2>&1 || true
-    docker compose exec -T mariadb mariadb -uroot -p"$pw" --protocol=socket \
+    mdb_compose exec -T mariadb /usr/local/lib/mdb/30-certs.sh >/dev/null 2>&1 || true
+    mdb_compose exec -T mariadb mariadb -uroot -p"$pw" --protocol=socket \
         -e "FLUSH SSL;" >/dev/null 2>&1 \
         || die "MariaDB did not reload TLS"
     log "mariadb reloaded via FLUSH SSL"

@@ -5,7 +5,7 @@
 
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
-need_docker
+need_runtime
 
 # SPEC decision 5: PG TLS is always on. Section 18: "psql sslmode=verify-full
 # against the toolkit CA succeeds".
@@ -24,29 +24,29 @@ need_image "$img"
 net="mdb-verify-tls-net-$$"
 name="mdb-verify-tls-$$"
 track_container "$name"
-add_cleanup "docker network rm '$net'"
+add_cleanup "mdb_ctr network rm '$net'"
 
-docker network create "$net" >/dev/null
+mdb_ctr network create "$net" >/dev/null
 
-docker run -d --name "$name" --network "$net" --network-alias pg \
+mdb_ctr run -d --name "$name" --network "$net" --network-alias pg \
     -e POSTGRES_PASSWORD=mdb-throwaway-verify \
     -v "$MDB_ROOT/certs:/certs:ro" \
     "$img" >/dev/null || vfail "container failed to start with certs mounted"
 
-wait_ready 60 "postgres to accept connections" docker exec "$name" pg_isready -U postgres
+wait_ready 60 "postgres to accept connections" mdb_ctr exec "$name" pg_isready -U postgres
 
 # TLS must be on.
-ssl_on="$(docker exec "$name" psql -U postgres -tAc "SHOW ssl" 2>/dev/null | tr -d ' ')"
+ssl_on="$(mdb_ctr exec "$name" psql -U postgres -tAc "SHOW ssl" 2>/dev/null | tr -d ' ')"
 [[ "$ssl_on" == "on" ]] || vfail "SHOW ssl returned '$ssl_on', expected 'on'"
 vinfo "server reports ssl=on"
 
 # The connection must actually be encrypted, not merely capable of it.
-cipher="$(docker exec "$name" psql -U postgres -tAc \
+cipher="$(mdb_ctr exec "$name" psql -U postgres -tAc \
     "SELECT version FROM pg_stat_ssl WHERE pid = pg_backend_pid()" 2>/dev/null | tr -d ' ')"
 vinfo "local session TLS version: ${cipher:-none}"
 
 # verify-full from a separate container, trusting only the toolkit CA.
-out="$(docker run --rm --network "$net" \
+out="$(mdb_ctr run --rm --network "$net" \
     -v "$MDB_ROOT/certs/ca.crt:/ca.crt:ro" \
     -e PGPASSWORD=mdb-throwaway-verify \
     "$img" \

@@ -12,7 +12,7 @@
 -- Apply with:
 --   make psql < rls/rls-template.sql
 -- or, for a specific project database:
---   docker compose exec -T pg psql -U postgres -d mydb < rls/rls-template.sql
+--   scripts/runtime compose exec -T pg psql -U postgres -d mydb < rls/rls-template.sql
 
 BEGIN;
 

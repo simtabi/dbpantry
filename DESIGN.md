@@ -335,6 +335,45 @@ Two things fell out of building the check. `python3` parses the file but **PyYAM
 
 **D-59 — The repository is grouped by how each file is used, and only where that was unclear.** On 2026-11-01 the owner asked for the tree to be reorganised by relationships and inputs/outputs. Most of it already was: compose files at the root are where `COMPOSE_FILE` and every operator expect them, `scripts/` is flat because each file is a command the Makefile names, and `engines/`, `images/`, `overrides/` and `rls/` each hold one kind of thing. Two places were not. `caddy/`, `haproxy/` and `proxysql/` were three top-level folders for single files bind-mounted into third-party containers; they are now `config/caddy`, `config/haproxy` and `config/proxysql`, and the rendered `Caddyfile`, `servers.json` and `layer4.caddy` live beside their templates. `docs/` mixed guides, 2am runbooks and the build contract in one flat list, while the README already indexed them in those three groups; they are now `docs/guides/`, `docs/runbooks/` (upper-case names kept, because they are referred to by name) and `docs/reference/`, which also takes the root `IMAGE-PROVENANCE.md` as `image-provenance.md`. SPEC section 15's tree is the original contract and is left as written; this entry is the deviation. Two checks keep the move honest: 46 resolves every relative Markdown link, and 47 resolves every compose mount source, build context and dockerfile. The full plan, with rollback, is [docs/REORGANIZATION_PLAN.md](docs/REORGANIZATION_PLAN.md).
 
+**D-60: one runtime layer, so dbpantry runs on Docker, Podman and nerdctl.** On 2026-11-02 the owner asked for dbpantry to work with "any containers like podman". Every script called `docker` or `docker compose` directly (about 50 files). The audit also found five places that only worked on Docker:
+
+- short image names, which Podman rejects without a search registry;
+- `podman build`'s OCI default, which drops HEALTHCHECK;
+- `ps --format '{{.Service}} {{.Health}}'` templates, which differ between Compose implementations;
+- `scripts/scan` bind-mounting `/var/run/docker.sock` into Trivy;
+- Caddy's default ports 80/443, which a rootless runtime can't bind.
+
+The fix is one sourced layer, `scripts/runtime-lib.sh`, plus `scripts/runtime` as its CLI. `CONTAINER_RUNTIME` chooses the runtime. Each runtime is an adapter, `scripts/runtimes/NN-<name>.sh`, that registers itself and defines hooks (`present`, `reachable` and `compose` are required; `ctr`, `alias`, `validate`, `build`, `rootless` and `provider` are optional). The core names no runtime. `auto` picks the first adapter, in filename order (today docker, podman, nerdctl), whose engine answers, and an adapter's `alias` hook lets the podman-docker shim count as Podman. The adapter design came from the owner's 2026-11-02 follow-up: more backends will be added, so adding one has to mean adding a file. `MDB_COMPOSE` overrides the Compose command, and detection is lazy and cached. Through that layer:
+
+- `mdb_ctr` and `mdb_compose` replace the direct calls.
+- `mdb_build` adds `--format docker` on Podman.
+- Service state is read from `ps -q` plus `inspect` (Compose labels and `.State.Health`), which every implementation answers the same way.
+- `mdb_compose_up_wait` polls health where `--wait` doesn't exist.
+- For podman-compose and nerdctl, `COMPOSE_FILE` and `COMPOSE_PROFILES` are passed as explicit flags.
+
+Other changes:
+
+- The scan saves the image to a tarball and runs `trivy --input`, so no socket is mounted on any runtime.
+- Every image reference is fully qualified (`docker.io/library/...`).
+- `check-env` refuses ports below 1024 on a rootless runtime.
+
+Products that speak the Docker API (OrbStack, Colima, Docker Desktop, Rancher Desktop's moby) are `docker`, with no code path of their own, and get documentation and testing notes instead. Kubernetes, LXC/LXD/Incus and Apple's `container` tool are planned as follow-up adapters. None of them is a Compose runtime, so each will also need a deployment path of its own. That is the reason for the adapter interface rather than more `case` branches.
+
+Some things were deliberately not done:
+
+- `docker-compose.yml` keeps its name. Every Compose implementation reads it, and renaming it would churn every doc and operator habit for nothing.
+- SELinux `:z` labels are not added to bind mounts. Relabelling the checkout would relabel the operator's own files, so `docs/guides/runtime-podman.md` gives the one-time `chcon` or `label=false` instead.
+- CI stays on Docker.
+
+Two latent bugs surfaced while testing on a second checkout:
+
+- The Makefile exported `COMPOSE_PROJECT_NAME ?= mdb`. Compose ranks the environment above `.env`, so a checkout naming itself `mdbrt` in `.env` still ran as `mdb` and attached the first checkout's volumes. The Makefile now reads the name from the env file, and scripts use `mdb_project_name`.
+- Check 41's `docker rm -f` scan could never match.
+
+Real Podman testing (6.1, a rootful `podman machine` on macOS) found a third problem. `podman compose` hands its provider the machine's API socket and ignores `CONTAINER_CONNECTION`, while the CLI follows the connection. A rootless connection on a rootful machine therefore created containers in one store and looked for them in the other. The Podman adapter's `validate` hook refuses that combination and names the three fixes.
+
+Checks 48 (detection against stub CLIs, the adapter interface with a plugged-in fake backend, the project name, no direct CLI calls) and 49 (fully-qualified images) keep this true. The same session adopted the owner's env-file rule: values with whitespace or special characters are double-quoted, and every reader goes through `scripts/env-lib.sh` (`mdb_env_get`/`mdb_env_quote`), because the dozen `grep | cut -d= -f2-` readers would have returned the quotes as part of the value. Check 50 enforces both halves. Guides: [docs/guides/runtimes.md](docs/guides/runtimes.md).
+
 ## 8. arm64 deliverability
 
 **Nothing in the spec is undeliverable on arm64.** The named unknown anticipated gaps that do not exist:
