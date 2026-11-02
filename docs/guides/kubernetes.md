@@ -210,3 +210,7 @@ The Services are `ClusterIP`. Set `service.type: LoadBalancer` in an
 | CloudNativePG: `conflict with "kubectl-annotate" ... cnpg.io/hibernation` | a Cluster hibernated by an older dbpantry. Run `kubectl annotate clusters.postgresql.cnpg.io <release>-pg cnpg.io/hibernation-`, then `make up` (current versions do this themselves) |
 | HA: a replica logs `no pg_hba.conf entry for replication` | a dbpantry-patroni image from before D-65; rebuild or pull it and delete the pod |
 | MongoDB: `Permission denied` on the password file | the chart mounts MongoDB's Secret `0444` because its entrypoint reads it as `mongodb`; keep `engines.mongodb.secretMode` |
+
+## Operators for the other engines
+
+Planned, not built: [Operators](operators.md) (design.md D-67).

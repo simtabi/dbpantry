@@ -232,3 +232,30 @@ backup:
   successfulJobsHistoryLimit: 3
   failedJobsHistoryLimit: 3
   activeDeadlineSeconds: 7200
+
+# Operators for the other engines (design.md D-67, docs/guides/operators.md).
+# NOT IMPLEMENTED: this block is a stub that records the intended shape. No
+# template reads it, and uncommenting it changes nothing yet. PostgreSQL HA on
+# an operator already works: engines.pg.ha.provider: cnpg (D-65).
+#operators:
+#  mysql:
+#    # oracle (MySQL Operator for Kubernetes, InnoDBCluster) | percona (PXC)
+#    provider: ""
+#    operatorNamespace: mysql-operator
+#    instances: 3
+#  mariadb:
+#    # mariadb-operator (MariaDB resource; replication or Galera)
+#    provider: ""
+#    operatorNamespace: mariadb-operator
+#    instances: 3
+#    galera: false
+#  mongodb:
+#    # mck (MongoDB Controllers for Kubernetes, MongoDBCommunity) | percona (PSMDB)
+#    provider: ""
+#    operatorNamespace: mongodb
+#    members: 3
+#  cassandra:
+#    # k8ssandra (K8ssandraCluster / cass-operator CassandraDatacenter)
+#    provider: ""
+#    operatorNamespace: k8ssandra-operator
+#    size: 3
