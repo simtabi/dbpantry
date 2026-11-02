@@ -98,6 +98,12 @@ spec:
                   mkdir -p /tmp/mdb
                   tar -xf /mdb-bundle/bundle.tar -C /tmp/mdb
                   cd /tmp/mdb
+                  # A new pod's network can lag its start by a second or two,
+                  # and scripts/backup tries once: wait for the server first.
+                  for _ in $(seq 1 60); do
+                    (exec 3<>/dev/tcp/{{ $host }}/{{ if eq $name "pg" }}5432{{ else }}3306{{ end }}) 2>/dev/null && break
+                    sleep 2
+                  done
                   exec bash scripts/backup --engine {{ $name }}
               env:
                 - name: MDB_IN_CONTAINER

@@ -225,7 +225,7 @@ _mdb_k8s_backup_bundle() {
         [[ -e "$root/$f" ]] && files+=("$f")
     done
     tmp="$(mktemp "${TMPDIR:-/tmp}/dbpantry-bundle.XXXXXX")" || return
-    ( cd "$root" && COPYFILE_DISABLE=1 tar -cf "$tmp" --exclude '*.md' "${files[@]}" ) || { rm -f "$tmp"; return 1; }
+    ( cd "$root" && COPYFILE_DISABLE=1 tar -cf "$tmp" --no-xattrs --exclude '*.md' "${files[@]}" ) || { rm -f "$tmp"; return 1; }
     # Server-side apply: a client-side apply copies the whole object into the
     # last-applied annotation, and the bundle is past that 256 KiB limit.
     _mdb_k8s_kubectl create secret generic dbpantry-backup-bundle --from-file=bundle.tar="$tmp" \

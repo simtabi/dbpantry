@@ -124,6 +124,10 @@ done
 grep -q 'concurrencyPolicy: Forbid' "$tmp/backup.yaml" || vfail "backup jobs may overlap"
 grep -q 'scripts/backup --engine pg' "$tmp/backup.yaml" || vfail "the backup job does not run scripts/backup"
 grep -q 'hostPath' "$tmp/backup.yaml" && vfail "a backup job mounts a host path"
+# A new pod's network can lag its start by a second or two (seen on OrbStack:
+# "Connection refused" from the Service IP), and scripts/backup tries once.
+grep -q '/dev/tcp/' "$tmp/backup.yaml" || vfail "the backup job does not wait for the database to be reachable"
+grep -q 'no-xattrs' scripts/backends/kubernetes.sh || vfail "the backup bundle carries macOS extended attributes (tar warns on every file)"
 helm template r "$chart" --set engines.pg.enabled=true --set backup.enabled=true --set backup.createClaims=false \
     >"$tmp/noclaim.yaml" 2>"$tmp/err" || vfail "helm template (createClaims=false): $(cat "$tmp/err")"
 grep -q '^kind: PersistentVolumeClaim' "$tmp/noclaim.yaml" && vfail "backup.createClaims=false still rendered a claim"
