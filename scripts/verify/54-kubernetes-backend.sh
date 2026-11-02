@@ -136,6 +136,13 @@ grep -q 'ca.key' "$log" && vfail "the CA private key was sent to the cluster"
 # refused ("password authentication failed for user postgres").
 [[ "$(od -c < "$log.superpw" 2>/dev/null | head -1)" == "$(printf pw | od -c | head -1)" ]] \
     || vfail "the CloudNativePG superuser Secret password is not the file without its newline: $(od -c < "$log.superpw" 2>/dev/null | head -1)"
+# make down hibernates a CloudNativePG Cluster with kubectl annotate, which then
+# owns that annotation; helm 4 applies server-side, so the next make up failed
+# with "conflict with kubectl-annotate ... cnpg.io/hibernation". up wakes it
+# first by removing the annotation (which also drops kubectl's ownership).
+kube ctx '_mdb_k8s_cnpg_wake' >/dev/null
+grep -q -- ' annotate clusters.postgresql.cnpg.io proj-pg cnpg.io/hibernation-' "$log" \
+    || vfail "make up does not wake a hibernated CloudNativePG Cluster before helm: $(cat "$log")"
 kube kind-dev 'mdb_be_image_load img:1' >/dev/null
 grep -qx 'kind load docker-image img:1 --name dev' "$log" || vfail "a kind context did not kind-load the image"
 kube orbstack 'mdb_be_image_load img:1' >/dev/null

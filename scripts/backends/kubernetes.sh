@@ -310,6 +310,18 @@ _mdb_k8s_backup_claims() {
     done
 }
 
+# Wake a CloudNativePG Cluster that `make down` hibernated. Removing the
+# annotation (rather than leaving it to the chart's "off") matters: down set it
+# with kubectl annotate, which then owns the field, and helm 4 applies
+# server-side, so the install conflicted with "kubectl-annotate" over
+# cnpg.io/hibernation. Removing it drops that ownership and wakes the Cluster;
+# the chart then sets "off" as its own.
+_mdb_k8s_cnpg_wake() {
+    local cluster; cluster="$(_mdb_k8s_release)-pg"
+    _mdb_k8s_kubectl get clusters.postgresql.cnpg.io "$cluster" >/dev/null 2>&1 || return 0
+    _mdb_k8s_kubectl annotate clusters.postgresql.cnpg.io "$cluster" cnpg.io/hibernation- >/dev/null
+}
+
 _mdb_be_kubernetes_up() {
     _mdb_k8s_tools || return
     local ctx release ns values extra img chart="$MDB_RT_ROOT/deploy/helm/dbpantry" vf=() v rc
@@ -319,6 +331,7 @@ _mdb_be_kubernetes_up() {
     "$MDB_RT_ROOT/scripts/helm-values" -o "$values" || { rm -f "$values"; return 1; }
     _mdb_be_kubernetes_secrets_sync || { rm -f "$values"; return 1; }
     _mdb_k8s_backup_claims "$values" || { rm -f "$values"; return 1; }
+    _mdb_k8s_cnpg_wake || { rm -f "$values"; return 1; }
     while IFS= read -r img; do
         [[ -n "$img" ]] || continue
         _mdb_be_kubernetes_image_load "$img" || { rm -f "$values"; return 1; }
