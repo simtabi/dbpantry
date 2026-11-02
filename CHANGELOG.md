@@ -115,6 +115,25 @@ image, replacing Cassandra's vulnerable vendored JARs rather than waiving them.
   exist and is not a known generated file.
 
 ### Fixed
+- **`make restore` no longer restores a dump it cannot verify.** A dump with no `.sha256` beside
+  it only logged a warning and was restored over the live database. It is now refused before
+  anything is touched; `MDB_RESTORE_ALLOW_UNVERIFIED=yes` restores a hand-made dump you trust.
+  A checksum mismatch is still always refused.
+- **`make upgrade` reported success after a failed restore.** Both restore steps ended in
+  `|| true`, so a client that could not connect, or MySQL stopping at its first error, still led
+  to "Upgrade staged successfully" over a partial copy. A failure now prints the client's last
+  lines, keeps the full log under `backups/upgrade/`, and exits non-zero; the old volume is
+  untouched either way.
+- **`scripts/backup` and `scripts/verify-backups` ignored `MDB_BACKUP_DIR` in `.env`.** Only the
+  environment was read, so a directory configured in `.env` was not the one written to,
+  verified or pruned. The environment still wins (the sidecars set `/backups`); a relative value
+  is relative to the checkout. The sidecars still bind `./backups`, so a different host
+  directory for them remains a Compose override.
+- **Verify-suite hygiene:** check 20 leaked one socket volume per MySQL-family engine on every
+  run (it removed the volume while its container still held it); check 15 counted every `mdb_*`
+  volume on the machine, so an isolated project could pass on the operator's real volumes; and
+  check 37 failed under load while pgBackRest's first full backup was still running. Check 60
+  now guards all three.
 - **`make rotate-secrets` never rotated a MySQL or MariaDB project user.** Root logged in with
   the user's freshly generated password instead of its own, so every user failed with a warning,
   kept its old password, and the run still exited 0. Only `'root'@'localhost'` was changed, so

@@ -59,6 +59,8 @@ so a green `make verify` is the criteria being met rather than a proxy for it.
 | A restore that fails exits non-zero and says FAILED instead of "complete", and good pg and mysql dumps still restore; run in an isolated scratch checkout | `56-restore-failures` |
 | rotate-secrets changes MySQL and MariaDB root (every host row), project owner and read-only passwords, the new ones log in over TCP and the old ones are refused; run in a scratch checkout, with the operator's secrets/ hashed before and after | `57-rotate-secrets` |
 | The Incus backend (untested on a live host) keeps the verb contract, maps every verb onto incus-compose and incus pinned to the project, and reads ic-healthd health; against stub binaries | `58-incus-backend` |
+| `scripts/backup` and `verify-backups` honour `MDB_BACKUP_DIR` from `.env`; `restore` refuses a dump with no checksum unless `MDB_RESTORE_ALLOW_UNVERIFIED=yes`; `upgrade` exits non-zero when its restore fails; against a stub runtime in a throwaway root | `59-data-scripts-refuse` |
+| Checks track every volume they create, count only their own project's volumes, and wait past a budget only while work is visibly in progress | `60-verify-hygiene` |
 | The off-site push is wired, authenticated, and fails loudly | `39-offsite-backup` |
 | Configuration reproduces, data persists, recovery data outlives `destroy` | `41-state-survives` |
 | Every image is official, upstream, or justified | `42-image-provenance` |
