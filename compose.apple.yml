@@ -1,0 +1,37 @@
+# Apple container (macOS 26) through socktainer: docs/guides/runtime-apple-container.md.
+#
+# Every container is its own lightweight VM whose memory is fixed when it is
+# created, 1 GiB unless Compose asks for more. Each engine tunes its caches from
+# MDB_<ENGINE>_MEM_LIMIT, so the VM gets exactly that much. Add this file to the
+# END of COMPOSE_FILE; scripts refuse to run on socktainer without it.
+#
+# On Docker, Podman and nerdctl these are cgroup ceilings, so the file is also
+# harmless there, but it is meant for Apple container only.
+
+services:
+  pg:
+    deploy:
+      resources:
+        limits:
+          memory: ${MDB_PG_MEM_LIMIT:-4g}
+  mysql:
+    deploy:
+      resources:
+        limits:
+          memory: ${MDB_MYSQL_MEM_LIMIT:-2g}
+  mariadb:
+    deploy:
+      resources:
+        limits:
+          memory: ${MDB_MARIADB_MEM_LIMIT:-2g}
+  mongodb:
+    deploy:
+      resources:
+        limits:
+          memory: ${MDB_MONGODB_MEM_LIMIT:-2g}
+  # MDB_CASSANDRA_HEAP (1G) plus off-heap memory and the OS.
+  cassandra:
+    deploy:
+      resources:
+        limits:
+          memory: ${MDB_CASSANDRA_MEM_LIMIT:-3g}
