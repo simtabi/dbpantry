@@ -243,11 +243,16 @@ build_image() {
 
 CLEANUP_CONTAINERS=()
 CLEANUP_VOLUMES=()
+CLEANUP_NETWORKS=()
 CLEANUP_COMMANDS=()
 
 track_container() { CLEANUP_CONTAINERS+=("$1"); }
 track_volume()    { CLEANUP_VOLUMES+=("$1"); }
 add_cleanup()     { CLEANUP_COMMANDS+=("$1"); }
+# For a check's own network: removed after the tracked containers, because a
+# network with a container still attached refuses `network rm`. Run with the
+# other commands, it failed silently and leaked one network per run.
+track_network()   { CLEANUP_NETWORKS+=("$1"); }
 
 # Remove, at exit, every file the check adds under backups/ and nothing else.
 #
@@ -281,6 +286,9 @@ mdb_cleanup() {
     done
     for item in ${CLEANUP_VOLUMES[@]+"${CLEANUP_VOLUMES[@]}"}; do
         if [[ -n "$item" ]]; then mdb_ctr volume rm -f "$item" >/dev/null 2>&1 || true; fi
+    done
+    for item in ${CLEANUP_NETWORKS[@]+"${CLEANUP_NETWORKS[@]}"}; do
+        if [[ -n "$item" ]]; then mdb_ctr network rm "$item" >/dev/null 2>&1 || true; fi
     done
 }
 trap mdb_cleanup EXIT
