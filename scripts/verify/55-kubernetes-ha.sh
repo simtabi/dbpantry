@@ -30,6 +30,7 @@ hv() { env -i PATH="$PATH" MDB_HELM_ENV_FILE="$tmp/env" "$@" bash scripts/helm-v
 out="$(hv)" || vfail "helm-values failed: $(cat "$tmp/err")"
 printf '%s\n' "$out" | grep -A2 '^    ha:$' | grep -qx '      enabled: true' || vfail "the ha profile did not enable engines.pg.ha"
 printf '%s\n' "$out" | grep -qx '      provider: "patroni"' || vfail "Patroni is not the default HA provider"
+printf '%s\n' "$out" | grep -qx '  createClaims: false' || vfail "helm-values lets the chart create the backup claims (helm --wait hangs on them)"
 printf '%s\n' "$out" | grep -qx '  schedule: "15 2 \* \* \*"' || vfail "MDB_BACKUP_SCHEDULE=0215 is not a daily cron line: $(printf '%s\n' "$out" | grep schedule)"
 grep -q 'not deployed on Kubernetes yet' "$tmp/err" && vfail "ha or backup reported as not deployed: $(cat "$tmp/err")"
 out="$(hv MDB_K8S_HA_PROVIDER=cnpg)" || vfail "helm-values failed for cnpg"
@@ -116,4 +117,7 @@ done
 grep -q 'concurrencyPolicy: Forbid' "$tmp/backup.yaml" || vfail "backup jobs may overlap"
 grep -q 'scripts/backup --engine pg' "$tmp/backup.yaml" || vfail "the backup job does not run scripts/backup"
 grep -q 'hostPath' "$tmp/backup.yaml" && vfail "a backup job mounts a host path"
+helm template r "$chart" --set engines.pg.enabled=true --set backup.enabled=true --set backup.createClaims=false \
+    >"$tmp/noclaim.yaml" 2>"$tmp/err" || vfail "helm template (createClaims=false): $(cat "$tmp/err")"
+grep -q '^kind: PersistentVolumeClaim' "$tmp/noclaim.yaml" && vfail "backup.createClaims=false still rendered a claim"
 vinfo "Patroni is namespace-scoped with pg/pg-ro on the role labels; cnpg needs its operator; each backup job prunes only its own volume"

@@ -6,6 +6,7 @@
 {{- if $e.enabled }}
 {{- $ctx := dict "root" $root "name" (printf "backup-%s" $name) "engine" $e }}
 {{- $host := include "dbpantry.svcname" (dict "root" $root "name" $name) }}
+{{- if $b.createClaims }}
 # Where this engine's scheduled dumps live, and the only place their
 # retention prunes. Labelled with the release, so `make destroy` deletes it
 # with the data; its name does not start with pitr-.
@@ -27,6 +28,7 @@ spec:
   resources:
     requests:
       storage: {{ $b.storage }}
+{{- end }}
 ---
 apiVersion: batch/v1
 kind: CronJob

@@ -139,6 +139,10 @@ render_backup() {
     fi
     printf '  schedule: %s\n' "$(q "$v")"
     v="$(setting MDB_TZ)"; [[ -z "$v" ]] || printf '  timeZone: %s\n' "$(q "$v")"
+    v="$(setting MDB_K8S_BACKUP_STORAGE)"; v="${v:-20Gi}"
+    printf '  storage: %s\n' "$(q "$v")"
+    # The backend creates the claims: see backup.createClaims in values.yaml.
+    printf '  createClaims: false\n'
 }
 
 render() {

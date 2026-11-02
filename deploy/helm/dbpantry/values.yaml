@@ -218,6 +218,13 @@ backup:
   schedule: "0 3 * * *"
   timeZone: ""
   storage: 20Gi
+  # Render each engine's backup PersistentVolumeClaim. On storage that binds
+  # on first use (WaitForFirstConsumer: kind, most clouds) a claim nobody has
+  # mounted yet stays Pending until the first job runs, and `helm --wait`
+  # times out on it. `make up` therefore sets this to false and creates the
+  # claims itself, outside the release; plain `helm install --wait` users on
+  # such storage should do the same, or install without --wait.
+  createClaims: true
   engines: [pg, mysql, mariadb]
   # Secret with scripts/, engines/ and .env as a tar archive; `make up`
   # creates it. scripts/backup needs its libraries and the engine descriptors.

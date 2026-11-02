@@ -266,6 +266,46 @@ _mdb_k8s_local_images() {
     ' "$values"
 }
 
+# One claim per scheduled backup job, created here rather than by the chart:
+# on WaitForFirstConsumer storage an unmounted claim is Pending until the
+# first job runs, and `helm --wait` would time out on it every time. An
+# existing claim is left alone (a claim cannot shrink, and recreating one
+# loses the dumps). Same names and labels as the chart's, so `make destroy`
+# finds them.
+_mdb_k8s_backup_claims() {
+    local values="$1" line eng size sc name
+    line="$(awk '
+        /^global:$/ { sec = "g" } /^engines:$/ { sec = "e" } /^backup:$/ { sec = "b" }
+        sec == "g" && /^  storageClass: / { sc = $2; gsub(/"/, "", sc) }
+        sec == "e" && /^  [a-z]+:$/ { eng = $1; sub(/:/, "", eng) }
+        sec == "e" && /^    enabled: true$/ { on[eng] = 1 }
+        sec == "b" && /^  enabled: true$/ { b = 1 }
+        sec == "b" && /^  storage: / { size = $2; gsub(/"/, "", size) }
+        END {
+            if (!b) exit
+            printf "%s %s", (size == "" ? "20Gi" : size), (sc == "" ? "-" : sc)
+            n = split("pg mysql mariadb", want, " ")
+            for (i = 1; i <= n; i++) if (on[want[i]]) printf " %s", want[i]
+            printf "\n"
+        }' "$values")"
+    [[ -n "$line" ]] || return 0
+    read -r size sc line <<<"$line"
+    for eng in $line; do
+        name="$(_mdb_k8s_release)-backups-$eng"
+        _mdb_k8s_kubectl get pvc "$name" >/dev/null 2>&1 && continue
+        {
+            printf 'apiVersion: v1\nkind: PersistentVolumeClaim\nmetadata:\n'
+            printf '  name: %s\n  labels:\n' "$name"
+            printf '    app.kubernetes.io/name: dbpantry\n'
+            printf '    app.kubernetes.io/instance: %s\n' "$(_mdb_k8s_release)"
+            printf '    app.kubernetes.io/component: backup-%s\n' "$eng"
+            printf 'spec:\n  accessModes: [ReadWriteOnce]\n'
+            [[ "$sc" == - ]] || printf '  storageClassName: %s\n' "$sc"
+            printf '  resources:\n    requests:\n      storage: %s\n' "$size"
+        } | _mdb_k8s_kubectl create -f - >/dev/null || return
+    done
+}
+
 _mdb_be_kubernetes_up() {
     _mdb_k8s_tools || return
     local ctx release ns values extra img chart="$MDB_RT_ROOT/deploy/helm/dbpantry" vf=() v rc
@@ -274,6 +314,7 @@ _mdb_be_kubernetes_up() {
     values="$(mktemp "${TMPDIR:-/tmp}/dbpantry-values.XXXXXX")" || return
     "$MDB_RT_ROOT/scripts/helm-values" -o "$values" || { rm -f "$values"; return 1; }
     _mdb_be_kubernetes_secrets_sync || { rm -f "$values"; return 1; }
+    _mdb_k8s_backup_claims "$values" || { rm -f "$values"; return 1; }
     while IFS= read -r img; do
         [[ -n "$img" ]] || continue
         _mdb_be_kubernetes_image_load "$img" || { rm -f "$values"; return 1; }

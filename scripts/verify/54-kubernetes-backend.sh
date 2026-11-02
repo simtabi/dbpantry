@@ -62,6 +62,8 @@ for t in kubectl helm kind; do
 printf '$t %s\n' "\$*" >> "\$STUB_LOG"
 case "\$*" in
     *"get pods"*) printf '%b' "\${STUB_PODS:-}" ;;
+    *"get pvc "*) [[ -z "\${STUB_NO_PVC:-}" ]] || exit 1 ;;
+    *"create -f -"*) cat >> "\$STUB_LOG.stdin" ;;
     *--dry-run=client*) printf 'kind: Secret\n' ;;
     *" apply "*) cat >/dev/null ;;
 esac
@@ -131,6 +133,23 @@ grep -qx 'kind load docker-image img:1 --name dev' "$log" || vfail "a kind conte
 kube orbstack 'mdb_be_image_load img:1' >/dev/null
 grep -q '^kind' "$log" && vfail "OrbStack (shared image store) ran kind"
 vinfo "secrets and certs sync without the CA key; images load into kind only"
+
+# Backup claims come from the backend, not the chart: on WaitForFirstConsumer
+# storage an unmounted claim stays Pending and `helm --wait` times out on it.
+printf 'global:\n  storageClass: "fast"\nengines:\n  pg:\n    enabled: true\n  mysql:\n    enabled: false\n  mariadb:\n    enabled: true\nbackup:\n  enabled: true\n  storage: "5Gi"\n' > "$tmp/values.yaml"
+: > "$log.stdin"
+kube ctx "_mdb_k8s_backup_claims '$tmp/values.yaml'" STUB_NO_PVC=1 >/dev/null
+grep -qx '  name: proj-backups-pg' "$log.stdin" || vfail "no backup claim was created for pg: $(cat "$log.stdin")"
+grep -qx '  name: proj-backups-mariadb' "$log.stdin" || vfail "no backup claim was created for mariadb"
+grep -q 'proj-backups-mysql' "$log.stdin" && vfail "a backup claim was created for a disabled engine"
+grep -qx '      storage: 5Gi' "$log.stdin" || vfail "the backup claim ignored backup.storage"
+grep -qx '  storageClassName: fast' "$log.stdin" || vfail "the backup claim ignored global.storageClass"
+: > "$log.stdin"
+kube ctx "_mdb_k8s_backup_claims '$tmp/values.yaml'" >/dev/null
+[[ -s "$log.stdin" ]] && vfail "an existing backup claim was recreated"
+# shellcheck disable=SC2016  # a literal line of the backend
+grep -qF '_mdb_k8s_backup_claims "$values"' scripts/backends/kubernetes.sh || vfail "make up does not create the backup claims"
+vinfo "backup claims are created by the backend for enabled engines, never recreated"
 
 # Check 05 scans config files, not scripts, so the settings the backend and
 # scripts/helm-values read from .env are checked here: every one must be
