@@ -19,7 +19,7 @@ You are building dbpantry per docs/reference/SPEC.md. That file is the contract.
 - Pinned versions and digests everywhere; no `latest`.
 - No secret in any file, layer, or log; `make check-env` must stay enforcing.
 - shellcheck-clean bash; docs updated in the same commit as behavior changes.
-- A container runtime is required: if `scripts/runtime info` reports no reachable engine, stop and say so rather than mocking. Never call `docker` directly in a script; use `mdb_ctr` / `mdb_compose` from `scripts/runtime-lib.sh` (check 48, DESIGN.md D-60). Runtime-specific behaviour belongs in an adapter hook in `scripts/runtimes/` (see its README), never in a `case "$MDB_RUNTIME"` in the core or a caller. Image references are fully qualified (`docker.io/library/...`, check 49).
+- A container runtime is required: if `scripts/runtime info` reports no reachable engine, stop and say so rather than mocking. Never call `docker` directly in a script; use `mdb_ctr` / `mdb_compose` from `scripts/runtime-lib.sh` (check 48, DESIGN.md D-60). Runtime-specific behaviour belongs in an adapter hook in `scripts/runtimes/` (see `scripts/runtimes/readme.md`), never in a `case "$MDB_RUNTIME"` in the core or a caller. Image references are fully qualified (`docker.io/library/...`, check 49).
 - Env files: a value containing whitespace or a special character is double-quoted (`TENANTS="landlord panel api socket queue"`). Read values with `mdb_env_get`, write generated ones with `mdb_env_quote` (`scripts/env-lib.sh`, check 50); never `grep | cut -d= -f2-`.
 
 ## Commands

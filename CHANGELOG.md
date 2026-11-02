@@ -53,7 +53,7 @@ image, replacing Cassandra's vulnerable vendored JARs rather than waiving them.
   - `make runtime` / `scripts/runtime info` shows what was detected.
   - There are guides for [Docker and the Docker-API products](docs/guides/runtime-docker.md),
     [Podman](docs/guides/runtime-podman.md) and [nerdctl](docs/guides/runtime-nerdctl.md).
-  - Runtimes are pluggable adapters in `scripts/runtimes/` (interface in its README); a new backend is a new file. Kubernetes, LXC/Incus and Apple's `container` tool are planned as follow-up adapters.
+  - Runtimes are pluggable adapters in `scripts/runtimes/` (interface in `scripts/runtimes/readme.md`); a new backend is a new file. Kubernetes, LXC/Incus and Apple's `container` tool are planned as follow-up adapters.
   - The Podman adapter refuses a rootless connection on a rootful podman machine, because `podman compose` would use the other container store.
 - Checks 48 (runtime detection, make's project name, no direct `docker` calls), 49
   (fully-qualified image references) and 50 (quoted env values, and readers that unquote them).

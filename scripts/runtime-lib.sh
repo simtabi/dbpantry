@@ -15,7 +15,7 @@
 #                                              e.g. MDB_COMPOSE=podman-compose
 #
 # Runtimes are adapters (scripts/runtimes/NN-<name>.sh, interface documented in
-# scripts/runtimes/README.md). The core below names none of them: auto picks the
+# scripts/runtimes/readme.md). The core below names none of them: auto picks the
 # first adapter, in filename order, whose CLI is INSTALLED and whose engine is
 # REACHABLE. Today that is docker, podman, nerdctl. Docker-API runtimes (Docker Desktop, OrbStack, Colima,
 # Rancher Desktop in moby mode) are all "docker" here: they differ in how the

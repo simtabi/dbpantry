@@ -69,7 +69,7 @@ priority, and calls their hooks: `present`, `reachable` and `compose` are
 required; `ctr`, `alias`, `validate`, `build`, `rootless` and `provider` are
 optional. To add a backend you add a file, and neither the core nor any caller
 changes. Check 48 plugs in a fake adapter to prove it. The interface is in
-[scripts/runtimes/README.md](../../scripts/runtimes/README.md).
+[scripts/runtimes/readme.md](../../scripts/runtimes/readme.md).
 
 ## Planned
 
