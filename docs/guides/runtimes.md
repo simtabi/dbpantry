@@ -89,10 +89,11 @@ Backends so far:
 |---|---|---|
 | `compose` (default) | the Compose files, on the runtime above | this page |
 | `kubernetes` | the Helm chart in `deploy/helm/dbpantry`, to `MDB_K8S_CONTEXT` | [Kubernetes](kubernetes.md) |
+| `incus` (untested) | the Compose files on Incus, via incus-compose | [Incus](incus.md) |
 
 ## Planned
 
-- **LXC / LXD / Incus.**
+- **LXC / LXD.** Incus is covered by the `incus` backend above.
 
 Apple's `container` tool (macOS 26) needed no backend of its own: socktainer
 serves the Docker API on top of it, so it is the docker runtime with a memory

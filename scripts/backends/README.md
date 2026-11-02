@@ -8,6 +8,7 @@ choice (`CONTAINER_RUNTIME`, `scripts/runtimes/`, D-60).
 ```
 compose.sh      Docker Compose, podman compose or nerdctl compose (the default)
 kubernetes.sh   the Helm chart in deploy/helm/dbpantry, via kubectl and helm (D-64)
+incus.sh        Incus system containers via incus-compose (D-66, untested)
 ```
 
 Backends kept outside the repo, or under test, load from the directories in
