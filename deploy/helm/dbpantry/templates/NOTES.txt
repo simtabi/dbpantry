@@ -1,0 +1,11 @@
+dbpantry {{ .Chart.Version }} is installed as release {{ .Release.Name }} in namespace {{ .Release.Namespace }}.
+
+Engines and the host names apps use inside the cluster:
+{{- range $name, $e := .Values.engines }}
+{{- if $e.enabled }}
+  {{ $name }}: {{ include "dbpantry.svcname" (dict "root" $ "name" $name) }}.{{ $.Release.Namespace }}.svc:{{ $e.port }}
+{{- end }}
+{{- end }}
+
+Passwords are the files of the Secret {{ .Values.global.secretName }}, as in secrets/.
+From a workstation: scripts/runtime forward  (kubectl port-forward to the MDB_*_HOST_PORT ports).

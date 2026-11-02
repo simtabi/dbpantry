@@ -1,0 +1,177 @@
+# dbpantry on Kubernetes (design.md D-64, docs/guides/kubernetes.md).
+#
+# `make up` with MDB_BACKEND=kubernetes renders a values file from .env
+# (scripts/helm-values) on top of this one, so .env stays the one place a
+# checkout is configured. Installing the chart by hand works too: enable the
+# engines you want and create the Secret named in global.secretName first.
+
+global:
+  # Registry and repository prefix for the dbpantry images. The tag is each
+  # engine's version (engines.<name>.tag).
+  imageRegistry: ghcr.io/simtabi
+  imagePullPolicy: IfNotPresent
+  imagePullSecrets: []
+  # "" uses the cluster's default StorageClass.
+  storageClass: ""
+  # Secret holding the files of secrets/ (pg_superuser_password.txt, ...),
+  # mounted read-only at /run/secrets like the Compose bind mount.
+  # `make up` creates it from secrets/; on a real cluster you may instead
+  # create it from your secret manager (External Secrets, Sealed Secrets).
+  secretName: dbpantry-secrets
+  # Per-engine TLS Secrets are named "<certsSecretPrefix>-<engine>" and hold
+  # server.crt, server.key and ca.crt. Optional: an engine without one starts
+  # without TLS unless MDB_TLS_ENFORCE is true.
+  certsSecretPrefix: dbpantry-certs
+  # Per-engine ConfigMaps "<overridesConfigMapPrefix>-<engine>" with the files
+  # of overrides/<engine>/, mounted read-only where Compose mounts that
+  # directory. Optional; `make up` creates them from overrides/.
+  overridesConfigMapPrefix: dbpantry-overrides
+  # MDB_* settings every engine receives, as Compose passes them.
+  env: {}
+  podAnnotations: {}
+  podLabels: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  priorityClassName: ""
+  terminationGracePeriodSeconds: 60
+
+serviceAccount:
+  create: true
+  name: ""
+  # The engines never talk to the Kubernetes API.
+  automountToken: false
+
+service:
+  # ClusterIP keeps the databases inside the cluster, like Compose's default
+  # MDB_PUBLISH=none. LoadBalancer or NodePort publishes them: only with TLS
+  # enforced and network policy in place.
+  type: ClusterIP
+  annotations: {}
+  # Services are named after the Compose services (pg, mysql, ...), so apps use
+  # the same host names in both. Set true to prefix them with the release name
+  # when two releases share a namespace.
+  prefixWithRelease: false
+
+networkPolicy:
+  # Only pods in the release's namespace reach the engines, plus whatever is
+  # listed in extraFrom (namespaceSelector / podSelector / ipBlock entries).
+  enabled: true
+  extraFrom: []
+
+engines:
+  pg:
+    enabled: false
+    image: dbpantry-pg
+    tag: "17"
+    # A full image reference overrides image and tag.
+    imageRef: ""
+    port: 5432
+    dataPath: /var/lib/postgresql/data
+    pitrPath: /var/lib/pgbackrest
+    overridesPath: /etc/postgresql/conf.d/overrides
+    storage: 20Gi
+    pitrStorage: 20Gi
+    # The engine tunes shared_buffers and friends from MDB_PG_MEM_LIMIT; the
+    # chart sets that from memory below so the two always agree.
+    memory: 4g
+    cpu: "2"
+    memLimitVar: MDB_PG_MEM_LIMIT
+    shm: 256Mi
+    secretEnv:
+      POSTGRES_PASSWORD_FILE: pg_superuser_password.txt
+    # Backups and metrics run as their own workloads, as under Compose.
+    env:
+      MDB_PG_EMBED_EXPORTER: "false"
+      MDB_PG_EMBED_BACKUP: "false"
+    probe: ['sh', '-c', 'test ! -f /run/mdb/converge-failed && pg_isready -U "${POSTGRES_USER:-postgres}" -h /var/run/postgresql']
+    startupSeconds: 300
+    resources: {}
+  mysql:
+    enabled: false
+    image: dbpantry-mysql
+    tag: "8.4"
+    imageRef: ""
+    port: 3306
+    dataPath: /var/lib/mysql
+    pitrPath: /var/lib/mdb-binlog
+    overridesPath: /etc/mysql/conf.d/overrides
+    storage: 20Gi
+    pitrStorage: 10Gi
+    memory: 2g
+    cpu: "2"
+    memLimitVar: MDB_MYSQL_MEM_LIMIT
+    secretEnv:
+      MYSQL_ROOT_PASSWORD_FILE: mysql_root_password.txt
+    env: {}
+    probe: ['sh', '-c', 'test ! -f /run/mdb/converge-failed && mysqladmin ping -h localhost --protocol=socket']
+    startupSeconds: 300
+    resources: {}
+  mariadb:
+    enabled: false
+    image: dbpantry-mariadb
+    tag: "11.8"
+    imageRef: ""
+    port: 3306
+    dataPath: /var/lib/mysql
+    pitrPath: /var/lib/mdb-binlog
+    overridesPath: /etc/mysql/conf.d/overrides
+    storage: 20Gi
+    pitrStorage: 10Gi
+    memory: 2g
+    cpu: "2"
+    memLimitVar: MDB_MARIADB_MEM_LIMIT
+    secretEnv:
+      MARIADB_ROOT_PASSWORD_FILE: mariadb_root_password.txt
+    env: {}
+    probe: ['sh', '-c', 'test ! -f /run/mdb/converge-failed && mariadb-admin ping -h localhost --protocol=socket']
+    startupSeconds: 300
+    resources: {}
+  mongodb:
+    enabled: false
+    # MongoDB runs the upstream image, as under Compose.
+    image: ""
+    tag: ""
+    imageRef: docker.io/library/mongo:7.0.45@sha256:8bb4442761a63a8dda452744082cdac9644b429807eb977b42324a63cef59ca4
+    port: 27017
+    dataPath: /data/db
+    pitrPath: ""
+    overridesPath: /mdb/overrides
+    storage: 20Gi
+    memory: 2g
+    cpu: "2"
+    memLimitVar: ""
+    secretEnv:
+      MONGO_INITDB_ROOT_PASSWORD_FILE: mongodb_root_password.txt
+    # The upstream entrypoint reads the password file after dropping to the
+    # mongodb user, so the Secret's files must be readable by it (the other
+    # images read them as root, and keep 0400).
+    secretMode: 0444
+    # Supplying a root user is what turns authentication on.
+    env:
+      MONGO_INITDB_ROOT_USERNAME: root
+    probe: ['mongosh', '--quiet', '--eval', 'db.adminCommand("ping").ok']
+    startupSeconds: 300
+    resources: {}
+  cassandra:
+    enabled: false
+    image: dbpantry-cassandra
+    tag: "5.0"
+    imageRef: ""
+    port: 9042
+    dataPath: /var/lib/cassandra
+    pitrPath: ""
+    overridesPath: /mdb/overrides
+    storage: 20Gi
+    memory: 3g
+    cpu: "2"
+    memLimitVar: ""
+    secretEnv:
+      CASSANDRA_PASSWORD_FILE: cassandra_root_password.txt
+    env:
+      MAX_HEAP_SIZE: 1G
+      HEAP_NEWSIZE: 200M
+      CASSANDRA_CLUSTER_NAME: mdb
+    probe: ['sh', '-c', "nodetool status | grep -q '^UN'"]
+    startupSeconds: 600
+    resources: {}
