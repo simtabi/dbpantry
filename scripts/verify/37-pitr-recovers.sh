@@ -5,7 +5,7 @@
 
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
-need_docker
+need_runtime
 
 # SPEC section 18, criterion 7c: "PITR active for PG".
 #
@@ -26,21 +26,21 @@ name="mdb-verify-pitr-$$"
 vol="mdb-verify-pitr-repo-$$"
 track_container "$name"
 
-docker volume rm -f "$vol" >/dev/null 2>&1 || true
-docker volume create "$vol" >/dev/null
+mdb_ctr volume rm -f "$vol" >/dev/null 2>&1 || true
+mdb_ctr volume create "$vol" >/dev/null
 track_volume "$vol"
 
-docker run -d --name "$name" \
-    -e POSTGRES_PASSWORD=mdb-throwaway-pitr \
+mdb_ctr run -d --name "$name" \
+    -e POSTGRES_PASSWORD="${TW_PITR}" \
     -e MDB_PG_PITR=true \
     -e MDB_PG_ARCHIVE_TIMEOUT=5 \
     -v "$vol:/var/lib/pgbackrest" \
     "$img" >/dev/null || vfail "container failed to start"
 
 wait_ready 180 "postgres to accept connections" \
-    docker exec -u postgres "$name" pg_isready -U postgres
+    mdb_ctr exec -u postgres "$name" pg_isready -U postgres
 
-psql_pg() { docker exec -i -u postgres "$name" psql -qtAX -d postgres "$@" 2>/dev/null; }
+psql_pg() { mdb_ctr exec -i -u postgres "$name" psql -qtAX -d postgres "$@" 2>/dev/null; }
 
 # archive_mode is set before start, so it must already be on rather than
 # converged afterwards.
@@ -48,8 +48,14 @@ mode="$(psql_pg -c 'SHOW archive_mode' | tr -d ' \r')"
 [[ "$mode" == "on" ]] || vfail "archive_mode is '$mode'; PITR needs it on, set before start"
 vinfo "archive_mode is on"
 
-wait_ready 180 "pgBackRest to finish its initial full backup" \
-    docker exec -u postgres "$name" sh -c \
+# 180s is ample on an idle machine; under a full suite the backup has run past
+# it while still visibly working. Keep waiting, up to 15 minutes, for as long as
+# a pgbackrest process (or the converge script that starts it) is alive.
+# shellcheck disable=SC2016  # expanded inside the container
+wait_ready_while 180 900 "pgBackRest to finish its initial full backup" \
+    mdb_ctr exec "$name" sh -c \
+        'for c in /proc/[0-9]*/cmdline; do tr "\0" " " < "$c" 2>/dev/null; echo; done | grep -q "[p]gbackrest\|[5]0-converge"' \
+    -- mdb_ctr exec -u postgres "$name" sh -c \
     'pgbackrest --stanza=mdb info 2>/dev/null | grep -q "full backup"'
 vinfo "initial full backup present: recovery has a base to replay from"
 
@@ -75,23 +81,23 @@ vinfo "wrote 'before', recorded the target, wrote 'after'"
 # the check would fail for a reason that has nothing to do with PITR.
 psql_pg -c "SELECT pg_switch_wal()" >/dev/null
 sleep 5
-docker exec -u postgres "$name" pgbackrest --stanza=mdb check >/dev/null 2>&1 \
+mdb_ctr exec -u postgres "$name" pgbackrest --stanza=mdb check >/dev/null 2>&1 \
     || vfail "pgBackRest check failed: archiving is not working"
 vinfo "WAL archiving verified by pgbackrest check"
 
 # Recover. The server must be stopped: restore overwrites the data directory.
-docker exec -u postgres "$name" pg_ctl -D /var/lib/postgresql/data -m fast -w stop >/dev/null 2>&1 \
+mdb_ctr exec -u postgres "$name" pg_ctl -D /var/lib/postgresql/data -m fast -w stop >/dev/null 2>&1 \
     || vfail "could not stop PostgreSQL for recovery"
 
-docker exec -u postgres "$name" pgbackrest --stanza=mdb --delta \
+mdb_ctr exec -u postgres "$name" pgbackrest --stanza=mdb --delta \
     --type=time --target="$target" --target-action=promote restore >/dev/null 2>&1 \
     || vfail "pgbackrest restore failed"
 
-docker exec -u postgres "$name" pg_ctl -D /var/lib/postgresql/data -w start >/dev/null 2>&1 \
+mdb_ctr exec -u postgres "$name" pg_ctl -D /var/lib/postgresql/data -w start >/dev/null 2>&1 \
     || vfail "PostgreSQL did not start after the restore"
 
 wait_ready 120 "recovery to finish and the server to accept connections" \
-    docker exec -u postgres "$name" pg_isready -U postgres
+    mdb_ctr exec -u postgres "$name" pg_isready -U postgres
 
 # THE assertion.
 kept="$(psql_pg -c "SELECT count(*) FROM pitr_demo WHERE label='before'" | tr -d ' \r')"

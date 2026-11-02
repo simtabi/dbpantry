@@ -5,7 +5,7 @@
 
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
-need_docker
+need_runtime
 
 # SPEC section 18: "repo/image-history grep finds no credential."
 # A secret passed as a build ARG survives in the image history even when the
@@ -17,7 +17,7 @@ for engine in pg mysql mariadb cli; do
     img="$(image_name "$engine")"
     image_exists "$img" || vfail "image not built yet: $img"
 
-    history="$(docker history --no-trunc --format '{{.CreatedBy}}' "$img" 2>/dev/null || true)"
+    history="$(mdb_ctr history --no-trunc --format '{{.CreatedBy}}' "$img" 2>/dev/null || true)"
     [[ -n "$history" ]] || vfail "could not read image history for $img"
 
     while IFS= read -r pattern; do
@@ -32,7 +32,7 @@ aws_secret_access_key
 PATTERNS
 
     # Env baked into the image must not carry a literal password.
-    env_vars="$(docker image inspect -f '{{range .Config.Env}}{{println .}}{{end}}' "$img" 2>/dev/null || true)"
+    env_vars="$(mdb_ctr image inspect -f '{{range .Config.Env}}{{println .}}{{end}}' "$img" 2>/dev/null || true)"
     while IFS= read -r line; do
         [[ -z "$line" ]] && continue
         case "$line" in

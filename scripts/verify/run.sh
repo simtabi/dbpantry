@@ -7,12 +7,26 @@
 #
 #   # verify: one-line description of what this proves
 #   # tags:   space-separated (fast, pg, mysql, mariadb, tls, backup, ha, ...)
-#   # phase:  the KIT.md phase that makes this check pass
+#   # phase:  the kit.md phase that makes this check pass
+#
+# and optionally
+#
+#   # backends: the deployment backends it runs on (compose kubernetes incus,
+#               or any). Absent means compose: almost every check drives the
+#               Compose stack. Checks tagged "structure" read files only and
+#               run on every backend. On another MDB_BACKEND the rest are
+#               skipped, not failed (design.md D-62).
 #
 # Usage:
 #   run.sh                    run everything
 #   run.sh --structure-only   validate the harness itself, run no checks
 #   VERIFY_TAGS=fast run.sh   run only checks carrying a matching tag
+#   VERIFY_TAGS=pg,backup     several tags (comma or space separated): a check
+#                             runs when it carries ANY of them
+#   VERIFY_CHECKS=21,28       run only these checks, by number or full name
+#                             (make verify CHECKS=21,28 sets this)
+#
+# Both filters may be combined; a check must then pass both.
 
 set -euo pipefail
 
@@ -31,7 +45,51 @@ else
     RED=''; GRN=''; YLW=''; BLU=''; DIM=''; BLD=''; OFF=''
 fi
 
+# Is word $1 in the comma/space separated list $2?
+in_list() {
+    local item
+    for item in ${2//,/ }; do
+        [[ "$item" == "$1" ]] && return 0
+    done
+    return 1
+}
+
+# Does a check, by its name and tags, pass the VERIFY_TAGS and VERIFY_CHECKS
+# filters? Unset filters select everything.
+selected() {
+    local name="$1" tags="$2" num t hit
+    if [[ -n "${VERIFY_CHECKS:-}" ]]; then
+        num="${name%%-*}"
+        in_list "$num" "$VERIFY_CHECKS" || in_list "$name" "$VERIFY_CHECKS" \
+            || in_list "$((10#$num))" "$VERIFY_CHECKS" || return 1
+    fi
+    if [[ -n "${VERIFY_TAGS:-}" ]]; then
+        hit=1
+        for t in $tags; do
+            in_list "$t" "$VERIFY_TAGS" && { hit=0; break; }
+        done
+        return "$hit"
+    fi
+    return 0
+}
+
 meta() { grep -m1 -E "^# $1:" "$2" 2>/dev/null | sed -E "s/^# $1:[[:space:]]*//" || true; }
+
+# Does a check run on the selected backend?
+VERIFY_BACKEND="${MDB_BACKEND:-}"
+if [[ -z "$VERIFY_BACKEND" && -f "$ROOT/.env" ]]; then
+    # shellcheck source=../env-lib.sh
+    . "$ROOT/scripts/env-lib.sh"
+    VERIFY_BACKEND="$(mdb_env_get MDB_BACKEND "$ROOT/.env")"
+fi
+VERIFY_BACKEND="${VERIFY_BACKEND:-compose}"
+on_backend() {
+    local c="$1" b
+    b="$(meta backends "$c")"
+    in_list structure "$(meta tags "$c")" && return 0
+    [[ -n "$b" ]] || b=compose
+    in_list any "$b" || in_list "$VERIFY_BACKEND" "$b"
+}
 
 # bash 3.2 has no mapfile, and macOS ships bash 3.2 (SPEC section 1 makes
 # macOS first-class), so every array is built with a read loop instead.
@@ -83,7 +141,7 @@ fi
 # bash 3.2 and does not on the bash 5 CI runs on, which is why the harness ran
 # all 42 checks locally and died after the first passing check in CI, printing
 # the check's name and nothing else.
-pass=0; fail=0; skip=0
+pass=0; fail=0; skip=0; ran=0
 failed_names=()
 skipped_names=()
 
@@ -97,10 +155,11 @@ skipped_names=()
 MDB_IMAGE_SNAPSHOT="$(mktemp)"
 export MDB_IMAGE_SNAPSHOT
 trap 'rm -f "$MDB_IMAGE_SNAPSHOT"' EXIT
-docker images --format '{{.Repository}}:{{.Tag}}' > "$MDB_IMAGE_SNAPSHOT" 2>/dev/null || true
+mdb_ctr images --format '{{.Repository}}:{{.Tag}}' > "$MDB_IMAGE_SNAPSHOT" 2>/dev/null || true
 
 printf '%s%s dbpantry verify %s%s\n' "$BLD" "$BLU" "$(date '+%H:%M:%S')" "$OFF"
 [[ -n "${VERIFY_TAGS:-}" ]] && printf '%sfiltering by tag: %s%s\n' "$DIM" "$VERIFY_TAGS" "$OFF"
+[[ -n "${VERIFY_CHECKS:-}" ]] && printf '%sfiltering by check: %s%s\n' "$DIM" "$VERIFY_CHECKS" "$OFF"
 printf '\n'
 
 for c in "${CHECKS[@]}"; do
@@ -109,11 +168,17 @@ for c in "${CHECKS[@]}"; do
     tags="$(meta tags "$c")"
     phase="$(meta phase "$c")"
 
-    if [[ -n "${VERIFY_TAGS:-}" ]] && [[ " $tags " != *" $VERIFY_TAGS "* ]]; then
-        continue
-    fi
+    selected "$name" "$tags" || continue
+    ran=$(( ran + 1 ))
 
     printf '%s→%s %-34s %s%s%s\n' "$BLU" "$OFF" "$name" "$DIM" "$desc" "$OFF"
+
+    if ! on_backend "$c"; then
+        skip=$(( skip + 1 )); skipped_names+=("$name")
+        printf '  %s· skip%s %snot a %s check (# backends: %s)%s\n' "$YLW" "$OFF" "$DIM" \
+            "$VERIFY_BACKEND" "$(meta backends "$c" | sed 's/^$/compose/')" "$OFF"
+        continue
+    fi
 
     rc=0
     output="$("$c" 2>&1)" || rc=$?
@@ -137,6 +202,13 @@ for c in "${CHECKS[@]}"; do
     esac
 done
 
+# A filter that matches nothing is a typo, not a green run.
+if (( ran == 0 )); then
+    printf '%s✗ no check matched VERIFY_TAGS=%s VERIFY_CHECKS=%s%s\n' \
+        "$RED" "${VERIFY_TAGS:-}" "${VERIFY_CHECKS:-}" "$OFF" >&2
+    exit 1
+fi
+
 # -----------------------------------------------------------------------------
 # Summary
 # -----------------------------------------------------------------------------
@@ -158,7 +230,7 @@ if (( fail )); then
         reclaimed=0
         while IFS= read -r img; do
             [[ -n "$img" ]] || continue
-            docker image inspect "$img" >/dev/null 2>&1 || reclaimed=$(( reclaimed + 1 ))
+            mdb_ctr image inspect "$img" >/dev/null 2>&1 || reclaimed=$(( reclaimed + 1 ))
         done < "$MDB_IMAGE_SNAPSHOT"
         if (( reclaimed > 0 )); then
             printf '\n%s%d image(s) that existed when this run started are gone.%s\n' \

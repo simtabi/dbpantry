@@ -23,7 +23,7 @@ cd "$MDB_ROOT" || exit 1
 # with no coverage is an engine nobody can trust, and remembering to add a
 # check per engine is exactly the discipline that fails quietly.
 
-need_docker
+need_runtime
 
 checked=0
 skipped=0
@@ -64,7 +64,7 @@ for engine in $(engine_list); do
             # We do not build it, so fetch it. The reference is digest-pinned,
             # which makes this deterministic rather than a moving target.
             vinfo "$engine: pulling the referenced image"
-            docker pull -q "$img" >/dev/null 2>&1 \
+            mdb_ctr pull -q "$img" >/dev/null 2>&1 \
                 || vfail "$engine: could not pull $img; auth cannot be proven"
         elif [[ -f "$MDB_ROOT/images/$engine/Dockerfile" ]]; then
             vfail "$engine: image not built yet ($img); run: make build"
@@ -87,7 +87,7 @@ for engine in $(engine_list); do
     # value -- every probe would then run with an empty password and the
     # engine would look like it never became ready. The hooks were also fixed;
     # this side is named so neither depends on the other.
-    auth_pw="mdb-throwaway-verify"
+    auth_pw="${TW_VERIFY}"
 
     # Not every engine takes its root password from an environment variable.
     # Cassandra reads it from a mounted secret file, so an env-only container
@@ -100,8 +100,8 @@ for engine in $(engine_list); do
     # initialisation -- so the root user keeps its OLD password and every probe
     # fails with a storedKey mismatch that looks like a broken engine.
     vol="mdb-verify-auth-${engine}-vol-$$"
-    docker volume rm -f "$vol" >/dev/null 2>&1 || true
-    docker volume create "$vol" >/dev/null
+    mdb_ctr volume rm -f "$vol" >/dev/null 2>&1 || true
+    mdb_ctr volume create "$vol" >/dev/null
     track_volume "$vol"
 
     secrets_dir="$(mktemp -d)"
@@ -111,7 +111,7 @@ for engine in $(engine_list); do
     # Every engine's root password reaches it by a different variable name,
     # which the descriptor already declares. Passing them all is harmless: an
     # engine ignores the ones that are not its own.
-    docker run -d --name "$name" \
+    mdb_ctr run -d --name "$name" \
         -e POSTGRES_PASSWORD="$auth_pw" \
         -e MYSQL_ROOT_PASSWORD="$auth_pw" \
         -e MARIADB_ROOT_PASSWORD="$auth_pw" \
@@ -127,7 +127,7 @@ for engine in $(engine_list); do
     # throwaway container rather than a compose service.
     # shellcheck disable=SC2034  # read by the family hooks
     IN_CONTAINER=0
-    engine_exec() { shift; docker exec -i "$name" "$@"; }
+    engine_exec() { shift; mdb_ctr exec -i "$name" "$@"; }
     secret() { printf '%s' "$auth_pw"; }
     compress_ext() { printf ''; }
 
@@ -147,7 +147,7 @@ for engine in $(engine_list); do
     done
 
     if (( ! ready )); then
-        docker logs "$name" 2>&1 | tail -8 >&2
+        mdb_ctr logs "$name" 2>&1 | tail -8 >&2
         vfail "$engine: never became ready within ${budget}s"
     fi
 
@@ -158,7 +158,7 @@ for engine in $(engine_list); do
         vfail "$engine ACCEPTS UNAUTHENTICATED CONNECTIONS. SPEC section 22.3 forbids it."
     fi
 
-    docker rm -f -v "$name" >/dev/null 2>&1 || true
+    mdb_ctr rm -f -v "$name" >/dev/null 2>&1 || true
     checked=$(( checked + 1 ))
 done
 

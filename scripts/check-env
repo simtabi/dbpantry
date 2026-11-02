@@ -12,6 +12,8 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# shellcheck source=backend-lib.sh
+. "$ROOT/scripts/backend-lib.sh"
 ENV_FILE="${MDB_ENV_FILE:-$ROOT/.env}"
 QUIET=0
 [[ "${1:-}" == "--quiet" ]] && QUIET=1
@@ -26,18 +28,21 @@ if [[ ! -f "$ENV_FILE" ]]; then
 fi
 
 if [[ -t 1 ]] && [[ -z "${NO_COLOR:-}" ]]; then
-    RED=$'\033[31m'; GRN=$'\033[32m'; OFF=$'\033[0m'
+    RED=$'\033[31m'; GRN=$'\033[32m'; YEL=$'\033[33m'; OFF=$'\033[0m'
 else
-    RED=''; GRN=''; OFF=''
+    RED=''; GRN=''; YEL=''; OFF=''
 fi
 
 errors=0
 err()  { printf '%scheck-env%s %s\n' "$RED" "$OFF" "$1" >&2; (( errors++ )) || true; }
 note() { (( QUIET )) || printf '  %s\n' "$1"; }
+# A warning is printed even under --quiet: running an unsupported version is a
+# choice the operator should see on every boot, not only when asking.
+warn() { printf '%scheck-env warning%s %s\n' "$YEL" "$OFF" "$1" >&2; }
 
 # Read a key's value from the env file, ignoring comments.
 get() {
-    grep -E "^${1}=" "$ENV_FILE" 2>/dev/null | tail -1 | cut -d= -f2- || true
+    mdb_env_get "$1" "$ENV_FILE"
 }
 
 # -----------------------------------------------------------------------------
@@ -48,7 +53,7 @@ while IFS= read -r line; do
     [[ "$line" =~ ^[[:space:]]*$ ]] && continue
 
     key="${line%%=*}"
-    value="${line#*=}"
+    value="$(mdb_env_unquote "${line#*=}")"
     [[ "$key" == "$line" ]] && continue
 
     # Sentinel values anywhere are fatal.
@@ -81,27 +86,74 @@ for key in COMPOSE_PROJECT_NAME MDB_PROFILES MDB_TZ MDB_BIND_ADDR \
 done
 
 # -----------------------------------------------------------------------------
-# 3. Engine versions must be on the supported menu (SPEC section 4)
+# 3. Engine versions: maintained, or explicitly unsupported (design.md D-57)
 # -----------------------------------------------------------------------------
-check_menu() {
-    local key="$1" value; shift
-    value="$(get "$key")"
-    [[ -z "$value" ]] && return 0
-    local allowed=" $* "
-    [[ "$allowed" == *" $value "* ]] || err "$key=$value is not on the supported menu: $*"
-}
-# The supported menu comes from each engine's descriptor, so adding an engine
-# or a version does not require editing this file (SPEC section 22.1).
+# The menu in each descriptor is the MAINTAINED versions: the newest supported
+# line and the one before it. Those are built, scanned and verified in CI from
+# a base pinned in images/bases.tsv.
+#
+# Any other version is still allowed, because an operator with a 7.0 cluster to
+# mirror should not have to fork the toolkit. It needs MDB_<ENGINE>_BASE_IMAGE,
+# the upstream image to build or run it from, pinned by digest. That makes the
+# choice explicit and reproducible, and it is reported as UNSUPPORTED on every
+# boot: nothing here builds, scans or verifies it, so there is no scan
+# guarantee. Without the override an off-menu version is an error, as before,
+# so a typo cannot quietly select an unmaintained engine.
+#
+# The menu comes from each engine's descriptor, so adding an engine or a version
+# does not require editing this file (SPEC section 22.1).
 # shellcheck source=engine-lib.sh
 . "$ROOT/scripts/engine-lib.sh"
 
+check_version() {
+    local key="MDB_${1}_VERSION" base_key="MDB_${1}_BASE_IMAGE" value base
+    value="$(get "$key")"
+    base="$(get "$base_key")"
+
+    if [[ -n "$base" ]] && ! engine_valid_base_ref "$base"; then
+        err "$base_key=$base is not pinned by digest; use name:tag@sha256:<digest>"
+        return 0
+    fi
+    [[ -z "$value" ]] && return 0
+
+    if ! engine_valid_version "$value"; then
+        err "$key=$value is not a version number (it names an image tag and a volume)"
+        return 0
+    fi
+
+    if engine_supports_version "$value"; then
+        [[ -z "$base" ]] || warn "$base_key replaces the pinned base for $key=$value.
+       UNSUPPORTED: built from your image, not ours; no scan guarantee (docs/guides/versions.md)."
+        return 0
+    fi
+
+    if [[ -n "$base" ]]; then
+        warn "$key=$value is not a maintained version (maintained: $MDB_ENGINE_VERSIONS).
+       Running it from $base_key. UNSUPPORTED: not built, scanned or verified
+       here; no scan guarantee (docs/guides/versions.md)."
+    else
+        err "$key=$value is not a maintained version (maintained: $MDB_ENGINE_VERSIONS).
+       To run it anyway, set $base_key to its upstream image pinned by
+       digest (name:tag@sha256:<digest>). That is unsupported: no scan
+       guarantee. See docs/guides/versions.md."
+    fi
+}
+
 for _engine in $(engine_list); do
     engine_load "$_engine" || continue
-    _upper="$(printf '%s' "$MDB_ENGINE_NAME" | tr '[:lower:]-' '[:upper:]_')"
-    # Unquoted on purpose: VERSIONS is a space-separated menu and check_menu
-    # takes each version as its own argument.
-    # shellcheck disable=SC2086
-    check_menu "MDB_${_upper}_VERSION" $MDB_ENGINE_VERSIONS
+    check_version "$(printf '%s' "$MDB_ENGINE_NAME" | tr '[:lower:]-' '[:upper:]_')"
+done
+
+# A profile naming an engine whose image does not exist yet. Without this,
+# compose fails with a missing-Dockerfile path that names neither the engine
+# nor the reason. Same profile resolution as the port check below.
+_selected=",${COMPOSE_PROFILES:-${MDB_CHECK_PROFILES:-$(get MDB_PROFILES)}},"
+for _engine in $(engine_list); do
+    [[ "$_selected" == *,"$_engine",* ]] || continue
+    engine_load "$_engine" || continue
+    engine_implemented \
+        || err "profile '$_engine' names an engine that is declared but not built yet
+       (no images/$_engine/Dockerfile). Remove it from PROFILES / MDB_PROFILES."
 done
 
 # PostgreSQL 18 moved the expected mount point. Up to 17 the data directory is
@@ -131,7 +183,7 @@ fi
 # tracked in a plain string of "port:key " pairs.
 seen_ports=""
 while IFS= read -r line; do
-    key="${line%%=*}"; value="${line#*=}"
+    key="${line%%=*}"; value="$(mdb_env_unquote "${line#*=}")"
     [[ -z "$value" ]] && continue
     case " $seen_ports " in
         *" ${value}:"*)
@@ -212,10 +264,12 @@ if [[ -z "${MDB_CHECK_RENDERING:-}" ]]; then
 fi
 
 ours=""
-if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
+# Host port collisions only exist where the stack publishes host ports, which
+# is the compose backend; Kubernetes and Incus publish through the backend.
+if mdb_backend_init 2>/dev/null && [[ "$MDB_BACKEND" == compose ]] && mdb_runtime_ready; then
     # Space separated, not newline: the membership test below compares
     # " $ours " against *" $value "*, and newlines make every match fail.
-    ours="$(docker ps --filter "label=com.docker.compose.project=${COMPOSE_PROJECT_NAME:-mdb}" \
+    ours="$(mdb_ctr ps --filter "label=com.docker.compose.project=$(mdb_project_name)" \
              --format '{{.Ports}}' 2>/dev/null | grep -oE '[0-9]+->' | tr -d '>-' \
              | sort -u | tr '\n' ' ' || true)"
 fi
@@ -261,7 +315,7 @@ port_in_use() {
 # profile, which is the same thing `make up` is about to bind.
 taken=""
 resolved=""
-if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
+if mdb_runtime_ready; then
     # The SAME profiles that are about to start. Without them compose reports
     # every service in every profile, so HAProxy's 5433 gets flagged when HA is
     # off -- a false alarm that teaches people to ignore this check.
@@ -275,7 +329,7 @@ if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
     # A subshell that cd's and then runs, rather than `cd && cmd`: the latter
     # reads as if-then-else to shellcheck (SC2015) and the trailing || would
     # fire on a cd failure too.
-    resolved="$( { cd "$ROOT" || exit 0; docker compose ${prof_args[@]+"${prof_args[@]}"} config --format json 2>/dev/null; } \
+    resolved="$( { cd "$ROOT" || exit 0; mdb_compose ${prof_args[@]+"${prof_args[@]}"} config --format json 2>/dev/null; } \
         | python3 -c '
 import json,sys
 try:
@@ -293,7 +347,7 @@ fi
 # Fall back to the env file when compose or python is unavailable: a partial
 # check beats none, and this path still catches every explicitly-set port.
 if [[ -z "$resolved" ]]; then
-    resolved="$(grep -E '^MDB_[A-Z0-9_]*(HOST_)?PORT=' "$ENV_FILE" 2>/dev/null | cut -d= -f2- || true)"
+    resolved="$(grep -E '^MDB_[A-Z0-9_]*(HOST_)?PORT=' "$ENV_FILE" 2>/dev/null | cut -d= -f2- | while IFS= read -r v; do mdb_env_unquote "$v"; done || true)"
 fi
 
 while IFS= read -r value; do
@@ -337,6 +391,23 @@ while IFS= read -r value; do
         taken="${taken}       $value${key:+ ($key$hint)}"$'\n'
     fi
 done <<< "$resolved"
+
+# Rootless runtimes cannot publish ports below 1024 by default: Linux reserves
+# them (net.ipv4.ip_unprivileged_port_start), and on macOS Podman's gvproxy runs
+# unprivileged and is refused a privileged port on a specific address such as
+# 127.0.0.1. The failure surfaces from `compose up` as "bind: permission
+# denied" naming neither the setting nor the cause, so say it here (D-60).
+if [[ -n "$resolved" && "${MDB_CHECK_RENDERING:-0}" != "1" ]] && mdb_runtime_rootless; then
+    low=""
+    while IFS= read -r value; do
+        [[ "$value" =~ ^[0-9]+$ ]] && (( value < 1024 )) && low="${low} ${value}"
+    done <<< "$resolved"
+    if [[ -n "$low" ]]; then
+        err "the ${MDB_RUNTIME} engine is rootless and cannot publish port(s)${low}.
+       Move them to 1024 or above, e.g. MDB_CADDY_HTTP_PORT=8080 and
+       MDB_CADDY_HTTPS_PORT=8443 in .env. See docs/guides/runtime-podman.md."
+    fi
+fi
 
 if [[ -n "$taken" ]]; then
     # An error when BOOTING -- binding is about to happen and Docker's own
@@ -412,10 +483,24 @@ fi
 # all -- two switches for one thing, free to disagree.
 
 # -----------------------------------------------------------------------------
+# 5b. Reserved settings: present in .env, implemented by nothing yet
+# -----------------------------------------------------------------------------
+# MDB_BACKUP_ENCRYPT=true was set by init --prod, which then printed "backups
+# encrypted" over dumps that were plaintext. A warning rather than an error:
+# every .env.prod written by that init has it, and refusing to start a
+# running production stack over a switch that never did anything trades a
+# false claim for an outage. The warning is what removes the false claim.
+if [[ "$(get MDB_BACKUP_ENCRYPT)" == "true" ]]; then
+    warn "MDB_BACKUP_ENCRYPT=true does nothing: dumps are NOT encrypted, in
+       MDB_BACKUP_DIR or on S3 (nothing encrypts them yet). Set it to false and
+       encrypt the disk and the bucket; see docs/runbooks/operations.md (Backups)."
+fi
+
+# -----------------------------------------------------------------------------
 # 6. Secret files referenced must be resolvable once initialised
 # -----------------------------------------------------------------------------
 while IFS= read -r line; do
-    key="${line%%=*}"; value="${line#*=}"
+    key="${line%%=*}"; value="$(mdb_env_unquote "${line#*=}")"
     [[ -z "$value" ]] && continue
     [[ "$value" == secrets/* ]] || continue
     if [[ ! -f "$ROOT/$value" ]] && [[ -f "$ROOT/.env" ]] && [[ "$ENV_FILE" == "$ROOT/.env" ]]; then

@@ -3,7 +3,15 @@
 # Guided, confirmed restore (SPEC section 15.1).
 #
 # A restore overwrites a live database, so it asks before it does. CONFIRM=yes
-# skips the prompt for automation; there is no flag that skips the checksum.
+# skips the prompt for automation. A dump whose checksum does not match is
+# always refused. A dump with no .sha256 alongside is refused too, because
+# nothing proves it is whole; MDB_RESTORE_ALLOW_UNVERIFIED=yes restores it
+# anyway, for a dump you made by hand and trust.
+#
+# The exit status is the restore's. It used to end in `|| true` and log
+# "complete" whatever happened, so a corrupt or truncated dump left an empty
+# database behind a success message. A failure now prints the client's last
+# lines and exits non-zero, saying the database was already recreated.
 #
 # Usage: scripts/restore --engine pg --db mydb --file backups/pg_mydb_...zst
 #        CONFIRM=yes scripts/restore ...
@@ -11,10 +19,12 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# shellcheck source=backend-lib.sh
+. "$ROOT/scripts/backend-lib.sh"
 ENV_FILE="${MDB_ENV_FILE:-$ROOT/.env}"
 [[ -f "$ENV_FILE" ]] || ENV_FILE="$ROOT/.env.example"
 
-get() { grep -E "^${1}=" "$ENV_FILE" 2>/dev/null | tail -1 | cut -d= -f2- || true; }
+get() { mdb_env_get "$1" "$ENV_FILE"; }
 log() { printf '[restore] %s\n' "$*"; }
 die() { printf '[restore] ERROR: %s\n' "$*" >&2; exit 1; }
 
@@ -40,7 +50,7 @@ engine_exec() {
     if [[ "$IN_CONTAINER" == "1" ]]; then
         "$@"
     else
-        ( cd "$ROOT" && docker compose exec -T "$engine" "$@" )
+        ( cd "$ROOT" && mdb_svc_exec "$engine" "$@" )
     fi
 }
 
@@ -66,7 +76,8 @@ engine_load_hooks || die "no hooks for engine family ${MDB_ENGINE_FAMILY:-?}"
 # -----------------------------------------------------------------------------
 # Integrity first. Restoring a corrupted dump over a live database is strictly
 # worse than not restoring at all, so the checksum is verified before anything
-# is touched and there is no way to skip it.
+# is touched. A mismatch can never be skipped; a missing checksum only with
+# MDB_RESTORE_ALLOW_UNVERIFIED=yes.
 # -----------------------------------------------------------------------------
 if [[ -f "$FILE.sha256" ]]; then
     log "verifying checksum"
@@ -78,8 +89,11 @@ if [[ -f "$FILE.sha256" ]]; then
             || die "checksum mismatch: $FILE is corrupt or truncated"
     fi
     log "checksum ok"
+elif [[ "${MDB_RESTORE_ALLOW_UNVERIFIED:-}" == "yes" ]]; then
+    log "WARNING: no checksum file alongside $FILE; restoring it unverified (MDB_RESTORE_ALLOW_UNVERIFIED=yes)"
 else
-    log "WARNING: no checksum file alongside $FILE"
+    die "no checksum file alongside $FILE ($FILE.sha256), so nothing proves the dump is whole.
+       Nothing was changed. To restore it anyway: MDB_RESTORE_ALLOW_UNVERIFIED=yes"
 fi
 
 # -----------------------------------------------------------------------------
@@ -105,7 +119,15 @@ decompress() {
 log "recreating database $DB"
 hook_recreate_database "$DB" || die "could not recreate $DB"
 
+# The client's stderr is kept for the failure path: the reason is in it, and
+# nothing else records it.
 log "restoring"
-decompress | hook_restore_database "$DB" >/dev/null 2>&1 || true
+errlog="$(mktemp "${TMPDIR:-/tmp}/mdb-restore.XXXXXX")"
+trap 'rm -f "$errlog"' EXIT
+if ! decompress 2>"$errlog" | hook_restore_database "$DB" >/dev/null 2>>"$errlog"; then
+    tail -20 "$errlog" | sed 's/^/[restore]   /' >&2
+    die "restore of $DB FAILED. $DB was dropped and recreated first, so it is now
+       empty or partial. Fix the cause above and restore again."
+fi
 
 log "restore of $DB complete"

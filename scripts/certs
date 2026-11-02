@@ -12,6 +12,8 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# shellcheck source=env-lib.sh
+. "$ROOT/scripts/env-lib.sh"
 CERT_DIR="$ROOT/certs"
 ENV_FILE="${MDB_ENV_FILE:-$ROOT/.env}"
 [[ -f "$ENV_FILE" ]] || ENV_FILE="$ROOT/.env.example"
@@ -19,7 +21,7 @@ ENV_FILE="${MDB_ENV_FILE:-$ROOT/.env}"
 RENEW=0
 [[ "${1:-}" == "--renew" ]] && RENEW=1
 
-get() { grep -E "^${1}=" "$ENV_FILE" 2>/dev/null | tail -1 | cut -d= -f2- || true; }
+get() { mdb_env_get "$1" "$ENV_FILE"; }
 
 CERT_DAYS="$(get MDB_CERT_DAYS)"; CERT_DAYS="${CERT_DAYS:-825}"
 EXTRA_SANS="$(get MDB_EXTRA_SANS)"

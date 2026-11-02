@@ -4,14 +4,14 @@
 # scripts and s6 tree with the MariaDB image (see images/_shared/mysql-family).
 #
 # BASE_IMAGE is passed digest-pinned from images/bases.tsv.
-ARG BASE_IMAGE=mysql:8.4.11@sha256:b3b90af2a6552ae30c266fdb7d5dd55f3afb72404bb78d37fe8a23eb857fd3fb
+ARG BASE_IMAGE=docker.io/library/mysql:8.4.11@sha256:b3b90af2a6552ae30c266fdb7d5dd55f3afb72404bb78d37fe8a23eb857fd3fb
 # The Go toolchain the gotools stage builds with; pinned in images/bases.tsv
 # (row `toolchain go`) and passed by scripts/build, like BASE_IMAGE.
-ARG GO_IMAGE=golang:1.27.3-bookworm@sha256:d9b6a1beb9474adc2a1ce842573639b44b2a0dd49b6669f51d3821baf9ec37c9
+ARG GO_IMAGE=docker.io/library/golang:1.27.3-bookworm@sha256:d9b6a1beb9474adc2a1ce842573639b44b2a0dd49b6669f51d3821baf9ec37c9
 
 # =============================================================================
 # Go tools, rebuilt from their upstream release tags on a patched toolchain
-# (DESIGN.md D-51). The released binaries carry the Go standard library of the
+# (design.md D-51). The released binaries carry the Go standard library of the
 # day they were cut, and their CVEs with it; the same tag rebuilt on current Go
 # does not. Cross-compiled on the build platform: arm64 is never emulated.
 # =============================================================================
@@ -81,7 +81,7 @@ RUN set -eux; \
         echo "OS update moved the server: '$before' -> '$after'" >&2; exit 1; }
 
 # Oracle Linux 9, so microdnf. The base already carries tar, xz, zstd, curl,
-# gosu and openssl; procps-ng and unzip are what it lacks (DESIGN.md D-17).
+# gosu and openssl; procps-ng and unzip are what it lacks (design.md D-17).
 RUN set -eux; \
     microdnf install -y procps-ng unzip findutils; \
     microdnf clean all
@@ -156,7 +156,7 @@ RUN set -eux; \
 
 # rclone is not packaged for Oracle Linux, so it comes from upstream. It is the
 # S3 push tool SPEC section 6.1 requires baked into every engine image.
-# gosu, rclone from the gotools stage (DESIGN.md D-51). gosu replaces
+# gosu, rclone from the gotools stage (design.md D-51). gosu replaces
 # the base image's copy in place, so its entrypoint keeps calling the same path.
 COPY --from=gotools /out/gosu /out/rclone /usr/local/bin/
 RUN set -eux; gosu --version; gosu nobody true; rclone version | head -1
@@ -191,7 +191,7 @@ RUN set -eux; \
     chown -R mysql:mysql /var/run/mysqld
 
 # Gracetimes stay at the s6 defaults; raising them only makes the container
-# idle after everything is already down (DESIGN.md D-27).
+# idle after everything is already down (design.md D-27).
 ENV S6_CMD_WAIT_FOR_SERVICES_MAXTIME=0 \
     S6_BEHAVIOUR_IF_STAGE2_FAILS=2 \
     S6_KEEP_ENV=1

@@ -12,9 +12,11 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# shellcheck source=backend-lib.sh
+. "$ROOT/scripts/backend-lib.sh"
 cd "$ROOT" || exit 1
 
-PROJECT="${COMPOSE_PROJECT_NAME:-mdb}"
+PROJECT="$(mdb_project_name)"
 
 log() { printf '[destroy] %s\n' "$*"; }
 die() { printf '[destroy] ERROR: %s\n' "$*" >&2; exit 1; }
@@ -31,11 +33,14 @@ while (( $# )); do
     esac
 done
 
+# The backend lists the project's volumes (Compose: <project>_<volume>;
+# Kubernetes: the release's PersistentVolumeClaims), design.md D-62.
 list_volumes() {
-    docker volume ls --format '{{.Name}}' | grep -E "^${PROJECT}_" | sort || true
+    mdb_be_volumes "$PROJECT"
 }
 
-# Recovery repositories -- the pgBackRest repo and the binary logs.
+# Recovery repositories -- the pgBackRest repo and the binary logs, and on
+# Kubernetes the PVC the scheduled dumps are written to (<release>-backups-*).
 #
 # These are EXCLUDED from --all, because a command that destroys the data and
 # the means of recovering from it in one step is the worst possible default:
@@ -43,7 +48,7 @@ list_volumes() {
 # They live in separate volumes precisely so this distinction can exist, and
 # --include-recovery is the way to say you meant it.
 is_recovery_volume() {
-    case "$1" in *_pitr) return 0 ;; *) return 1 ;; esac
+    case "$1" in *_pitr|pitr-*|*-backups-*) return 0 ;; *) return 1 ;; esac
 }
 
 volumes="$(list_volumes)"
@@ -51,7 +56,7 @@ volumes="$(list_volumes)"
 
 # Destroying a volume out from under a running engine corrupts it rather than
 # removing it cleanly, so the stack has to be down first.
-running="$(docker compose ps --format '{{.Service}}' 2>/dev/null | grep -c . || true)"
+running="$(mdb_be_running | grep -c . || true)"
 if [[ "${running:-0}" != "0" ]]; then
     die "the stack is still running. Run 'make down' first, then destroy."
 fi
@@ -60,8 +65,7 @@ printf '\n'
 printf 'Data volumes for project %s:\n\n' "$PROJECT"
 while IFS= read -r v; do
     [[ -z "$v" ]] && continue
-    size="$(docker volume inspect "$v" --format '{{.Mountpoint}}' >/dev/null 2>&1 && echo "" || echo "")"
-    printf '  %s%s\n' "$v" "$size"
+    printf '  %s\n' "$v"
 done <<< "$volumes"
 printf '\n'
 
@@ -92,7 +96,7 @@ if (( ALL )); then
 
     while IFS= read -r v; do
         [[ -z "$v" ]] && continue
-        docker volume rm "$v" >/dev/null && log "deleted $v"
+        mdb_be_volume_rm "$v" >/dev/null && log "deleted $v"
     done <<< "$targets"
     if [[ -n "$kept" ]]; then
         log "recovery repositories kept; restore with: make pitr-info"
@@ -112,5 +116,5 @@ printf 'Type the volume name to continue: '
 read -r answer
 [[ "$answer" == "$TARGET" ]] || die "confirmation did not match; nothing was deleted"
 
-docker volume rm "$TARGET" >/dev/null
+mdb_be_volume_rm "$TARGET" >/dev/null
 log "deleted $TARGET"

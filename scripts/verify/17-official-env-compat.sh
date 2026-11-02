@@ -5,7 +5,7 @@
 
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
-need_docker
+need_runtime
 
 # SPEC section 6.1 names this as the integration risk to respect: the upstream
 # entrypoints own first-run init, the POSTGRES_*/MYSQL_* env semantics, the
@@ -19,7 +19,7 @@ add_cleanup "rm -rf '$tmp'"
 img="$(image_name pg)"
 need_image "$img"
 
-printf 'mdb-throwaway-pgfile\n' > "$tmp/pgpass"
+printf '%s\n' "${TW_PGFILE}" > "$tmp/pgpass"
 printf 'CREATE TABLE initdb_ran(v text);\nINSERT INTO initdb_ran VALUES ('"'"'yes'"'"');\n' > "$tmp/01-init.sql"
 
 name="mdb-verify-compat-pg-$$"
@@ -27,7 +27,7 @@ track_container "$name"
 
 # POSTGRES_PASSWORD_FILE (the _FILE convention), POSTGRES_USER, POSTGRES_DB,
 # and a mounted initdb.d script must all behave exactly as upstream.
-docker run -d --name "$name" \
+mdb_ctr run -d --name "$name" \
     -e POSTGRES_PASSWORD_FILE=/run/secrets/pgpass \
     -e POSTGRES_USER=custom_user \
     -e POSTGRES_DB=custom_db \
@@ -36,14 +36,14 @@ docker run -d --name "$name" \
     "$img" >/dev/null || vfail "PG failed to start with POSTGRES_PASSWORD_FILE"
 
 wait_ready 60 "custom_user to accept connections" \
-    docker exec "$name" pg_isready -U custom_user -d custom_db
+    mdb_ctr exec "$name" pg_isready -U custom_user -d custom_db
 
-docker exec -e PGPASSWORD=mdb-throwaway-pgfile "$name" \
+mdb_ctr exec -e PGPASSWORD="${TW_PGFILE}" "$name" \
     psql -U custom_user -d custom_db -tAc "SELECT 1" >/dev/null 2>&1 \
     || vfail "POSTGRES_PASSWORD_FILE was not honoured"
 vinfo "POSTGRES_PASSWORD_FILE, POSTGRES_USER, POSTGRES_DB honoured"
 
-ran="$(docker exec -e PGPASSWORD=mdb-throwaway-pgfile "$name" \
+ran="$(mdb_ctr exec -e PGPASSWORD="${TW_PGFILE}" "$name" \
     psql -U custom_user -d custom_db -tAc "SELECT v FROM initdb_ran" 2>/dev/null | tr -d ' ')"
 [[ "$ran" == "yes" ]] || vfail "/docker-entrypoint-initdb.d script did not run"
 vinfo "/docker-entrypoint-initdb.d executed"
@@ -54,30 +54,30 @@ compat_mysql_family() {
     img="$(image_name "$engine")"
     need_image "$img"
 
-    printf 'mdb-throwaway-myfile\n' > "$tmp/${engine}pass"
+    printf '%s\n' "${TW_MYFILE}" > "$tmp/${engine}pass"
     printf 'CREATE TABLE initdb_ran(v text);\nINSERT INTO initdb_ran VALUES ("yes");\n' \
         > "$tmp/${engine}-init.sql"
 
     name="mdb-verify-compat-$engine-$$"
     track_container "$name"
 
-    docker run -d --name "$name" \
+    mdb_ctr run -d --name "$name" \
         -e "${prefix}_ROOT_PASSWORD_FILE=/run/secrets/pw" \
         -e "${prefix}_DATABASE=custom_db" \
         -e "${prefix}_USER=custom_user" \
-        -e "${prefix}_PASSWORD=mdb-throwaway-user" \
+        -e "${prefix}_PASSWORD=${TW_USER}" \
         -v "$tmp/${engine}pass:/run/secrets/pw:ro" \
         -v "$tmp/${engine}-init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro" \
         "$img" >/dev/null || vfail "$engine failed to start with ${prefix}_ROOT_PASSWORD_FILE"
 
     wait_ready 90 "$engine custom_user to connect" \
-        docker exec "$name" "$client" -ucustom_user -pmdb-throwaway-user custom_db -e "SELECT 1"
+        mdb_ctr exec "$name" "$client" -ucustom_user -p"${TW_USER}" custom_db -e "SELECT 1"
 
-    docker exec "$name" "$client" -uroot -pmdb-throwaway-myfile -e "SELECT 1" >/dev/null 2>&1 \
+    mdb_ctr exec "$name" "$client" -uroot -p"${TW_MYFILE}" -e "SELECT 1" >/dev/null 2>&1 \
         || vfail "${prefix}_ROOT_PASSWORD_FILE was not honoured"
 
     local ran
-    ran="$(docker exec "$name" "$client" -ucustom_user -pmdb-throwaway-user custom_db -N -B \
+    ran="$(mdb_ctr exec "$name" "$client" -ucustom_user -p"${TW_USER}" custom_db -N -B \
         -e "SELECT v FROM initdb_ran" 2>/dev/null | tr -d ' \r')"
     [[ "$ran" == "yes" ]] || vfail "$engine /docker-entrypoint-initdb.d script did not run"
 

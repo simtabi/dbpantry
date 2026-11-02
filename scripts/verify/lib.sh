@@ -21,7 +21,34 @@ export MDB_ROOT
 # shellcheck source=../engine-lib.sh
 . "$MDB_ROOT/scripts/engine-lib.sh"
 
+# Every container call goes through the runtime layer (design.md D-60).
+# shellcheck source=../backend-lib.sh
+. "$MDB_ROOT/scripts/backend-lib.sh"
+
 readonly VERIFY_EXIT_SKIP=3
+
+# Throwaway passwords for containers that live for seconds, generated per run so no
+# credential is ever written in the source. Each keeps the mdb-throwaway- prefix that
+# scripts/verify/03-secret-scan-repo.sh recognises, and labels keep them distinct: a
+# check that needs a wrong password gets one that cannot equal the right one.
+_mdb_tw_salt="$(od -An -N8 -tx1 /dev/urandom | tr -d ' \n')"
+TW_ALPHA="mdb-throwaway-alpha-${_mdb_tw_salt}"
+TW_APP="mdb-throwaway-app-${_mdb_tw_salt}"
+TW_BETA="mdb-throwaway-beta-${_mdb_tw_salt}"
+TW_BOUNCER="mdb-throwaway-bouncer-${_mdb_tw_salt}"
+TW_MYFILE="mdb-throwaway-myfile-${_mdb_tw_salt}"
+TW_MYPITR="mdb-throwaway-mypitr-${_mdb_tw_salt}"
+TW_PGFILE="mdb-throwaway-pgfile-${_mdb_tw_salt}"
+TW_PITR="mdb-throwaway-pitr-${_mdb_tw_salt}"
+TW_PLAINTEXT="mdb-throwaway-plaintext-${_mdb_tw_salt}"
+TW_RLS="mdb-throwaway-rls-${_mdb_tw_salt}"
+TW_RLSAPP="mdb-throwaway-rlsapp-${_mdb_tw_salt}"
+TW_SUPER="mdb-throwaway-super-${_mdb_tw_salt}"
+TW_USER="mdb-throwaway-user-${_mdb_tw_salt}"
+TW_VERIFY="mdb-throwaway-verify-${_mdb_tw_salt}"
+TW_WRONG_PASSWORD="mdb-throwaway-wrong-password-${_mdb_tw_salt}"
+# shellcheck disable=SC2034  # read by the verify checks that source this file
+readonly TW_ALPHA TW_APP TW_BETA TW_BOUNCER TW_MYFILE TW_MYPITR TW_PGFILE TW_PITR TW_PLAINTEXT TW_RLS TW_RLSAPP TW_SUPER TW_USER TW_VERIFY TW_WRONG_PASSWORD
 
 if [[ -t 1 ]] && [[ -z "${NO_COLOR:-}" ]]; then
     C_DIM=$'\033[2m'; C_OFF=$'\033[0m'
@@ -43,19 +70,24 @@ vskip() {
     exit "$VERIFY_EXIT_SKIP"
 }
 
-# Docker is required. CLAUDE.md is explicit: if docker is unavailable we stop
-# and say so rather than mocking, so this is a FAIL and never a SKIP.
-need_docker() {
-    docker info >/dev/null 2>&1 \
-        || vfail "docker is not running (docker info failed); this harness never mocks it"
+# A container runtime is required. CLAUDE.md is explicit: if none is available
+# we stop and say so rather than mocking, so this is a FAIL and never a SKIP.
+# Which runtime is decided once, in scripts/runtime-lib.sh (design.md D-60).
+need_runtime() {
+    mdb_runtime_init >/dev/null 2>&1 \
+        || vfail "no container runtime found (CONTAINER_RUNTIME=${CONTAINER_RUNTIME:-auto}); see docs/guides/runtimes.md"
+    mdb_runtime_ready \
+        || vfail "$MDB_RUNTIME is not running ($MDB_CTR_CMD info failed); this harness never mocks it"
 }
+# The historical name, kept so a check written before D-60 still reads.
+need_docker() { need_runtime; }
 
 # Read a variable from .env, falling back to .env.example, then to a default.
 env_get() {
     local key="$1" default="${2:-}" file val
     for file in "$MDB_ROOT/.env" "$MDB_ROOT/.env.example"; do
         [[ -f "$file" ]] || continue
-        val="$(grep -E "^${key}=" "$file" 2>/dev/null | tail -1 | cut -d= -f2- || true)"
+        val="$(mdb_env_get "$key" "$file")"
         if [[ -n "$val" ]]; then printf '%s\n' "$val"; return 0; fi
     done
     printf '%s\n' "$default"
@@ -69,11 +101,11 @@ engine_selected() {
 }
 
 # Does a local image exist?
-image_exists() { docker image inspect "$1" >/dev/null 2>&1; }
+image_exists() { mdb_ctr image inspect "$1" >/dev/null 2>&1; }
 
 # Fully-qualified name for one of our engine images.
 #   image_name pg      -> ghcr.io/simtabi/dbpantry-pg:17
-#   image_name mariadb -> ghcr.io/simtabi/dbpantry-mariadb:11.4
+#   image_name mariadb -> ghcr.io/simtabi/dbpantry-mariadb:11.8
 image_name() {
     local engine="$1" prefix ver
     prefix="${MDB_IMAGE_PREFIX:-ghcr.io/simtabi}"
@@ -112,7 +144,7 @@ need_image() {
         MDB_IMAGE_SNAPSHOT="$(mktemp)"
         export MDB_IMAGE_SNAPSHOT
         add_cleanup "rm -f '$MDB_IMAGE_SNAPSHOT'"
-        docker images --format '{{.Repository}}:{{.Tag}}' > "$MDB_IMAGE_SNAPSHOT" 2>/dev/null || true
+        mdb_ctr images --format '{{.Repository}}:{{.Tag}}' > "$MDB_IMAGE_SNAPSHOT" 2>/dev/null || true
     fi
 
     if [[ -n "${MDB_IMAGE_SNAPSHOT:-}" ]] && [[ -f "$MDB_IMAGE_SNAPSHOT" ]] \
@@ -167,7 +199,7 @@ need_image() {
         printf '      %s is a declared version that make build does not cover; building it\n' "$img" >&2
         base="$(awk -v e="$engine" -v v="$want" '$1==e && $2==v {print $3; exit}' \
                 "$MDB_ROOT/images/bases.tsv")"
-        if docker build -f "$MDB_ROOT/images/$engine/Dockerfile" \
+        if mdb_build -f "$MDB_ROOT/images/$engine/Dockerfile" \
                 --build-arg "BASE_IMAGE=$base" \
                 --build-arg "ENGINE_VERSION=$want" \
                 -t "$img" "$MDB_ROOT/images" >/dev/null 2>&1; then
@@ -217,7 +249,7 @@ build_image() {
 
     # Context is images/ so MySQL and MariaDB can share images/_shared.
     base="$(base_image "$engine" "$version")"
-    docker build \
+    mdb_build \
         -f "$MDB_ROOT/images/$engine/Dockerfile" \
         --build-arg "BASE_IMAGE=$base" \
         --build-arg "ENGINE_VERSION=$version" \
@@ -234,11 +266,29 @@ build_image() {
 
 CLEANUP_CONTAINERS=()
 CLEANUP_VOLUMES=()
+CLEANUP_NETWORKS=()
 CLEANUP_COMMANDS=()
 
 track_container() { CLEANUP_CONTAINERS+=("$1"); }
 track_volume()    { CLEANUP_VOLUMES+=("$1"); }
 add_cleanup()     { CLEANUP_COMMANDS+=("$1"); }
+# For a check's own network: removed after the tracked containers, because a
+# network with a container still attached refuses `network rm`. Run with the
+# other commands, it failed silently and leaked one network per run.
+track_network()   { CLEANUP_NETWORKS+=("$1"); }
+
+# Remove, at exit, every file the check adds under backups/ and nothing else.
+#
+# Checks that take real dumps write into the operator's backups/ directory. Left
+# behind, they piled up by the hundred across runs and were indistinguishable
+# from the operator's own dumps. The snapshot is taken when this is called, so
+# call it before the first dump; anything already there is never touched.
+cleanup_new_backups() {
+    local list
+    list="$(mktemp "${TMPDIR:-/tmp}/mdb-backups.XXXXXX")" || return 0
+    find "$MDB_ROOT/backups" -type f > "$list" 2>/dev/null || true
+    add_cleanup "find '$MDB_ROOT/backups' -type f ! -name .gitkeep | grep -vxF -f '$list' | while IFS= read -r f; do rm -f \"\$f\"; done; rm -f '$list'"
+}
 
 mdb_cleanup() {
     local item
@@ -255,13 +305,131 @@ mdb_cleanup() {
         # reached 420 volumes and 34GB here -- which is disk pressure, which is
         # what makes Docker reclaim IMAGES mid-run. The harness was breaking
         # itself, one orphaned volume at a time.
-        if [[ -n "$item" ]]; then docker rm -f -v "$item" >/dev/null 2>&1 || true; fi
+        if [[ -n "$item" ]]; then mdb_ctr rm -f -v "$item" >/dev/null 2>&1 || true; fi
     done
     for item in ${CLEANUP_VOLUMES[@]+"${CLEANUP_VOLUMES[@]}"}; do
-        if [[ -n "$item" ]]; then docker volume rm -f "$item" >/dev/null 2>&1 || true; fi
+        if [[ -n "$item" ]]; then mdb_ctr volume rm -f "$item" >/dev/null 2>&1 || true; fi
+    done
+    for item in ${CLEANUP_NETWORKS[@]+"${CLEANUP_NETWORKS[@]}"}; do
+        if [[ -n "$item" ]]; then mdb_ctr network rm "$item" >/dev/null 2>&1 || true; fi
     done
 }
 trap mdb_cleanup EXIT
+
+# A throwaway checkout with its own stack, for checks that change state the
+# operator owns: secrets, databases, volumes.
+#
+# Most checks run against the checkout's own .env, project and secrets/, which
+# is fine for reading and fatal for writing: a rotation check rotated the real
+# passwords, and a retention run once deleted 175 real dumps. This copies the
+# tree WITHOUT .git, backups/, secrets/, certs/, .env and overrides/local,
+# writes a fresh .env (a unique COMPOSE_PROJECT_NAME, every host port moved to
+# a free high port, backups in the scratch tree) and generates new secrets and
+# certificates there with scripts/init. Run commands inside it with
+# `(cd "$dir" && ...)`: every script there resolves its root, .env and secrets
+# from its own location, never this checkout's.
+#
+# Cleanup stops that project and deletes its volumes (only that project's,
+# by the project name) and then the tree. It refuses to clean anything whose
+# project name is not the generated one.
+#
+# Usage: scratch_stack PROFILES; then use $SCRATCH_DIR and $SCRATCH_PROJECT.
+# Not in $(...): the cleanup it registers would be lost with the subshell.
+_port_busy() {
+    if command -v lsof >/dev/null 2>&1; then
+        lsof -nP -iTCP:"$1" -sTCP:LISTEN >/dev/null 2>&1
+    else
+        (exec 3<>"/dev/tcp/127.0.0.1/$1") 2>/dev/null
+    fi
+}
+
+scratch_stack() {
+    local profiles="$1" sdir proj base key
+    sdir="$(mktemp -d "${TMPDIR:-/tmp}/mdb-scratch.XXXXXX")" || vfail "mktemp failed"
+    proj="mdbscratch$(od -An -N4 -tx1 /dev/urandom | tr -d ' \n')"
+    SCRATCH_PROJECT="$proj"; SCRATCH_DIR="$sdir"
+    # Registered first, so a failure below still removes the tree.
+    add_cleanup "scratch_stack_cleanup '$sdir' '$proj'"
+    export SCRATCH_PROJECT SCRATCH_DIR
+    # Anchored: an unanchored "certs" also drops scripts/certs.
+    rsync -a --exclude /.git --exclude /backups --exclude /secrets --exclude /certs \
+        --exclude /.env --exclude /.env.prod --exclude /overrides/local "$MDB_ROOT/" "$sdir/" \
+        || vfail "could not copy the checkout to $sdir"
+    mkdir -p "$sdir/backups"
+    # init ends with check-env, which fails here whenever the operator's own
+    # stack holds the default ports; the ports are moved below and checked then.
+    ( cd "$sdir" && scripts/init >/dev/null 2>&1 ) || true
+    [[ -s "$sdir/.env" && -s "$sdir/secrets/pg_superuser_password.txt" && -s "$sdir/certs/ca.crt" \
+       && "$sdir/secrets" != "$MDB_ROOT/secrets" ]] \
+        || vfail "scripts/init did not create the scratch checkout's .env, secrets and certs"
+    # Every port key moves to a run of free high ports. The active lines are
+    # deleted rather than overridden: check-env reads every assignment.
+    base=$(( 41000 + (RANDOM % 200) * 100 ))
+    sed -i.bak -E '/^(COMPOSE_PROJECT_NAME|MDB_PROFILES|MDB_BACKUP_DIR|MDB_NETWORK_SUBNET|MDB_[A-Z0-9_]*PORT)=/d' "$sdir/.env" \
+        && rm -f "$sdir/.env.bak"
+    {
+        printf '\n# scratch_stack (verify): never the operator project\n'
+        printf 'COMPOSE_PROJECT_NAME=%s\n' "$proj"
+        printf 'MDB_PROFILES="%s"\n' "$profiles"
+        printf 'MDB_BACKUP_DIR="%s"\n' "$sdir/backups"
+        # Its own subnet too: the operator's mdb_net already holds the default.
+        printf 'MDB_NETWORK_SUBNET=10.%s.%s.0/24\n' "$(( 200 + RANDOM % 50 ))" "$(( RANDOM % 250 ))"
+        for key in $(grep -oE '^#?MDB_[A-Z0-9_]*PORT=' "$MDB_ROOT/.env.example" | tr -d '#=' | sort -u); do
+            # A random base can still land on a listener (another tool's
+            # ephemeral port), which check-env then rightly refuses.
+            while _port_busy "$base"; do base=$(( base + 1 )); done
+            printf '%s=%s\n' "$key" "$base"
+            base=$(( base + 1 ))
+        done
+    } >> "$sdir/.env"
+    # Last assignment wins for both Compose and mdb_env_get; make sure.
+    [[ "$(mdb_env_get COMPOSE_PROJECT_NAME "$sdir/.env")" == "$proj" ]] \
+        || vfail "the scratch .env does not resolve to the scratch project"
+    scratch_run scripts/check-env --quiet >/dev/null 2>&1 \
+        || vfail "check-env rejects the scratch .env: $(scratch_run scripts/check-env 2>&1 | tail -5)"
+}
+
+# Run a command in the scratch checkout, with nothing from this process that
+# could point it back at the operator's: Compose reads COMPOSE_* from the
+# environment before .env.
+scratch_run() {
+    [[ -n "${SCRATCH_DIR:-}" && "$SCRATCH_DIR" != "$MDB_ROOT" ]] || vfail "scratch_run before scratch_stack"
+    ( cd "$SCRATCH_DIR" && env -u COMPOSE_PROJECT_NAME -u COMPOSE_FILE -u COMPOSE_PROFILES \
+        -u MDB_ENV_FILE -u ENV_FILE -u MDB_BACKUP_DIR -u MDB_BACKEND -u MDB_BACKEND_READY \
+        MDB_RT_ROOT="$SCRATCH_DIR" "$@" )
+}
+
+# `make up` in the scratch stack, with mdb_up's failure tail.
+scratch_up() {
+    local out rc=0
+    out="$(scratch_run make up "$@" 2>&1)" || rc=$?
+    (( rc == 0 )) || printf '%s\n' "$out" | tail -25 | sed 's/^/      /' >&2
+    return "$rc"
+}
+
+# A service exec in the scratch stack.
+scratch_exec() {
+    # shellcheck disable=SC2016  # expanded by the inner bash
+    scratch_run bash -c '. scripts/backend-lib.sh && mdb_svc_exec "$@"' scratch_exec "$@"
+}
+
+# Every named service in the scratch stack is healthy.
+scratch_healthy() {
+    # shellcheck disable=SC2016  # expanded by the inner bash
+    scratch_run bash -c '. scripts/backend-lib.sh && for s in "$@"; do mdb_svc_healthy "$s" || exit 1; done' scratch_healthy "$@"
+}
+
+scratch_stack_cleanup() {
+    local sdir="$1" proj="$2" v
+    [[ "$proj" == mdbscratch* && -d "$sdir" && "$sdir" != "$MDB_ROOT" && "$sdir" == */mdb-scratch.* ]] || return 0
+    if [[ "$(mdb_env_get COMPOSE_PROJECT_NAME "$sdir/.env" 2>/dev/null)" == "$proj" ]]; then
+        SCRATCH_DIR="$sdir" scratch_run make down >/dev/null 2>&1 || true
+    fi
+    for v in $(mdb_ctr volume ls -q --filter "label=com.docker.compose.project=$proj" 2>/dev/null); do
+        mdb_ctr volume rm -f "$v" >/dev/null 2>&1 || true
+    done
+    rm -rf "$sdir"
+}
 
 # Wait until a command succeeds, or fail after a budget in seconds.
 wait_for() {
@@ -298,6 +466,34 @@ wait_ready() {
         sleep 1
     done
     vfail "timed out after ${budget}s waiting for: $what"
+}
+
+# wait_ready_while BUDGET CEILING WHAT BUSY... -- CMD...
+# wait_ready, except that past BUDGET seconds it keeps waiting, up to CEILING,
+# for as long as the BUSY command succeeds (work visibly still in progress). A
+# loaded machine then gets the time it needs, and a genuinely stuck one still
+# fails at BUDGET instead of the ceiling.
+wait_ready_while() {
+    local budget="$1" ceiling="$2" what="$3"; shift 3
+    local -a busy=()
+    while (( $# )) && [[ "$1" != -- ]]; do busy+=("$1"); shift; done
+    shift
+    local start=$SECONDS streak=0 needed=3 elapsed
+    while :; do
+        if "$@" >/dev/null 2>&1; then
+            streak=$(( streak + 1 ))
+            (( streak >= needed )) && return 0
+        else
+            streak=0
+        fi
+        elapsed=$(( SECONDS - start ))
+        if (( elapsed >= budget )); then
+            if (( elapsed >= ceiling )) || ! "${busy[@]}" >/dev/null 2>&1; then
+                vfail "timed out after ${elapsed}s waiting for: $what"
+            fi
+        fi
+        sleep 1
+    done
 }
 
 # Require a file to exist, else fail with a useful message.

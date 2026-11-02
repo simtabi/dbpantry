@@ -10,16 +10,25 @@
 
 set -euo pipefail
 
+# Throwaway passwords for containers that live for seconds, generated per run so no
+# credential is ever written in the source. Each keeps the mdb-throwaway- prefix that
+# scripts/verify/03-secret-scan-repo.sh recognises, and labels keep them distinct: a
+# check that needs a wrong password gets one that cannot equal the right one.
+_mdb_tw_salt="$(od -An -N8 -tx1 /dev/urandom | tr -d ' \n')"
+TW_VERIFY="mdb-throwaway-verify-${_mdb_tw_salt}"
+
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# shellcheck source=backend-lib.sh
+. "$ROOT/scripts/backend-lib.sh"
 cd "$ROOT" || exit 1
 
 ENV_FILE="${MDB_ENV_FILE:-$ROOT/.env}"
 [[ -f "$ENV_FILE" ]] || ENV_FILE="$ROOT/.env.example"
 
-BACKUP_DIR="${MDB_BACKUP_DIR:-$ROOT/backups}"
+BACKUP_DIR="$(mdb_backup_dir "$ROOT" "$ENV_FILE")"
 PREFIX="${MDB_IMAGE_PREFIX:-ghcr.io/simtabi}"
 
-get() { grep -E "^${1}=" "$ENV_FILE" 2>/dev/null | tail -1 | cut -d= -f2- || true; }
+get() { mdb_env_get "$1" "$ENV_FILE"; }
 log() { printf '[verify-backups] %s\n' "$*"; }
 die() { printf '[verify-backups] ERROR: %s\n' "$*" >&2; exit 1; }
 
@@ -27,7 +36,7 @@ CONTAINERS=()
 cleanup() {
     local c
     for c in ${CONTAINERS[@]+"${CONTAINERS[@]}"}; do
-        docker rm -f -v "$c" >/dev/null 2>&1 || true
+        mdb_ctr rm -f -v "$c" >/dev/null 2>&1 || true
     done
 }
 trap cleanup EXIT
@@ -58,7 +67,7 @@ for engine in $(engine_list); do
     upper="$(printf '%s' "$engine" | tr '[:lower:]-' '[:upper:]_')"
     ver="$(get "MDB_${upper}_VERSION")"; ver="${ver:-$MDB_ENGINE_DEFAULT_VERSION}"
 
-    if ! docker image inspect "$prefix_img:$ver" >/dev/null 2>&1; then
+    if ! mdb_ctr image inspect "$prefix_img:$ver" >/dev/null 2>&1; then
         log "$engine: image $prefix_img:$ver not built; skipping"
         continue
     fi
@@ -74,10 +83,10 @@ for engine in $(engine_list); do
     # A throwaway container, never the running stack: a verification that
     # damaged production to prove production is recoverable would be its own
     # disaster.
-    docker run -d --name "$c" \
-        -e POSTGRES_PASSWORD=mdb-throwaway-verify \
-        -e MYSQL_ROOT_PASSWORD=mdb-throwaway-verify \
-        -e MARIADB_ROOT_PASSWORD=mdb-throwaway-verify \
+    mdb_ctr run -d --name "$c" \
+        -e POSTGRES_PASSWORD="${TW_VERIFY}" \
+        -e MYSQL_ROOT_PASSWORD="${TW_VERIFY}" \
+        -e MARIADB_ROOT_PASSWORD="${TW_VERIFY}" \
         "$prefix_img:$ver" >/dev/null 2>&1 || {
             log "$engine: FAILED, could not start a throwaway container"
             failed=$(( failed + 1 )); continue
@@ -87,8 +96,8 @@ for engine in $(engine_list); do
     # compress_ext. Here every one of them targets the throwaway container.
     # shellcheck disable=SC2034  # read by the family hooks
     IN_CONTAINER=0
-    engine_exec() { shift; docker exec -i "$c" "$@"; }
-    secret() { printf 'mdb-throwaway-verify'; }
+    engine_exec() { shift; mdb_ctr exec -i "$c" "$@"; }
+    secret() { printf '%s' "${TW_VERIFY}"; }
     compress_ext() { case "$f" in *.zst) printf '.zst' ;; *) printf '' ;; esac; }
     engine_load_hooks || { log "$engine: no hooks"; failed=$(( failed + 1 )); continue; }
 
@@ -105,7 +114,7 @@ for engine in $(engine_list); do
     if [ -n "${MDB_ENGINE_DUMP_GLOBALS:-}" ]; then
         globals="$(find "$BACKUP_DIR" -maxdepth 1 -name "${engine}_globals_*" ! -name '*.sha256' | sort | tail -1)"
         if [ -n "$globals" ]; then
-            zstd -dc "$globals" 2>/dev/null | docker exec -i "$c" psql -U postgres -q >/dev/null 2>&1 || true
+            zstd -dc "$globals" 2>/dev/null | mdb_ctr exec -i "$c" psql -U postgres -q >/dev/null 2>&1 || true
             log "restored globals from $(basename "$globals")"
         fi
     fi
@@ -131,7 +140,7 @@ for engine in $(engine_list); do
         empty=$(( empty + 1 ))
     fi
 
-    docker rm -f -v "$c" >/dev/null 2>&1 || true
+    mdb_ctr rm -f -v "$c" >/dev/null 2>&1 || true
 done
 
 printf '\n'

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# verify: repository layout matches SPEC.md section 15
+# verify: repository layout matches spec.md section 15
 # tags: fast structure
 # phase: 1
 
@@ -9,13 +9,14 @@ cd "$MDB_ROOT" || exit 1
 
 for d in images/pg images/mysql images/mariadb images/cli \
          overrides/pg overrides/mysql overrides/mariadb \
-         caddy scripts scripts/verify rls docs .github/workflows; do
+         config/caddy config/haproxy config/proxysql \
+         scripts scripts/verify rls docs .github/workflows; do
     need_dir "$MDB_ROOT/$d"
 done
 
 for f in Makefile .env.example .gitignore .gitattributes .editorconfig \
          README.md CONTRIBUTING.md SECURITY.md CODE_OF_CONDUCT.md CHANGELOG.md LICENSE \
-         CLAUDE.md DESIGN.md docs/SPEC.md docs/KIT.md; do
+         CLAUDE.md design.md docs/reference/spec.md docs/reference/kit.md; do
     need_file "$MDB_ROOT/$f"
 done
 
@@ -57,7 +58,7 @@ while IFS= read -r hit; do
     # variable, not this script's.
     # shellcheck disable=SC2016
     case "$hit" in
-        *'docker compose'*|*'$(COMPOSE)'*|*'${COMPOSE}'*) ;;
+        *'mdb_compose'*|*'scripts/runtime'*|*'$(COMPOSE)'*|*'${COMPOSE}'*) ;;
         *) continue ;;
     esac
     offenders+="        ${hit}"$'\n'
@@ -104,5 +105,12 @@ if [[ -n "$missing_keep" ]]; then
        overrides/<engine>/.gitkeep for each."
 fi
 vinfo "every engine's overrides/ directory is tracked"
+
+# A check's network goes through track_network, which removes it after the
+# containers. `network rm` as an add_cleanup command runs while a tracked
+# container is still attached, fails silently, and leaked one network per run.
+leaky="$(grep -lE "add_cleanup .*network rm" "$MDB_ROOT"/scripts/verify/[0-9]*.sh 2>/dev/null | grep -v /01-repo-structure.sh || true)"
+[[ -z "$leaky" ]] || vfail "remove check networks with track_network, not add_cleanup: ${leaky//$MDB_ROOT\//}"
+vinfo "check networks are removed after their containers"
 
 vinfo "layout matches SPEC section 15"

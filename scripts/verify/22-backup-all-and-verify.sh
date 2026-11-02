@@ -5,7 +5,7 @@
 
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
-need_docker
+need_runtime
 cd "$MDB_ROOT" || exit 1
 
 # SPEC section 18: "make backup-all produces per-database dumps plus PG
@@ -18,27 +18,70 @@ cd "$MDB_ROOT" || exit 1
 
 need_file "$MDB_ROOT/scripts/backup"
 
-mdb_up PROFILES=pg,mysql,mariadb,backup || vfail "make up failed"
+# The check seeds its own database on every engine. It used to rely on user
+# databases left behind by check 21; once that check cleaned up after itself,
+# MySQL and MariaDB had nothing but system schemas, backup-all correctly dumped
+# nothing, and only stale dumps from earlier runs had kept this check green.
+# Cleanups run in the order registered: drop the seeded databases, then down.
+cleanup_new_backups
+add_cleanup "mdb_compose exec -T pg psql -U postgres -q -c 'DROP DATABASE IF EXISTS backupall;'"
+for e in mysql mariadb; do
+    add_cleanup "mdb_compose exec -T $e $e -uroot -p\"\$(cat secrets/${e}_root_password.txt)\" -e 'DROP DATABASE IF EXISTS backupall;'"
+done
 add_cleanup 'make down'
+mdb_up PROFILES=pg,mysql,mariadb,backup || vfail "make up failed"
 
-# shellcheck disable=SC2016  # evaluated by the subshell, not here
-wait_for 120 "all engines healthy" bash -c \
-    '[[ $(docker compose ps --format "{{.Health}}" | grep -c healthy) -ge 3 ]]'
+for e in pg mysql mariadb; do
+    # shellcheck disable=SC2016  # evaluated by the subshell, not here
+    wait_for 120 "$e healthy" bash -c \
+        "mdb_service_healthy $e"
+done
+
+if ! mdb_compose exec -T pg psql -U postgres -q -c "CREATE DATABASE backupall;" >/dev/null 2>&1 \
+    || ! mdb_compose exec -T pg psql -U postgres -d backupall -q -c "
+        CREATE TABLE items(id int primary key); INSERT INTO items VALUES (1);" >/dev/null 2>&1; then
+    vfail "could not seed the PG backupall database"
+fi
+for e in mysql mariadb; do
+    mdb_compose exec -T "$e" "$e" -uroot -p"$(cat "secrets/${e}_root_password.txt")" -e "
+        CREATE DATABASE IF NOT EXISTS backupall;
+        CREATE TABLE IF NOT EXISTS backupall.items(id INT PRIMARY KEY);
+        INSERT IGNORE INTO backupall.items VALUES (1);" >/dev/null 2>&1 \
+        || vfail "could not seed the $e backupall database"
+done
+vinfo "seeded a backupall database on pg, mysql and mariadb"
+
+# Retention prunes old dumps, and only dumps. It once removed EVERY file in
+# backups/ older than the retention window -- the operator's notes, an .env
+# copy kept there, Finder's .DS_Store -- because it matched on age alone.
+keep="backups/operator-notes-$$.txt"
+expired="backups/pg_verifyprune$$_20200101T000000Z.dump.zst"
+add_cleanup "rm -f '$MDB_ROOT/$keep' '$MDB_ROOT/$expired' '$MDB_ROOT/$expired.sha256'"
+printf 'not a dump\n' > "$keep"
+: > "$expired"; : > "$expired.sha256"
+touch -t 202001010000 "$keep" "$expired" "$expired.sha256"
 
 make backup-all >/dev/null 2>&1 || vfail "make backup-all failed"
 
+[[ -f "$keep" ]] || vfail "retention deleted $keep, which is not a backup artefact"
+[[ ! -f "$expired" ]] || vfail "retention left an expired dump behind ($expired)"
+vinfo "retention pruned an expired dump and left a non-dump file alone"
+
+# Every user database, not just the first: from the host each dump runs through
+# `docker compose exec`, which reads stdin, and once swallowed the rest of the
+# database list -- PG dumped `postgres` and silently skipped everything after it.
 for engine in pg mysql mariadb; do
-    find backups -name "${engine}_*" -type f -newermt '-10 minutes' | grep -q . \
-        || vfail "make backup-all produced no fresh dump for $engine"
+    find backups -name "${engine}_backupall_*" -type f -newermt '-10 minutes' | grep -q . \
+        || vfail "make backup-all produced no fresh dump of backupall for $engine"
 done
-vinfo "fresh dumps present for all three engines"
+vinfo "fresh dumps of every seeded database on all three engines"
 
 find backups -name '*globals*' -type f -newermt '-10 minutes' | grep -q . \
     || vfail "make backup-all did not produce PG globals"
 vinfo "pg globals dumped"
 
 # Checksums, per SPEC section 11.
-find backups -name '*.sha256' -o -name '*.md5' | grep -q . \
+find backups \( -name '*.sha256' -o -name '*.md5' \) -type f -newermt '-10 minutes' | grep -q . \
     || vfail "no checksum files alongside the dumps"
 vinfo "checksums written"
 

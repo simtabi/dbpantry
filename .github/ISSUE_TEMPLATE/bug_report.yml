@@ -38,7 +38,7 @@ body:
     id: logs
     attributes:
       label: Container logs
-      description: "`docker compose logs <service> --tail 50` for the service involved."
+      description: "`scripts/runtime compose logs <service> --tail 50` for the service involved, and the output of `scripts/runtime info`."
       render: text
     validations:
       required: false

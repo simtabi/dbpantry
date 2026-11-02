@@ -18,7 +18,8 @@ cd "$MDB_ROOT" || exit 1
 #     flagged it.
 #
 #  2. The harness needs throwaway passwords for containers that live for
-#     seconds. Those carry the mandatory `mdb-throwaway-` prefix, which is
+#     seconds. They are generated per run (TW_* in scripts/verify/lib.sh), never
+#     written as literals, and carry the mandatory `mdb-throwaway-` prefix, which is
 #     exempt HERE ONLY. Deliberately a value convention rather than a path
 #     exemption: exempting scripts/verify/ wholesale would create somewhere a
 #     real credential could hide, whereas a real credential will never carry
@@ -53,7 +54,7 @@ for f in "${files[@]}"; do
     [[ -f "$f" ]] || continue
     case "$f" in
         # Prose that quotes variable names is documentation, not configuration.
-        docs/SPEC.md|docs/KIT.md|DESIGN.md|docs/archive/KICKOFF-PROMPT.txt|CHANGELOG.md) continue ;;
+        docs/reference/spec.md|docs/reference/kit.md|design.md|docs/archive/KICKOFF-PROMPT.txt|CHANGELOG.md) continue ;;
         scripts/verify/03-secret-scan-repo.sh) continue ;;
     esac
 

@@ -81,15 +81,15 @@ vinfo "$checked engine(s) declare a provisioning hook"
 # running. Engines that are not up are named rather than silently passed over --
 # a check that quietly covers nothing reads exactly like one that covers
 # everything.
-if ! docker info >/dev/null 2>&1; then
-    vinfo "docker unavailable; skipped the behavioural half"
+if ! mdb_runtime_ready; then
+    vinfo "no container runtime reachable; skipped the behavioural half"
     exit 0
 fi
 
 running=""
 while IFS= read -r svc; do
     [[ -n "$svc" ]] && running+="$svc "
-done < <( { cd "$MDB_ROOT" || exit 0; docker compose ps --services --status running 2>/dev/null; } || true)
+done < <( { cd "$MDB_ROOT" || exit 0; mdb_running_services; } || true)
 
 provisioned=0
 skipped=""

@@ -7,6 +7,9 @@
 > One local database toolkit for SQL and NoSQL: PostgreSQL, MySQL, MariaDB, MongoDB, Cassandra and FerretDB, each version-switchable, secure by default, with browser UIs — installed once and shared by many projects.
 
 Runs on macOS, Windows and Linux across amd64 and arm64; dev-first, prod-capable.
+Works with any OCI runtime that has Compose: Docker, OrbStack, Colima, Rancher
+Desktop, Podman (rootless included) and nerdctl. It detects which one you have,
+and `CONTAINER_RUNTIME=podman` forces a choice. See [Container runtimes](docs/guides/runtimes.md).
 
 ## Install
 
@@ -20,7 +23,7 @@ make up
 PostgreSQL and Adminer are running, with **no host port published** — your
 application joins the `mdb_net` network and connects to `pg:5432`. Set
 `MDB_PUBLISH=direct` (or `proxy`) when a GUI client needs a host port; see
-[Configuration](docs/configuration.md).
+[Configuration](docs/guides/configuration.md).
 
 Add engines with profiles:
 
@@ -55,7 +58,7 @@ make backup ENGINE=pg DB=myapp     # one database
 make verify-backups                # restore them into throwaway containers
 ```
 
-The full walkthrough is in [Getting started](docs/getting-started.md); everything
+The full walkthrough is in [Getting started](docs/guides/getting-started.md); everything
 else is in the [documentation index](#documentation).
 
 ## Engines
@@ -65,47 +68,62 @@ of the box — correcting that is a large part of why this exists.
 
 | Engine | Paradigm | Versions | Pooling | Licence |
 |---|---|---|---|---|
-| PostgreSQL | relational | 15 · 16 · 17 · 18 | pgBouncer (required in prod) | PostgreSQL |
-| MySQL | relational | 8.0 · 8.4 · 9.7 | ProxySQL (optional) | GPL-2.0 |
-| MariaDB | relational | 10.11 · 11.4 · 11.8 | ProxySQL (optional) | GPL-2.0 |
-| MongoDB | document | 7.0 · 8.0 · 8.3 | driver-side | SSPL — [referenced, not published](docs/licensing.md) |
-| Cassandra | wide-column | 4.1 · 5.0 | driver-side | Apache-2.0 |
-| FerretDB | document | 2 | driver-side | Apache-2.0 |
+| PostgreSQL | relational | **17** · 18 | pgBouncer (required in prod) | PostgreSQL |
+| MySQL | relational | **8.4** · 9.7 (both LTS) | ProxySQL (optional) | GPL-2.0 |
+| MariaDB | relational | **11.8** · 12.3 (both LTS) | ProxySQL (optional) | GPL-2.0 |
+| MongoDB | document | **7.0** · 8.0 · 9.0 | driver-side | SSPL — [referenced, not published](docs/guides/licensing.md) |
+| Cassandra | wide-column | **5.0** | driver-side | Apache-2.0 |
+| FerretDB | document | **2** | driver-side | Apache-2.0 — declared, image not built yet ([why](docs/guides/adding-an-engine.md)) |
 
-Adding another is a descriptor file — see [Adding an engine](docs/adding-an-engine.md).
+Bold is the default. Each engine maintains the newest supported line and the one
+before it; those are the versions built, scanned and verified here. An older
+version still runs, unsupported and with no scan guarantee, by naming its upstream
+image in `MDB_<ENGINE>_BASE_IMAGE` — see [Supported versions](docs/guides/versions.md).
+
+Adding another is a descriptor file — see [Adding an engine](docs/guides/adding-an-engine.md).
 
 ## <a name="documentation"></a>Documentation
 
 The documentation lives in [`docs/`](docs/), indexed below. Engine images are not
 published yet: the release workflow publishes them from the next tag, and until
-then `make build` builds them locally (see [Release](docs/release.md)).
+then `make build` builds them locally (see [Release](docs/guides/release.md)).
 
-### Guides
+### Guides — `docs/guides/`
 
-- [Installation](docs/installation.md) — prerequisites and first run
-- [Getting started](docs/getting-started.md) — a new project connected in under a minute
-- [Configuration](docs/configuration.md) — every `MDB_` variable
-- [Architecture](docs/architecture.md) — how engines are declared rather than hardcoded
-- [Adding an engine](docs/adding-an-engine.md) — the extensibility contract
-- [Connection pooling](docs/pooling.md) — why the answer differs per engine
-- [Licensing](docs/licensing.md) — what you are running, and under what terms
-- [Image provenance](IMAGE-PROVENANCE.md) — every image, its publisher, and why
-- [Operations](docs/OPERATIONS.md) — VPS, exposure, tuning, HA
-- [Release](docs/release.md) — how versions ship
+Read once, to learn how the toolkit works and how to set it up.
 
-### Reference
+- [Installation](docs/guides/installation.md) — prerequisites and first run
+- [Container runtimes](docs/guides/runtimes.md) — Docker, OrbStack, Colima, Rancher Desktop, Podman, nerdctl ([Docker](docs/guides/runtime-docker.md) · [Podman](docs/guides/runtime-podman.md) · [nerdctl](docs/guides/runtime-nerdctl.md))
+- [Kubernetes](docs/guides/kubernetes.md) — the Helm chart, `MDB_BACKEND=kubernetes`, OrbStack, kind and real clusters
+- [Getting started](docs/guides/getting-started.md) — a new project connected in under a minute
+- [Configuration](docs/guides/configuration.md) — every `MDB_` variable
+- [Supported versions](docs/guides/versions.md) — which versions are maintained, and running any other
+- [Architecture](docs/guides/architecture.md) — how engines are declared rather than hardcoded
+- [Adding an engine](docs/guides/adding-an-engine.md) — the extensibility contract
+- [Connection pooling](docs/guides/pooling.md) — why the answer differs per engine
+- [Licensing](docs/guides/licensing.md) — what you are running, and under what terms
+- [Release](docs/guides/release.md) — how versions ship
 
-- [Specification](docs/SPEC.md) — the build contract
-- [Acceptance](docs/acceptance.md) — every criterion mapped to the check that proves it
-- [Design](DESIGN.md) — pinned versions, capacity table, decision log
+### Runbooks — `docs/runbooks/`
+
+Followed step by step, often under pressure.
+
+- [Operations](docs/runbooks/operations.md) — VPS, exposure, tuning, HA
+- [Restore](docs/runbooks/restore.md) — the 2am runbook
+- [Upgrade](docs/runbooks/upgrade.md) — guided major-version migration
+- [Onboarding](docs/runbooks/onboarding.md) — migrate existing native databases in
+- [Windows](docs/runbooks/windows.md) — WSL2 and git-bash notes
+
+### Reference — `docs/reference/`
+
+Looked up to check the contract, the evidence, or a fact.
+
+- [Specification](docs/reference/spec.md) — the build contract
+- [Acceptance](docs/reference/acceptance.md) — every criterion mapped to the check that proves it
+- [Image provenance](docs/reference/image-provenance.md) — every image, its publisher, and why
+- [Design](design.md) — pinned versions, capacity table, decision log
 - [Row-level security kit](rls/README.md) — database-enforced multi-tenancy
-
-### Recipes
-
-- [Restore](docs/RESTORE.md) — the 2am runbook
-- [Upgrade](docs/UPGRADE.md) — guided major-version migration
-- [Onboarding](docs/ONBOARDING.md) — migrate existing native databases in
-- [Windows](docs/WINDOWS.md) — WSL2 and git-bash notes
+- [Repository layout](docs/reorganization-plan.md) — where each file lives, and why
 
 ## Name
 
@@ -120,7 +138,7 @@ volumes and integrations depend on them:
 - two strings written into existing data: the PostgreSQL `# multidb-server include` marker and
   the Patroni `/multidb-server/` namespace.
 
-The decision is [D-54](DESIGN.md#7-decision-log). Check 44 fails on any other use of the old
+The decision is [D-54](design.md#7-decision-log). Check 44 fails on any other use of the old
 names.
 
 ## Community
@@ -134,4 +152,4 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) and [SECURITY.md](SECURITY.md).
 ## License
 
 MIT for this repository. Published images inherit the licence of the database
-they contain — see [Licensing](docs/licensing.md). See [LICENSE](LICENSE).
+they contain — see [Licensing](docs/guides/licensing.md). See [LICENSE](LICENSE).

@@ -30,7 +30,7 @@ x-hardening: &hardening
 services:
   phpmyadmin:
     profiles: [ui]
-    image: phpmyadmin:5.2.3@sha256:5e2289bcd500868ed4ac9261ddd7cbcc6e20036f83031ade72667b15dca31c60
+    image: docker.io/library/phpmyadmin:5.2.3@sha256:5e2289bcd500868ed4ac9261ddd7cbcc6e20036f83031ade72667b15dca31c60
     restart: unless-stopped
     <<: *hardening
     environment:
@@ -49,7 +49,7 @@ services:
   # ---------------------------------------------------------------------------
   adminer:
     profiles: [ui]
-    image: adminer:5.4.1@sha256:a3167350c4eb9ae4473b8ea0f49c8e5ae74c87b240ee2f6086521dba2a6bf243
+    image: docker.io/library/adminer:5.4.1@sha256:a3167350c4eb9ae4473b8ea0f49c8e5ae74c87b240ee2f6086521dba2a6bf243
     restart: unless-stopped
     <<: *hardening
     environment:
@@ -66,7 +66,7 @@ services:
   # ---------------------------------------------------------------------------
   pgadmin:
     profiles: [ui]
-    image: dpage/pgadmin4:9.9@sha256:5d9624a93634d1c5e595619cc57b1d330758120d1baf445fa97300c0c1fc3c0a
+    image: docker.io/dpage/pgadmin4:9.9@sha256:5d9624a93634d1c5e595619cc57b1d330758120d1baf445fa97300c0c1fc3c0a
     restart: unless-stopped
     environment:
       PGADMIN_DEFAULT_EMAIL: ${MDB_PGADMIN_EMAIL:-admin@db.localhost}
@@ -81,7 +81,7 @@ services:
     volumes:
       # Rendered by scripts/env-render so the UI opens with the server already
       # listed rather than asking for a hostname (SPEC section 7).
-      - ./caddy/servers.json:/pgadmin4/servers.json:ro
+      - ./config/caddy/servers.json:/pgadmin4/servers.json:ro
       - pgadmin_data:/var/lib/pgadmin
     # A compose SECRET rather than the ./secrets bind mount every other service
     # uses, because pgAdmin is the only one that reads a secret as a non-root
@@ -111,7 +111,7 @@ services:
     profiles: [ui, prod]
     # Built here: stock Caddy proxies HTTP, and the database engines speak raw
     # TCP. images/caddy/Dockerfile adds caddy-l4 so ONE front door can own the
-    # host ports for every engine. See IMAGE-PROVENANCE.md.
+    # host ports for every engine. See docs/reference/image-provenance.md.
     build:
       context: ./images
       dockerfile: caddy/Dockerfile
@@ -125,9 +125,9 @@ services:
     volumes:
       # Generated from the engine descriptors by scripts/gen-compose; empty
       # unless MDB_PUBLISH=proxy.
-      - ./caddy/layer4.caddy:/etc/caddy/layer4.caddy:ro
-      # Rendered from caddy/Caddyfile.tmpl (dev) or Caddyfile.prod.tmpl (prod).
-      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./config/caddy/layer4.caddy:/etc/caddy/layer4.caddy:ro
+      # Rendered from config/caddy/Caddyfile.tmpl (dev) or Caddyfile.prod.tmpl (prod).
+      - ./config/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
       # Persisted so the internal CA and any issued certificates survive a
       # restart; without this every `make up` would mint a new local CA and
       # browsers would warn again each time.
@@ -262,7 +262,7 @@ services:
 
   backup-mariadb:
     profiles: [backup]
-    image: ghcr.io/simtabi/dbpantry-mariadb:${MDB_MARIADB_VERSION:-11.4}
+    image: ghcr.io/simtabi/dbpantry-mariadb:${MDB_MARIADB_VERSION:-11.8}
     restart: unless-stopped
     <<: *hardening
     entrypoint: ["/mdb/scripts/backup", "--engine", "mariadb", "--schedule"]
@@ -325,6 +325,14 @@ services:
     image: quay.io/prometheuscommunity/postgres-exporter:v0.20.1@sha256:ac5ec343104fae0e2d84a27bb8d69b38430a11910c5382cad85d478d2bab713e
     restart: unless-stopped
     <<: *hardening
+    # secrets/ is 0700 and its files 0600, owned by the operator. The image's
+    # own user (nobody) cannot open the password file on a Linux host -- it
+    # crash-looped there while Docker Desktop and OrbStack, whose file sharing
+    # ignores those permissions, hid it. Root with ALL capabilities dropped
+    # except DAC_READ_SEARCH can read (not write) files whatever their owner,
+    # and nothing more; check 24 replays this against real permissions.
+    user: "0:0"
+    cap_add: [DAC_READ_SEARCH]
     environment:
       # The exporter reads the password from a file rather than taking it in
       # the connection string, so no credential appears in `docker inspect`.
@@ -338,9 +346,12 @@ services:
 
   mysqld-exporter:
     profiles: [metrics]
-    image: prom/mysqld-exporter:v0.19.0@sha256:eacb4b18e2ec1e0abdf2d64851b68526c964f6d9cb3e9458fb5d5f5062ea94c1
+    image: docker.io/prom/mysqld-exporter:v0.19.0@sha256:eacb4b18e2ec1e0abdf2d64851b68526c964f6d9cb3e9458fb5d5f5062ea94c1
     restart: unless-stopped
     <<: *hardening
+    # As pg-exporter: read the 0600 password file on a Linux host.
+    user: "0:0"
+    cap_add: [DAC_READ_SEARCH]
     command:
       - "--mysqld.address=mysql:3306"
       - "--mysqld.username=root"

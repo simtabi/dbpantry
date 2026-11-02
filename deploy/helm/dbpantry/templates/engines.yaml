@@ -1,0 +1,248 @@
+{{- $root := . }}
+{{- range $name, $e := .Values.engines }}
+{{- if and $e.enabled (not (and (hasKey $e "ha") $e.ha.enabled)) }}
+{{- $ctx := dict "root" $root "name" $name "engine" $e }}
+{{- $full := include "dbpantry.fullname" $ctx }}
+---
+# Headless Service: stable DNS for the StatefulSet pod.
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $full }}-hl
+  labels:
+    {{- include "dbpantry.labels" $ctx | nindent 4 }}
+spec:
+  clusterIP: None
+  publishNotReadyAddresses: true
+  selector:
+    {{- include "dbpantry.selector" $ctx | nindent 4 }}
+  ports:
+    - name: db
+      port: {{ $e.port }}
+      targetPort: db
+---
+# Client Service, named like the Compose service so apps use the same host.
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "dbpantry.svcname" $ctx }}
+  labels:
+    {{- include "dbpantry.labels" $ctx | nindent 4 }}
+  {{- with $root.Values.service.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  type: {{ $root.Values.service.type }}
+  selector:
+    {{- include "dbpantry.selector" $ctx | nindent 4 }}
+  ports:
+    - name: db
+      port: {{ $e.port }}
+      targetPort: db
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ $full }}
+  labels:
+    {{- include "dbpantry.labels" $ctx | nindent 4 }}
+spec:
+  serviceName: {{ $full }}-hl
+  replicas: 1
+  podManagementPolicy: OrderedReady
+  updateStrategy:
+    type: RollingUpdate
+  # Data outlives the release: `helm uninstall` and `make down` keep the PVCs;
+  # only `make destroy` deletes them.
+  persistentVolumeClaimRetentionPolicy:
+    whenDeleted: Retain
+    whenScaled: Retain
+  selector:
+    matchLabels:
+      {{- include "dbpantry.selector" $ctx | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "dbpantry.labels" $ctx | nindent 8 }}
+        {{- with $root.Values.global.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      annotations:
+        # Roll the pod when the settings change.
+        checksum/env: {{ toJson (list $root.Values.global.env $e.env) | sha256sum }}
+        {{- with $root.Values.global.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      serviceAccountName: {{ include "dbpantry.serviceAccountName" $root }}
+      automountServiceAccountToken: {{ $root.Values.serviceAccount.automountToken }}
+      terminationGracePeriodSeconds: {{ $root.Values.global.terminationGracePeriodSeconds }}
+      {{- with $root.Values.global.priorityClassName }}
+      priorityClassName: {{ . }}
+      {{- end }}
+      {{- with $root.Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $root.Values.global.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $root.Values.global.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $root.Values.global.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: {{ $name }}
+          image: {{ include "dbpantry.image" $ctx }}
+          imagePullPolicy: {{ $root.Values.global.imagePullPolicy }}
+          # The images start as root under s6 (or the upstream entrypoint) and
+          # drop to the engine's user, exactly as under Compose: no privilege
+          # escalation, every capability dropped but the five the init needs.
+          # This passes the Pod Security "baseline" level, not "restricted".
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+              add: [CHOWN, SETUID, SETGID, DAC_OVERRIDE, FOWNER]
+          ports:
+            - name: db
+              containerPort: {{ $e.port }}
+          env:
+            {{- range $k, $v := $root.Values.global.env }}
+            - name: {{ $k }}
+              value: {{ toString $v | quote }}
+            {{- end }}
+            {{- range $k, $v := $e.env }}
+            - name: {{ $k }}
+              value: {{ toString $v | quote }}
+            {{- end }}
+            {{- if $e.memLimitVar }}
+            - name: {{ $e.memLimitVar }}
+              value: {{ toString $e.memory | quote }}
+            {{- end }}
+            {{- range $k, $v := $e.secretEnv }}
+            - name: {{ $k }}
+              value: /run/secrets/{{ $v }}
+            {{- end }}
+          resources:
+            {{- if $e.resources }}
+            {{- toYaml $e.resources | nindent 12 }}
+            {{- else }}
+            requests:
+              cpu: {{ toString $e.cpu | quote }}
+              memory: {{ include "dbpantry.qty" $e.memory }}
+            limits:
+              memory: {{ include "dbpantry.qty" $e.memory }}
+            {{- end }}
+          startupProbe:
+            exec:
+              command: {{ toJson $e.probe }}
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: {{ div (int $e.startupSeconds) 10 }}
+          readinessProbe:
+            exec:
+              command: {{ toJson $e.probe }}
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          # Generous: restarting a busy database is worse than a slow probe.
+          livenessProbe:
+            exec:
+              command: {{ toJson $e.probe }}
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 6
+          volumeMounts:
+            - name: data
+              mountPath: {{ $e.dataPath }}
+            {{- if $e.pitrPath }}
+            - name: pitr
+              mountPath: {{ $e.pitrPath }}
+            {{- end }}
+            - name: secrets
+              mountPath: /run/secrets
+              readOnly: true
+            # Laid out like the Compose bind mount of certs/: /certs/ca.crt
+            # and /certs/<engine>/server.{crt,key}.
+            - name: certs
+              mountPath: /certs
+              readOnly: true
+            {{- if $e.overridesPath }}
+            - name: overrides
+              mountPath: {{ $e.overridesPath }}
+              readOnly: true
+            {{- end }}
+            {{- if $e.shm }}
+            - name: shm
+              mountPath: /dev/shm
+            {{- end }}
+      volumes:
+        - name: secrets
+          secret:
+            secretName: {{ $root.Values.global.secretName }}
+            defaultMode: {{ $e.secretMode | default 0400 }}
+        - name: certs
+          secret:
+            secretName: {{ printf "%s-%s" $root.Values.global.certsSecretPrefix $name }}
+            optional: true
+            defaultMode: 0400
+            items:
+              - key: ca.crt
+                path: ca.crt
+              - key: server.crt
+                path: {{ $name }}/server.crt
+              - key: server.key
+                path: {{ $name }}/server.key
+        {{- if $e.overridesPath }}
+        - name: overrides
+          configMap:
+            name: {{ printf "%s-%s" $root.Values.global.overridesConfigMapPrefix $name }}
+            optional: true
+        {{- end }}
+        {{- if $e.shm }}
+        - name: shm
+          emptyDir:
+            medium: Memory
+            sizeLimit: {{ include "dbpantry.qty" $e.shm }}
+        {{- end }}
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+        labels:
+          {{- include "dbpantry.selector" $ctx | nindent 10 }}
+      spec:
+        accessModes: [ReadWriteOnce]
+        {{- with $root.Values.global.storageClass }}
+        storageClassName: {{ . }}
+        {{- end }}
+        resources:
+          requests:
+            storage: {{ $e.storage }}
+    {{- if $e.pitrPath }}
+    # Recovery repository (binlogs, pgBackRest): its PVC name starts with
+    # "pitr-", which `make destroy` keeps unless told otherwise.
+    - metadata:
+        name: pitr
+        labels:
+          {{- include "dbpantry.selector" $ctx | nindent 10 }}
+      spec:
+        accessModes: [ReadWriteOnce]
+        {{- with $root.Values.global.storageClass }}
+        storageClassName: {{ . }}
+        {{- end }}
+        resources:
+          requests:
+            storage: {{ $e.pitrStorage }}
+    {{- end }}
+{{- end }}
+{{- end }}

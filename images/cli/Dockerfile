@@ -7,14 +7,14 @@
 # a database that lives somewhere else entirely.
 #
 # Build context is images/, like every other image here.
-ARG BASE_IMAGE=debian:12-slim@sha256:abd67ffcfa541b485a3dff59865ab629aa048a6c613e639d36e7456b0b229241
+ARG BASE_IMAGE=docker.io/library/debian:12-slim@sha256:abd67ffcfa541b485a3dff59865ab629aa048a6c613e639d36e7456b0b229241
 # The Go toolchain the gotools stage builds with; pinned in images/bases.tsv
 # (row `toolchain go`) and passed by scripts/build, like BASE_IMAGE.
-ARG GO_IMAGE=golang:1.27.3-bookworm@sha256:d9b6a1beb9474adc2a1ce842573639b44b2a0dd49b6669f51d3821baf9ec37c9
+ARG GO_IMAGE=docker.io/library/golang:1.27.3-bookworm@sha256:d9b6a1beb9474adc2a1ce842573639b44b2a0dd49b6669f51d3821baf9ec37c9
 
 # =============================================================================
 # Go tools, rebuilt from their upstream release tags on a patched toolchain
-# (DESIGN.md D-51). The released binaries carry the Go standard library of the
+# (design.md D-51). The released binaries carry the Go standard library of the
 # day they were cut, and their CVEs with it; the same tag rebuilt on current Go
 # does not. Cross-compiled on the build platform: arm64 is never emulated.
 # =============================================================================
@@ -86,7 +86,7 @@ RUN set -eux; \
     rm -rf /var/lib/apt/lists/*
 
 # rclone for S3-compatible targets, matching the engine images' version.
-# rclone from the gotools stage (DESIGN.md D-51).
+# rclone from the gotools stage (design.md D-51).
 COPY --from=gotools /out/rclone /usr/local/bin/
 RUN set -eux; rclone version | head -1
 

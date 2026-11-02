@@ -15,9 +15,9 @@ cd "$MDB_ROOT" || exit 1
 #
 # So the allowlist is namespaces, not individual images: a Docker Official
 # Image (no namespace at all) or the upstream project's own namespace. Anything
-# else has to be justified in IMAGE-PROVENANCE.md, by name.
+# else has to be justified in docs/reference/image-provenance.md, by name.
 
-need_file "$MDB_ROOT/IMAGE-PROVENANCE.md"
+need_file "$MDB_ROOT/docs/reference/image-provenance.md"
 
 # Namespaces belonging to the projects whose software they package.
 UPSTREAM='^(pgvector/pgvector|dpage/pgadmin4|proxysql/proxysql|prom/[a-z-]+|aquasec/trivy|ghcr\.io/ferretdb/[a-z-]+|quay\.io/coreos/etcd|quay\.io/prometheuscommunity/[a-z-]+|ghcr\.io/simtabi/[a-z-]+)$'
@@ -35,6 +35,11 @@ while IFS= read -r ref; do
 
     checked=$(( checked + 1 ))
 
+    # References are fully qualified so Podman resolves them without a search
+    # list (design.md D-60). docker.io/library/x is the Official Image x, and
+    # docker.io/ns/x is ns/x; judge the publisher, not the spelling.
+    repo="${repo#docker.io/library/}"; repo="${repo#docker.io/}"
+
     # A Docker Official Image has no namespace: "mysql", not "someone/mysql".
     case "$repo" in
         */*) ;;
@@ -45,12 +50,12 @@ while IFS= read -r ref; do
 
     # Everything else must be named in the provenance document, so an exception
     # is a decision someone wrote down rather than a line nobody noticed.
-    if grep -qF "$repo" "$MDB_ROOT/IMAGE-PROVENANCE.md"; then
-        vinfo "note: $repo is not upstream but is justified in IMAGE-PROVENANCE.md"
+    if grep -qF "$repo" "$MDB_ROOT/docs/reference/image-provenance.md"; then
+        vinfo "note: $repo is not upstream but is justified in docs/reference/image-provenance.md"
         continue
     fi
 
-    printf '      %s is a third-party rebuild and is not justified in IMAGE-PROVENANCE.md\n' "$repo" >&2
+    printf '      %s is a third-party rebuild and is not justified in docs/reference/image-provenance.md\n' "$repo" >&2
     violations=$(( violations + 1 ))
 done < <(
     grep -rhoE '(^|[[:space:]])image:[[:space:]]*[A-Za-z0-9][A-Za-z0-9./_-]*(:[A-Za-z0-9._-]+)?(@sha256:[a-f0-9]+)?' \

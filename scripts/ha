@@ -16,6 +16,8 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# shellcheck source=backend-lib.sh
+. "$ROOT/scripts/backend-lib.sh"
 cd "$ROOT" || exit 1
 
 log() { printf '[ha] %s\n' "$*"; }
@@ -36,10 +38,21 @@ done
 # in etcd, not on a particular node -- so this deliberately does not care which
 # one it finds. Requiring a specific node would make `make ha-status` fail
 # exactly when that node is the one that died.
+#
+# On Kubernetes the members are the pods of the "pg" service (design.md
+# D-65), and the backend picks a Ready one.
 node_container() {
     local svc
+    mdb_backend_init || return 1
+    if [[ "$MDB_BACKEND" == kubernetes ]]; then
+        mdb_be_running | grep -qx pg || return 1
+        mdb_svc_exec pg sh -c 'command -v patronictl' >/dev/null 2>&1 \
+            || die "pg is not running under Patroni here (CloudNativePG? use: kubectl cnpg status)"
+        printf 'pg'
+        return 0
+    fi
     for svc in patroni1 patroni2 patroni3; do
-        if docker compose ps --status running --services 2>/dev/null | grep -qx "$svc"; then
+        if mdb_be_running | grep -qx "$svc"; then
             printf '%s' "$svc"
             return 0
         fi
@@ -51,7 +64,7 @@ svc="$(node_container || true)"
 [[ -n "$svc" ]] || die "no Patroni node is running (try: make up PROFILES=pg,ha)"
 
 patronictl() {
-    docker compose exec -T "$svc" patronictl -c /etc/patroni/patroni.yml "$@"
+    mdb_svc_exec "$svc" patronictl -c /etc/patroni/patroni.yml "$@"
 }
 
 case "$verb" in
@@ -73,9 +86,9 @@ case "$verb" in
         printf '\n'
         printf 'This promotes a different node to leader. In-flight transactions on the\n'
         printf 'current leader will be terminated.\n\n'
-        printf 'Type the cluster name (%s) to continue: ' "$(grep -E '^MDB_HA_CLUSTER_NAME=' .env 2>/dev/null | cut -d= -f2- || printf 'mdb-pg')"
+        printf 'Type the cluster name (%s) to continue: ' "$(c="$(mdb_env_get MDB_HA_CLUSTER_NAME .env)"; printf '%s' "${c:-mdb-pg}")"
         read -r answer
-        expected="$(grep -E '^MDB_HA_CLUSTER_NAME=' .env 2>/dev/null | cut -d= -f2-)"
+        expected="$(mdb_env_get MDB_HA_CLUSTER_NAME .env)"
         expected="${expected:-mdb-pg}"
         [[ "$answer" == "$expected" ]] || die "confirmation did not match; nothing was changed"
 
@@ -94,7 +107,7 @@ case "$verb" in
         printf 'Type %s to continue: ' "$NODE"
         read -r answer
         [[ "$answer" == "$NODE" ]] || die "confirmation did not match; nothing was changed"
-        patronictl reinit --force "$(grep -E '^MDB_HA_CLUSTER_NAME=' .env 2>/dev/null | cut -d= -f2- || printf 'mdb-pg')" "$NODE"
+        patronictl reinit --force "$(c="$(mdb_env_get MDB_HA_CLUSTER_NAME .env)"; printf '%s' "${c:-mdb-pg}")" "$NODE"
         log "reinit requested; watch progress with: make ha-status"
         ;;
 

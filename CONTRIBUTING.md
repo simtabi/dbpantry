@@ -20,17 +20,32 @@ cd dbpantry
 make init
 make verify-structure   # harness self-test; must be green
 make verify             # full acceptance harness
+make verify-fast        # the fast, Docker-light subset
+make verify CHECKS=21,28        # only these checks
+make verify TAGS=backup,pg      # checks carrying any of these tags
 ```
 
-Docker is required — Docker Desktop, OrbStack, or colima. Podman is best-effort
-and untested in CI. If `docker info` fails, stop; nothing here is mocked.
+Where things live: compose files and the Makefile at the root, one command
+per file in `scripts/`, checks in `scripts/verify/`, engine descriptors in
+`engines/`, image sources in `images/`, files mounted into third-party
+containers in `config/`, and documentation in `docs/guides/`,
+`docs/runbooks/` and `docs/reference/`. The reasoning is in
+[docs/reorganization-plan.md](docs/reorganization-plan.md).
+
+A container runtime is required: Docker (Desktop, OrbStack, Colima, Rancher
+Desktop) or Podman; nerdctl is best effort. CI runs on Docker. Check yours with
+`scripts/runtime info`, and if no engine is reachable, stop; nothing here is
+mocked. Scripts reach the runtime only through `scripts/runtime-lib.sh`; see
+[Container runtimes](docs/guides/runtimes.md).
 
 ## Conventions
 
 - **Bash must be shellcheck-clean.** `make lint` runs shellcheck over every
   script and must pass with no warnings.
 - **Pinned versions and digests everywhere.** No `latest` in any Dockerfile,
-  compose file, or workflow. Renovate raises the bumps.
+  compose file, or workflow. Dependabot raises action and Caddy bumps; the
+  digest-pinned bases in `images/bases.tsv` are re-pinned by hand (see
+  [Release](docs/guides/release.md)).
 - **No secret in any file, layer, or log.** Passwords travel via the `_FILE`
   convention only. `make verify` greps the repository and image history for
   credentials and fails on a hit.
@@ -46,12 +61,12 @@ and untested in CI. If `docker info` fails, stop; nothing here is mocked.
 - No emoji in commit messages.
 - Name the phase and task where it applies, e.g. `phase 2: pg image s6 tree`.
 - A pull request should describe what changed, which check proves it, and any
-  entry it added to the `DESIGN.md` decision log.
+  entry it added to the `design.md` decision log.
 
 ## Spec gaps
 
-If `docs/SPEC.md` is ambiguous, wrong, or silent on something you need, do not
-deviate quietly. Add an entry to the `DESIGN.md` decision log recording what the
+If `docs/reference/spec.md` is ambiguous, wrong, or silent on something you need, do not
+deviate quietly. Add an entry to the `design.md` decision log recording what the
 spec said, what you did, and why — then proceed.
 
 ## Reporting security issues

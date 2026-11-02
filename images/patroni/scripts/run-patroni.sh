@@ -17,15 +17,67 @@ source /usr/local/lib/mdb/mdb-lib.sh
 
 name="${PATRONI_NAME:?PATRONI_NAME is required}"
 scope="${PATRONI_SCOPE:-mdb-pg}"
-etcd_hosts="${PATRONI_ETCD3_HOSTS:?PATRONI_ETCD3_HOSTS is required}"
 
-# Accept the comma-separated form compose passes and emit YAML list items.
-# Quotes are stripped so both "a:1,b:2" and "'a:1','b:2'" work; getting that
-# wrong is silent, because a quoted host is still a valid YAML string.
-etcd_hosts_yaml="$(printf '%s' "$etcd_hosts" \
-    | tr ',' '\n' \
-    | sed "s/^[[:space:]]*['\"]*//; s/['\"]*[[:space:]]*$//" \
-    | sed '/^$/d; s/^/    - /')"
+# Where the cluster state lives (design.md D-65). etcd3 is the Compose
+# topology. kubernetes keeps the leader lock in ConfigMaps of the pod's own
+# namespace and labels each pod with its role, which is what the chart's pg
+# (primary) and pg-ro (replica) Services select on -- no etcd, no HAProxy.
+dcs="${MDB_PATRONI_DCS:-etcd3}"
+# Members reach each other by this address: the compose hostname, or the pod
+# IP on Kubernetes, where a pod's name is not resolvable on its own.
+connect_host="${MDB_PATRONI_CONNECT_ADDRESS:-$name}"
+
+case "$dcs" in
+    etcd3)
+        etcd_hosts="${PATRONI_ETCD3_HOSTS:?PATRONI_ETCD3_HOSTS is required}"
+        # Accept the comma-separated form compose passes and emit YAML list
+        # items. Quotes are stripped so both "a:1,b:2" and "'a:1','b:2'" work;
+        # getting that wrong is silent, because a quoted host is still a valid
+        # YAML string.
+        etcd_hosts_yaml="$(printf '%s' "$etcd_hosts" \
+            | tr ',' '\n' \
+            | sed "s/^[[:space:]]*['\"]*//; s/['\"]*[[:space:]]*$//" \
+            | sed '/^$/d; s/^/    - /')"
+        # A YAML LIST. PATRONI_ETCD3_HOSTS is a comma-separated scalar when
+        # Patroni reads it from the environment, and writing that form straight
+        # into the file is a parse error at the first comma -- Patroni exits
+        # before it ever contacts etcd, and the container just looks unhealthy.
+        dcs_yaml="etcd3:
+  hosts:
+${etcd_hosts_yaml}"
+        # The old product name stays: a new namespace orphans an existing
+        # cluster (D-54).
+        global_ns="namespace: /multidb-server/"
+        ;;
+    kubernetes)
+        k8s_ns="${MDB_PATRONI_K8S_NAMESPACE:?MDB_PATRONI_K8S_NAMESPACE is required for the kubernetes DCS}"
+        # Flow-style YAML map of the labels that select this cluster's pods,
+        # e.g. {app.kubernetes.io/instance: mdb, app.kubernetes.io/component: pg}.
+        k8s_labels="${MDB_PATRONI_K8S_LABELS:?MDB_PATRONI_K8S_LABELS is required for the kubernetes DCS}"
+        # ConfigMaps, not Endpoints: Endpoints mode needs a selector-less
+        # Service Patroni owns, and the chart's Services select on the role
+        # label instead. Role values are spelled out because Patroni 4 changed
+        # its defaults, and the Services depend on them.
+        dcs_yaml="kubernetes:
+  namespace: ${k8s_ns}
+  labels: ${k8s_labels}
+  scope_label: cluster-name
+  role_label: role
+  leader_label_value: primary
+  follower_label_value: replica
+  standby_leader_label_value: primary
+  use_endpoints: false
+  pod_ip: ${connect_host}
+  ports:
+    - name: db
+      port: 5432"
+        # No global namespace: Patroni copies it into the DCS config, where it
+        # replaces kubernetes.namespace and every API call goes to a namespace
+        # called /multidb-server/.
+        global_ns=""
+        ;;
+    *) die "MDB_PATRONI_DCS must be etcd3 or kubernetes, not $dcs" ;;
+esac
 data_dir="${PGDATA:-/var/lib/postgresql/data}"
 conf=/etc/patroni/patroni.yml
 
@@ -79,23 +131,16 @@ stage "writing $conf for node $name in scope $scope"
 cat > "$conf" <<YAML
 scope: ${scope}
 name: ${name}
-# The old product name stays: a new namespace orphans an existing cluster (D-54).
-namespace: /multidb-server/
+${global_ns}
 
 restapi:
   listen: 0.0.0.0:8008
-  connect_address: ${name}:8008
+  connect_address: ${connect_host}:8008
   authentication:
     username: patroni
     password: '${rest_pw}'
 
-etcd3:
-  # A YAML LIST. PATRONI_ETCD3_HOSTS is a comma-separated scalar when Patroni
-  # reads it from the environment, and writing that form straight into the file
-  # is a parse error at the first comma -- Patroni exits before it ever contacts
-  # etcd, and the container just looks unhealthy.
-  hosts:
-${etcd_hosts_yaml}
+${dcs_yaml}
 
 bootstrap:
   # DCS values are written to etcd once, by whichever node bootstraps, and are
@@ -143,19 +188,9 @@ bootstrap:
     - auth-host: scram-sha-256
     - auth-local: peer
 
-  # pg_hba as Patroni writes it on bootstrap. Same shape the standalone image
-  # generates, plus the replication rules the cluster needs.
-  pg_hba:
-    - local   all             postgres                    peer
-    - local   all             all                         scram-sha-256
-    - hostssl all             all         127.0.0.1/32    scram-sha-256
-    - hostssl all             all         ::1/128         scram-sha-256
-    - hostssl all             all         0.0.0.0/0       scram-sha-256
-    - hostssl replication     replicator  0.0.0.0/0       scram-sha-256
-
 postgresql:
   listen: 0.0.0.0:5432
-  connect_address: ${name}:5432
+  connect_address: ${connect_host}:5432
   data_dir: ${data_dir}
   bin_dir: /usr/lib/postgresql/${PG_MAJOR:-17}/bin
   pgpass: /tmp/pgpass0
@@ -168,6 +203,30 @@ postgresql:
       password: '${repl_pw}'
   parameters:
     shared_buffers: ${MDB_PG_SHARED_BUFFERS:-256MB}
+  # pg_hba, which Patroni writes every time it starts PostgreSQL. Same shape
+  # the standalone image generates, plus the replication rules the cluster
+  # needs. Here and not under bootstrap:, where it is written once: the
+  # image's start-up hardening (30-certs.sh) regenerates pg_hba.conf on every
+  # container start without them, so a member that restarts -- the old
+  # primary after a failover, or any pod Kubernetes reschedules -- and later
+  # leads would refuse every replica.
+  pg_hba:
+    - local   all             postgres                    peer map=mdb
+    - local   all             all                         scram-sha-256
+    - hostssl all             all         127.0.0.1/32    scram-sha-256
+    - hostssl all             all         ::1/128         scram-sha-256
+    - hostssl all             all         0.0.0.0/0       scram-sha-256
+    - hostssl replication     replicator  0.0.0.0/0       scram-sha-256
+    # Pod networks may be IPv6 (or dual-stack) on Kubernetes.
+    - hostssl all             all         ::/0            scram-sha-256
+    - hostssl replication     replicator  ::/0            scram-sha-256
+  # kubectl exec and docker exec run as root: map root (and postgres) to the
+  # postgres role on the socket, as the standalone image does, so host-side
+  # make backup, restore and psql work against a member. Peer still checks a
+  # real OS identity; this names exactly which ones.
+  pg_ident:
+    - mdb        root              postgres
+    - mdb        postgres          postgres
 
 tags:
   nofailover: false

@@ -14,7 +14,7 @@ cd "$ROOT" || exit 1
 ENV_FILE="${MDB_ENV_FILE:-$ROOT/.env}"
 [[ -f "$ENV_FILE" ]] || ENV_FILE="$ROOT/.env.example"
 
-profiles="${COMPOSE_PROFILES:-$(grep -E '^MDB_PROFILES=' "$ENV_FILE" 2>/dev/null | tail -1 | cut -d= -f2- || true)}"
+profiles="${COMPOSE_PROFILES:-$(mdb_env_get MDB_PROFILES "$ENV_FILE")}"
 profiles="${profiles:-pg,ui}"
 
 # Dev and prod are separate templates rather than one file full of
@@ -22,13 +22,13 @@ profiles="${profiles:-pg,ui}"
 # env-render fails loudly if either is missing, which is the behaviour we want
 # for a UI that would otherwise be published with no password.
 if [[ ",${profiles}," == *",prod,"* ]]; then
-    caddy_template="caddy/Caddyfile.prod.tmpl"
+    caddy_template="config/caddy/Caddyfile.prod.tmpl"
 else
-    caddy_template="caddy/Caddyfile.tmpl"
+    caddy_template="config/caddy/Caddyfile.tmpl"
 fi
 
-MDB_ENV_FILE="$ENV_FILE" "$ROOT/scripts/env-render" "$caddy_template" "$ROOT/caddy/Caddyfile"
-MDB_ENV_FILE="$ENV_FILE" "$ROOT/scripts/env-render" "caddy/servers.json.tmpl" "$ROOT/caddy/servers.json"
+MDB_ENV_FILE="$ENV_FILE" "$ROOT/scripts/env-render" "$caddy_template" "$ROOT/config/caddy/Caddyfile"
+MDB_ENV_FILE="$ENV_FILE" "$ROOT/scripts/env-render" "config/caddy/servers.json.tmpl" "$ROOT/config/caddy/servers.json"
 
 # -----------------------------------------------------------------------------
 # Normalise the one secret whose mode must differ

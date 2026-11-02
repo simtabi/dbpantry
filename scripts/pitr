@@ -16,6 +16,8 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# shellcheck source=backend-lib.sh
+. "$ROOT/scripts/backend-lib.sh"
 cd "$ROOT" || exit 1
 
 log() { printf '[pitr] %s\n' "$*"; }
@@ -23,7 +25,7 @@ die() { printf '[pitr] ERROR: %s\n' "$*" >&2; exit 1; }
 
 ENV_FILE="${MDB_ENV_FILE:-$ROOT/.env}"
 [[ -f "$ENV_FILE" ]] || ENV_FILE="$ROOT/.env.example"
-get() { grep -E "^${1}=" "$ENV_FILE" 2>/dev/null | tail -1 | cut -d= -f2- || true; }
+get() { mdb_env_get "$1" "$ENV_FILE"; }
 
 stanza="$(get MDB_PGBACKREST_STANZA)"; stanza="${stanza:-mdb}"
 ENGINE=pg
@@ -70,7 +72,7 @@ pitr_enabled || die "PITR is off for $ENGINE. Set MDB_${upper}_PITR=true and res
        neither archive_mode nor log_bin can be enabled without one, so this is
        not a live toggle."
 
-pgbr() { docker compose exec -T -u postgres "$svc" pgbackrest --stanza="$stanza" "$@"; }
+pgbr() { mdb_svc_exec -u postgres "$svc" pgbackrest --stanza="$stanza" "$@"; }
 
 # -----------------------------------------------------------------------------
 # MySQL family: the binary log
@@ -80,7 +82,7 @@ if is_mysql_family; then
     dir="$(binlog_dir)"
 
     my() {
-        docker compose exec -T "$svc" "$client" --protocol=socket -uroot \
+        mdb_svc_exec "$svc" "$client" --protocol=socket -uroot \
             -p"$(root_pw)" -N -B -e "$1" 2>/dev/null
     }
 
@@ -107,7 +109,7 @@ if is_mysql_family; then
     # final file stops at the byte offset.
     files_through() {
         local target_file="$1" f out=""
-        for f in $(docker compose exec -T "$svc" sh -c "ls -1 '$dir' 2>/dev/null" \
+        for f in $(mdb_svc_exec "$svc" sh -c "ls -1 '$dir' 2>/dev/null" \
                     | tr -d '\r' | grep -E '^binlog\.[0-9]+$' | sort); do
             out="$out $dir/$f"
             [ "$f" = "$target_file" ] && break
@@ -118,7 +120,7 @@ if is_mysql_family; then
     case "$verb" in
         info)
             log "binary logs in $dir (their own volume, not inside the data directory)"
-            docker compose exec -T "$svc" sh -c "ls -lh '$dir' 2>/dev/null" || true
+            mdb_svc_exec "$svc" sh -c "ls -lh '$dir' 2>/dev/null" || true
             printf '\n'
             log "current coordinate: $(coordinate_now)"
             printf '\n'
@@ -182,11 +184,11 @@ if is_mysql_family; then
 
             log "replaying:$logs"
             # shellcheck disable=SC2086  # $logs is a deliberate argument list
-            docker compose exec -T "$svc" "$tool" ${stop_args[@]+"${stop_args[@]}"} $logs \
+            mdb_svc_exec "$svc" "$tool" ${stop_args[@]+"${stop_args[@]}"} $logs \
                 > /tmp/mdb-replay.$$.sql 2>/dev/null \
                 || { rm -f "/tmp/mdb-replay.$$.sql"; die "reading the binary log failed"; }
 
-            docker compose exec -T "$svc" "$client" --protocol=socket -uroot -p"$(root_pw)" \
+            mdb_svc_exec "$svc" "$client" --protocol=socket -uroot -p"$(root_pw)" \
                 < "/tmp/mdb-replay.$$.sql" \
                 || { rm -f "/tmp/mdb-replay.$$.sql"; die "applying the binary log failed"; }
             rm -f "/tmp/mdb-replay.$$.sql"
@@ -222,12 +224,15 @@ case "$verb" in
         ;;
 
     restore)
+        # Stop, restore into the data volume, start: Compose verbs on purpose.
+        # On Kubernetes a PITR restore is a Job (docs/guides/kubernetes.md).
+        mdb_backend_require compose || exit 64
         [[ -n "$TARGET" ]] || die "specify a target: --to '2026-08-09 12:34:56' or --to latest"
 
         printf 'This STOPS PostgreSQL and REPLACES its data directory with a recovery\n'
         printf 'to: %s\n\n' "$TARGET"
         printf 'Everything written after that point is discarded. If you are not sure the\n'
-        printf 'target is right, restore into a copy instead -- see docs/RESTORE.md.\n\n'
+        printf 'target is right, restore into a copy instead -- see docs/runbooks/restore.md.\n\n'
         printf 'Type the stanza name (%s) to continue: ' "$stanza"
         read -r answer
         [[ "$answer" == "$stanza" ]] || die "confirmation did not match; nothing was changed"
@@ -235,21 +240,21 @@ case "$verb" in
         # PostgreSQL must be down: pgbackrest restore overwrites the data
         # directory, and doing that under a running server corrupts it.
         log "stopping PostgreSQL"
-        docker compose stop "$svc" >/dev/null
+        mdb_compose stop "$svc" >/dev/null
 
         log "restoring"
         if [[ "$TARGET" == "latest" ]]; then
-            docker compose run --rm --no-deps -u postgres "$svc" \
+            mdb_compose run --rm --no-deps -u postgres "$svc" \
                 pgbackrest --stanza="$stanza" --delta restore
         else
-            docker compose run --rm --no-deps -u postgres "$svc" \
+            mdb_compose run --rm --no-deps -u postgres "$svc" \
                 pgbackrest --stanza="$stanza" --delta \
                 --type=time --target="$TARGET" --target-action=promote restore
         fi
 
         log "starting PostgreSQL; it will replay WAL up to the target"
-        docker compose start "$svc" >/dev/null
-        log "recovery started. Watch it finish with: docker compose logs -f $svc"
+        mdb_compose start "$svc" >/dev/null
+        log "recovery started. Watch it finish with: mdb_compose logs -f $svc"
         ;;
 
     *)

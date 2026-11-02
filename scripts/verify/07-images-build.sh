@@ -5,7 +5,7 @@
 
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
-need_docker
+need_runtime
 
 # Ordering matters: this check runs before every check that needs an image, and
 # building is its deliberate side effect. So it builds everything present FIRST

@@ -5,7 +5,7 @@
 
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
-need_docker
+need_runtime
 
 # SPEC section 18: "Two projects per engine, isolated roles, cross-access
 # denied." Provisioning that creates the databases but leaves project A able to
@@ -17,41 +17,41 @@ need_image "$img"
 name="mdb-verify-triplet-$$"
 track_container "$name"
 
-docker run -d --name "$name" \
-    -e POSTGRES_PASSWORD=mdb-throwaway-verify \
-    -e MDB_PG_DATABASES="alpha:alpha_user:mdb-throwaway-alpha,beta:beta_user:mdb-throwaway-beta" \
+mdb_ctr run -d --name "$name" \
+    -e POSTGRES_PASSWORD="${TW_VERIFY}" \
+    -e MDB_PG_DATABASES="alpha:alpha_user:${TW_ALPHA},beta:beta_user:${TW_BETA}" \
     "$img" >/dev/null || vfail "container failed to start with triplet provisioning"
 
-wait_ready 60 "postgres to accept connections" docker exec "$name" pg_isready -U postgres
+wait_ready 60 "postgres to accept connections" mdb_ctr exec "$name" pg_isready -U postgres
 
 # Both databases and both roles must exist.
 for db in alpha beta; do
-    docker exec "$name" psql -U postgres -tAc \
+    mdb_ctr exec "$name" psql -U postgres -tAc \
         "SELECT 1 FROM pg_database WHERE datname='$db'" 2>/dev/null | grep -q 1 \
         || vfail "database '$db' was not provisioned"
 done
 for role in alpha_user beta_user; do
-    docker exec "$name" psql -U postgres -tAc \
+    mdb_ctr exec "$name" psql -U postgres -tAc \
         "SELECT 1 FROM pg_roles WHERE rolname='$role'" 2>/dev/null | grep -q 1 \
         || vfail "role '$role' was not provisioned"
 done
 vinfo "both databases and both roles provisioned"
 
 # Owner must be able to work in its own database.
-docker exec -e PGPASSWORD=mdb-throwaway-alpha "$name" \
+mdb_ctr exec -e PGPASSWORD="${TW_ALPHA}" "$name" \
     psql -U alpha_user -d alpha -tAc "CREATE TABLE t(i int); DROP TABLE t;" >/dev/null 2>&1 \
     || vfail "alpha_user cannot create a table in its own database"
 vinfo "alpha_user owns its own database"
 
 # The isolation assertion: alpha_user must NOT reach beta.
-if docker exec -e PGPASSWORD=mdb-throwaway-alpha "$name" \
+if mdb_ctr exec -e PGPASSWORD="${TW_ALPHA}" "$name" \
     psql -U alpha_user -d beta -tAc "SELECT 1" >/dev/null 2>&1; then
     vfail "alpha_user connected to database beta; projects are not isolated"
 fi
 vinfo "alpha_user denied on database beta"
 
 # No app role may hold superuser.
-supers="$(docker exec "$name" psql -U postgres -tAc \
+supers="$(mdb_ctr exec "$name" psql -U postgres -tAc \
     "SELECT rolname FROM pg_roles WHERE rolsuper AND rolname LIKE '%_user'" 2>/dev/null || true)"
 [[ -z "$supers" ]] || vfail "app roles hold superuser: $supers"
 vinfo "no app role holds superuser"

@@ -27,8 +27,7 @@ mode="${1:-versions}"
 # licence) has no Dockerfile of ours, and an engine that is declared but not
 # yet implemented has none either -- neither belongs in a build matrix.
 buildable() {
-    [ "${MDB_ENGINE_PUBLISH:-derive}" = "derive" ] \
-        && [ -f "$ROOT/images/$MDB_ENGINE_NAME/Dockerfile" ]
+    [ "${MDB_ENGINE_PUBLISH:-derive}" = "derive" ] && engine_implemented
 }
 
 first=1

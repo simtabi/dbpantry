@@ -11,6 +11,8 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# shellcheck source=backend-lib.sh
+. "$ROOT/scripts/backend-lib.sh"
 cd "$ROOT" || exit 1
 
 PROD=0
@@ -78,7 +80,7 @@ gen_secret patroni_rest_password.txt
 
 # Poolers hold a credential of their own. pgBouncer never stores an application
 # user's password -- it looks verifiers up with auth_query -- so this is the
-# only one it has. See docs/pooling.md.
+# only one it has. See docs/guides/pooling.md.
 gen_secret pgbouncer_password.txt
 
 # ProxySQL's admin interface and its monitor account. Neither is an application
@@ -130,10 +132,10 @@ if (( PROD )); then
     # Found by SERVICE, not by a substring of the image name. The pattern used
     # to be /image: caddy:/, which stopped matching the moment the image became
     # one we build -- and the only symptom was "could not compute the UI
-    # password hash (is docker running?)", which blames Docker.
+    # password hash (is the container runtime running? scripts/runtime info)", which blames Docker.
     caddy_image="$(awk '/^  caddy:/{f=1} f && /^[[:space:]]+image:/{print $2; exit}' \
         "$ROOT/docker-compose.yml")"
-    ui_hash="$(docker run --rm "$caddy_image" caddy hash-password --plaintext "$ui_password" 2>/dev/null || true)"
+    ui_hash="$(mdb_ctr run --rm "$caddy_image" caddy hash-password --plaintext "$ui_password" 2>/dev/null || true)"
     if [[ -z "$ui_hash" ]]; then
         printf '  could not compute the UI password hash (is docker running?)\n' >&2
         printf '  set MDB_UI_BASIC_AUTH_HASH manually: caddy hash-password\n' >&2
@@ -143,11 +145,10 @@ if (( PROD )); then
     # BSD and GNU sed disagree about -i, so edit through a temporary file.
     tmp="$(mktemp)"
     sed -e 's|^MDB_TLS_ENFORCE=.*|MDB_TLS_ENFORCE=true|' \
-        -e 's|^MDB_PROFILES=.*|MDB_PROFILES=pg,prod,backup|' \
+        -e 's|^MDB_PROFILES=.*|MDB_PROFILES="pg,prod,backup"|' \
         -e 's|^MDB_PG_SLOW_MS=.*|MDB_PG_SLOW_MS=0|' \
         -e 's|^MDB_MYSQL_SLOW_SECONDS=.*|MDB_MYSQL_SLOW_SECONDS=0|' \
         -e 's|^MDB_MARIADB_SLOW_SECONDS=.*|MDB_MARIADB_SLOW_SECONDS=0|' \
-        -e 's|^MDB_BACKUP_ENCRYPT=.*|MDB_BACKUP_ENCRYPT=true|' \
         -e 's|^MDB_PG_PITR=.*|MDB_PG_PITR=true|' \
         -e 's|^MDB_PGBACKREST_REPO_TYPE=.*|MDB_PGBACKREST_REPO_TYPE=s3|' \
         -e 's|^#MDB_PG_HOST_PORT=.*|#MDB_PG_HOST_PORT=|' \
@@ -156,7 +157,11 @@ if (( PROD )); then
         "$TARGET" > "$tmp"
     mv "$tmp" "$TARGET"
 
-    printf '  TLS enforced, no engine ports published, backups encrypted\n'
+    printf '  TLS enforced, no engine ports published\n'
+    # Said every time, because the opposite was printed here until it was
+    # found to be false: nothing encrypts the dumps (MDB_BACKUP_ENCRYPT is
+    # reserved). Only the pgBackRest repository has a cipher.
+    printf '  dumps in %s are NOT encrypted; only the pgBackRest PITR repository is\n' "$(mdb_env_get MDB_BACKUP_DIR "$TARGET")"
     printf '  UI login: admin / (see secrets/ui_password.txt)\n'
     printf '\n'
     # shellcheck disable=SC2016  # backticks are prose here, not substitution

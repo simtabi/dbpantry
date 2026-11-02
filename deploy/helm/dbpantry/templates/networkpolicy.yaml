@@ -1,0 +1,31 @@
+{{- if .Values.networkPolicy.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ .Release.Name }}-dbpantry
+  labels:
+    app.kubernetes.io/name: dbpantry
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+  # Every dbpantry pod of this release: engines, HA members, backup jobs.
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: dbpantry
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        # Pods in this namespace (the apps of the project, and dbpantry itself).
+        - podSelector: {}
+        {{- $pg := .Values.engines.pg }}
+        {{- if and $pg.enabled $pg.ha.enabled (eq $pg.ha.provider "cnpg") }}
+        # The CloudNativePG operator polls each instance's status endpoint.
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ $pg.ha.cnpg.operatorNamespace }}
+        {{- end }}
+        {{- with .Values.networkPolicy.extraFrom }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+{{- end }}

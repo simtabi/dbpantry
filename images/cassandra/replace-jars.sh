@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Replace vendored JARs in Cassandra's lib/ with the fixed releases pinned in
-# jars.tsv (DESIGN.md D-55).
+# jars.tsv (design.md D-55).
 #
 #   replace-jars.sh <manifest> <series> <libdir>
 #
@@ -54,7 +54,16 @@ while IFS=$'\t' read -r s old coord sha || [[ -n "$s" ]]; do
     news+=("$jar")
 done < "$manifest"
 
-(( ${#news[@]} > 0 )) || die "jars.tsv has no rows for Cassandra $series"
+# A series with no rows is a series this project does not maintain. Built on
+# purpose from MDB_CASSANDRA_BASE_IMAGE (UNSUPPORTED_VERSION=true) it keeps
+# upstream's JARs, said loudly; built any other way it is a mistake.
+if (( ${#news[@]} == 0 )); then
+    if [[ "${UNSUPPORTED_VERSION:-false}" == "true" ]]; then
+        echo "replace-jars: WARNING: no rows for Cassandra $series; its vendored JARs are left as upstream ships them (unsupported, no scan guarantee)" >&2
+        exit 0
+    fi
+    die "jars.tsv has no rows for Cassandra $series"
+fi
 
 for i in "${!news[@]}"; do
     [[ "${olds[$i]}" == "-" ]] || rm -f "$lib/${olds[$i]}"

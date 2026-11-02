@@ -4,15 +4,15 @@
 # truth). It varies by PostgreSQL major, which is why it cannot be a literal
 # here; scripts/verify/02-pinned-versions.sh validates that file so the
 # indirection is not a way to smuggle in an unpinned base.
-ARG BASE_IMAGE=pgvector/pgvector:0.8.6-pg17@sha256:7ae6051efd0e60444282c27c7e141af07f322ce033300e727a49c3dd11075e38
+ARG BASE_IMAGE=docker.io/pgvector/pgvector:0.8.6-pg17@sha256:7ae6051efd0e60444282c27c7e141af07f322ce033300e727a49c3dd11075e38
 # The Go toolchain the gotools stage builds with; pinned in images/bases.tsv
 # (row `toolchain go`) and passed by scripts/build, like BASE_IMAGE.
-ARG GO_IMAGE=golang:1.27.3-bookworm@sha256:d9b6a1beb9474adc2a1ce842573639b44b2a0dd49b6669f51d3821baf9ec37c9
+ARG GO_IMAGE=docker.io/library/golang:1.27.3-bookworm@sha256:d9b6a1beb9474adc2a1ce842573639b44b2a0dd49b6669f51d3821baf9ec37c9
 
 # =============================================================================
 # Builder: the four extensions PGDG does not package.
 #
-# DESIGN.md D-07: pg_graphql ships official prebuilt .deb packages for pg14-18
+# design.md D-07: pg_graphql ships official prebuilt .deb packages for pg14-18
 # on both amd64 and arm64, so it is downloaded rather than compiled. pg_net and
 # pgsodium are portable C and are built here. pgjwt is pure plpgsql and is
 # vendored, pinned to a commit, because upstream is unmaintained (D-06).
@@ -25,10 +25,10 @@ ARG PG_NET_VERSION=0.20.5
 # Held one release behind on purpose. pgsodium 3.1.11 added crypto_ipcrypt and
 # with it a requirement for libsodium >= 1.0.20; Debian 12 bookworm ships
 # 1.0.18, and so does Debian 13 trixie, so this is not fixable by moving base
-# image. 3.1.9 is the last release that builds against 1.0.18. See DESIGN.md D-25.
+# image. 3.1.9 is the last release that builds against 1.0.18. See design.md D-25.
 ARG PGSODIUM_VERSION=3.1.9
 # michelp/pgjwt has no releases and its last commit is from 2023-03-02, so it is
-# pinned by commit rather than tag. See DESIGN.md D-06.
+# pinned by commit rather than tag. See design.md D-06.
 ARG PGJWT_COMMIT=f3d82fd30151e754e19ce5d6a06c71c20689ce3d
 
 ENV DEBIAN_FRONTEND=noninteractive
@@ -66,7 +66,7 @@ RUN set -eux; \
 # real files at runtime even if they were copied.
 #
 # Flattening the symlinks into real files removes both failure modes.
-# See DESIGN.md D-26.
+# See design.md D-26.
 RUN set -eux; \
     find /build/out/usr/share/postgresql -type l -name 'pg_graphql*' | while read -r link; do \
         target="$(readlink -f "$link")"; \
@@ -102,7 +102,7 @@ RUN set -eux; \
 
 # =============================================================================
 # Go tools, rebuilt from their upstream release tags on a patched toolchain
-# (DESIGN.md D-51). The released binaries carry the Go standard library of the
+# (design.md D-51). The released binaries carry the Go standard library of the
 # day they were cut, and their CVEs with it; the same tag rebuilt on current Go
 # does not. Cross-compiled on the build platform: arm64 is never emulated.
 # =============================================================================
@@ -154,7 +154,7 @@ ENV DEBIAN_FRONTEND=noninteractive \
 
 # --- PGDG extensions + the baked tool suite ----------------------------------
 # Every package here was confirmed available for arm64 against PGDG bookworm
-# during step 1 research (DESIGN.md section 4).
+# during step 1 research (design.md section 4).
 RUN set -eux; \
     apt-get update; \
     # The base digest predates Debian's pcre2, expat and perl security updates.
@@ -193,7 +193,7 @@ RUN set -eux; \
         libsodium23; \
     rm -rf /var/lib/apt/lists/*
 
-# gosu, rclone and postgres_exporter, rebuilt in the gotools stage (DESIGN.md D-51).
+# gosu, rclone and postgres_exporter, rebuilt in the gotools stage (design.md D-51).
 #   - rclone comes from its upstream tag rather than the distribution, pinned like
 #     the other engine images (SPEC section 6.1); Debian's package trails upstream.
 #   - postgres_exporter is the optional embedded exporter (SPEC section 6.1): present
@@ -208,7 +208,7 @@ RUN set -eux; gosu --version; gosu nobody true; rclone version | head -1; postgr
 COPY --from=builder /build/out/usr/ /usr/
 
 # --- s6-overlay v3 as PID 1 ---------------------------------------------------
-# DESIGN.md D-19: s6 must start as root to run its init stages (permissions,
+# design.md D-19: s6 must start as root to run its init stages (permissions,
 # certificate placement, conf assembly) and then drops to the postgres user via
 # s6-setuidgid. The container user is therefore root; no engine process is.
 RUN set -eux; \
@@ -248,7 +248,7 @@ RUN set -eux; \
 #
 # The correct split is SIGTERM to s6, which then stops each service with that
 # service's own down-signal -- SIGINT for PostgreSQL. See s6/mdb-postgres/
-# down-signal and DESIGN.md D-09.
+# down-signal and design.md D-09.
 
 # Wait indefinitely for init stages rather than starting the engine early, and
 # bring the whole container down if an init stage fails instead of running a

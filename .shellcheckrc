@@ -3,3 +3,7 @@
 # statically. SCRIPTDIR tells it to look next to the script being checked.
 source-path=SCRIPTDIR
 external-sources=true
+
+# SC2119: the backend verbs (mdb_be_running, mdb_be_info, ...) forward "$@" to
+# the backend, and most callers rightly pass nothing (design.md D-62).
+disable=SC2119

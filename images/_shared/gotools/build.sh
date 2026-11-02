@@ -2,7 +2,7 @@
 # build-go-tool <name> <git-url> <tag> <package> <output> [module@version ...]
 #
 # Builds one upstream Go binary from its release tag, on the toolchain this
-# stage runs on, for the image's target architecture (DESIGN.md D-51).
+# stage runs on, for the image's target architecture (design.md D-51).
 #
 # The released binaries of gosu, postgres_exporter and rclone are compiled with
 # whichever Go was current on their release day, so a Go standard-library CVE

@@ -4,14 +4,14 @@
 # scripts and s6 tree with the MySQL image (see images/_shared/mysql-family).
 #
 # BASE_IMAGE is passed digest-pinned from images/bases.tsv.
-ARG BASE_IMAGE=mariadb:11.4.13@sha256:1292844148b311e4ed4300022a996d39083f415a963e970cf47cad1b3b18e3a6
+ARG BASE_IMAGE=docker.io/library/mariadb:11.8.9@sha256:6422478cb8e159f080fb1d8ccf65101e26fe51385787fde7d16c3b165a331f15
 # The Go toolchain the gotools stage builds with; pinned in images/bases.tsv
 # (row `toolchain go`) and passed by scripts/build, like BASE_IMAGE.
-ARG GO_IMAGE=golang:1.27.3-bookworm@sha256:d9b6a1beb9474adc2a1ce842573639b44b2a0dd49b6669f51d3821baf9ec37c9
+ARG GO_IMAGE=docker.io/library/golang:1.27.3-bookworm@sha256:d9b6a1beb9474adc2a1ce842573639b44b2a0dd49b6669f51d3821baf9ec37c9
 
 # =============================================================================
 # Go tools, rebuilt from their upstream release tags on a patched toolchain
-# (DESIGN.md D-51). The released binaries carry the Go standard library of the
+# (design.md D-51). The released binaries carry the Go standard library of the
 # day they were cut, and their CVEs with it; the same tag rebuilt on current Go
 # does not. Cross-compiled on the build platform: arm64 is never emulated.
 # =============================================================================
@@ -38,7 +38,7 @@ RUN LDFLAGS="-X github.com/rclone/rclone/fs.VersionSuffix=" \
 
 FROM ${BASE_IMAGE}
 
-ARG ENGINE_VERSION=11.4
+ARG ENGINE_VERSION=11.8
 ARG S6_OVERLAY_VERSION=3.2.3.2
 
 LABEL org.opencontainers.image.title="dbpantry-mariadb" \
@@ -51,14 +51,15 @@ USER root
 ENV DEBIAN_FRONTEND=noninteractive
 
 # Ubuntu 24.04, so apt. The base already carries tar, xz, zstd, gosu, procps
-# and openssl; curl and unzip are what it lacks (DESIGN.md D-17).
+# and openssl; curl and unzip are what it lacks (design.md D-17).
 RUN set -eux; \
     apt-get update; \
     apt-get install -y --no-install-recommends ca-certificates curl unzip; \
-    # The 10.11 digest (Ubuntu 22.04) predates Ubuntu's libssl3 security
-    # update. It is fixable, so it is fixed -- named package only, and only
-    # where it is installed: 11.4 and 11.8 are Ubuntu 24.04, which ships
-    # libssl3t64 instead, and their pinned bases do not move.
+    # An Ubuntu 22.04 base -- 10.11, which is no longer maintained here but
+    # can still be built through MDB_MARIADB_BASE_IMAGE (design.md D-57) --
+    # ships libssl3 below its security update, so it is upgraded where it is
+    # installed. The maintained bases are Ubuntu 24.04, which ships libssl3t64
+    # instead, and their pinned packages do not move.
     if dpkg-query -W -f='${Status}' libssl3 2>/dev/null | grep -q 'install ok installed'; then \
         apt-get install -y --only-upgrade libssl3; \
     fi; \
@@ -66,7 +67,7 @@ RUN set -eux; \
 
 # rclone from upstream rather than the distribution, so both engine images
 # carry the same version (SPEC section 6.1).
-# gosu, rclone from the gotools stage (DESIGN.md D-51). gosu replaces
+# gosu, rclone from the gotools stage (design.md D-51). gosu replaces
 # the base image's copy in place, so its entrypoint keeps calling the same path.
 COPY --from=gotools /out/gosu /out/rclone /usr/local/bin/
 RUN set -eux; gosu --version; gosu nobody true; rclone version | head -1

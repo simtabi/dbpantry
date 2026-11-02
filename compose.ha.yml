@@ -164,14 +164,14 @@ services:
       - ./secrets:/run/secrets:ro
 
   haproxy:
-    image: haproxy:3.0-alpine@sha256:7c8dac975b9def049d6585b7efe865486acaa7b6ec5e74eec45f08fde8bb2ad4
+    image: docker.io/library/haproxy:3.0-alpine@sha256:7c8dac975b9def049d6585b7efe865486acaa7b6ec5e74eec45f08fde8bb2ad4
     container_name: ${COMPOSE_PROJECT_NAME:-mdb}-haproxy
     profiles: [ha]
     restart: unless-stopped
     networks: [mdb]
     depends_on: [patroni1, patroni2, patroni3]
     volumes:
-      - ./haproxy/haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro
+      - ./config/haproxy/haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro
     ports:
       - "${MDB_BIND_ADDR:-127.0.0.1}:${MDB_HAPROXY_WRITE_PORT:-5432}:5432"
       - "${MDB_BIND_ADDR:-127.0.0.1}:${MDB_HAPROXY_READ_PORT:-5433}:5433"

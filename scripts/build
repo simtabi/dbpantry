@@ -5,11 +5,18 @@
 # Bases come from images/bases.tsv, the single source of truth for what every
 # image is built FROM, so a digest is never written twice.
 #
+# bases.tsv holds MAINTAINED versions only (design.md D-57). Any other version
+# builds from MDB_<ENGINE>_BASE_IMAGE in .env, digest-pinned. Such an image is
+# UNSUPPORTED: it is labelled so, the build says so, and nothing here scans or
+# verifies it.
+#
 # Usage: scripts/build [engine ...]     (default: every engine with a Dockerfile)
 
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# shellcheck source=backend-lib.sh
+. "$ROOT/scripts/backend-lib.sh"
 cd "$ROOT" || exit 1
 
 ENV_FILE="${MDB_ENV_FILE:-$ROOT/.env}"
@@ -17,7 +24,7 @@ ENV_FILE="${MDB_ENV_FILE:-$ROOT/.env}"
 
 PREFIX="${MDB_IMAGE_PREFIX:-ghcr.io/simtabi}"
 
-get() { grep -E "^${1}=" "$ENV_FILE" 2>/dev/null | tail -1 | cut -d= -f2- || true; }
+get() { mdb_env_get "$1" "$ENV_FILE"; }
 
 # shellcheck source=engine-lib.sh
 . "$ROOT/scripts/engine-lib.sh"
@@ -35,6 +42,13 @@ version_for() {
 
 base_for() {
     awk -v e="$1" -v v="$2" '$1==e && $2==v {print $3; exit}' "$ROOT/images/bases.tsv"
+}
+
+# MDB_<ENGINE>_BASE_IMAGE from .env, or nothing. Not for the cli image, which
+# is not an engine and has no version menu.
+base_override_for() {
+    [ "$1" = "cli" ] && return 0
+    get "$(engine_base_override_var "$1")"
 }
 
 # Captured BEFORE the list is filled in, because by then it is never empty.
@@ -77,11 +91,28 @@ for engine in ${engines[@]+"${engines[@]}"}; do
 
     # The build context is images/, not images/<engine>/, so the MySQL and
     # MariaDB images can share one set of init scripts (images/_shared).
-    base="$(base_for "$engine" "$version")"
-    [[ -n "$base" ]] || {
-        printf 'no base pinned for %s %s in images/bases.tsv\n' "$engine" "$version" >&2
-        exit 1
-    }
+    support_args=()
+    base="$(base_override_for "$engine")"
+    if [[ -n "$base" ]]; then
+        engine_valid_base_ref "$base" || {
+            printf '%s=%s is not pinned by digest; use name:tag@sha256:<digest>\n' \
+                "$(engine_base_override_var "$engine")" "$base" >&2
+            exit 1
+        }
+        printf 'WARNING: %s %s builds from %s (%s).\n  UNSUPPORTED: not built, scanned or verified by dbpantry; no scan guarantee.\n' \
+            "$engine" "$version" "$base" "$(engine_base_override_var "$engine")" >&2
+        support_args=(--build-arg "UNSUPPORTED_VERSION=true"
+                      --label "io.simtabi.dbpantry.support=unsupported")
+    else
+        base="$(base_for "$engine" "$version")"
+        [[ -n "$base" ]] || {
+            printf 'no base pinned for %s %s in images/bases.tsv.\n' "$engine" "$version" >&2
+            printf '  %s is not a maintained version (docs/guides/versions.md). To build it anyway, set\n' "$version" >&2
+            printf '  %s in .env to its upstream image pinned by digest; it is then\n' "$(engine_base_override_var "$engine")" >&2
+            printf '  unsupported, with no scan guarantee.\n' >&2
+            exit 1
+        }
+    fi
 
     # The Go toolchain for the gotools stage (D-51), from the same file as the base.
     go_image="$(base_for toolchain go)"
@@ -91,11 +122,12 @@ for engine in ${engines[@]+"${engines[@]}"}; do
     }
 
     printf 'building %s\n  from %s\n' "$tag" "$base"
-    docker build \
+    mdb_build \
         -f "$ROOT/images/$engine/Dockerfile" \
         --build-arg "BASE_IMAGE=$base" \
         --build-arg "GO_IMAGE=$go_image" \
         --build-arg "ENGINE_VERSION=$version" \
+        ${support_args[@]+"${support_args[@]}"} \
         -t "$tag" "$ROOT/images"
 done
 
@@ -128,8 +160,8 @@ case " $explicit_derived " in *" patroni "*)   build_patroni=1   ;; *) build_pat
 
 if (( build_pgbouncer )) && [[ -f "$ROOT/images/pgbouncer/Dockerfile" ]]; then
     tag="$PREFIX/dbpantry-pgbouncer:dev"
-    printf 'building %s\n  from debian:12-slim + PGDG\n' "$tag"
-    docker build -f "$ROOT/images/pgbouncer/Dockerfile" -t "$tag" "$ROOT/images"
+    printf 'building %s\n  from docker.io/library/debian:12-slim + PGDG\n' "$tag"
+    mdb_build -f "$ROOT/images/pgbouncer/Dockerfile" -t "$tag" "$ROOT/images"
     derived=$(( derived + 1 ))
 fi
 
@@ -137,7 +169,7 @@ if (( build_patroni )) && [[ -f "$ROOT/images/patroni/Dockerfile" ]]; then
     pg_version="$(version_for pg)"
     tag="$PREFIX/dbpantry-patroni:$pg_version"
     printf 'building %s\n  from %s/dbpantry-pg:%s\n' "$tag" "$PREFIX" "$pg_version"
-    docker build \
+    mdb_build \
         -f "$ROOT/images/patroni/Dockerfile" \
         --build-arg "ENGINE_VERSION=$pg_version" \
         --build-arg "IMAGE_PREFIX=$PREFIX" \

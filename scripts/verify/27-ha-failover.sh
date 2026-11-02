@@ -5,7 +5,7 @@
 
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
-need_docker
+need_runtime
 cd "$MDB_ROOT" || exit 1
 
 # SPEC section 21.5. This is the only check that proves the HA stack does the
@@ -29,14 +29,14 @@ psql_via_haproxy() {
     # check (mdb-verify-pool-net-NNNN), where no service resolves -- so every
     # probe failed with "could not translate host name", and the check reported
     # that the write port was not routing when it had never been reached.
-    net="${COMPOSE_PROJECT_NAME:-mdb}_net"
+    net="$(mdb_project_name)_net"
     # The superuser password, not an anonymous connection. pg_hba is
     # scram-sha-256 for every host rule -- check 30 fails the build if it ever
     # is not -- so a passwordless attempt is refused, and the check then reads
     # as "the write port does not route to a primary" when the routing was
     # fine all along.
     pw="$(tr -d '\n' < "$MDB_ROOT/secrets/pg_superuser_password.txt" 2>/dev/null)"
-    docker run --rm --network "$net" \
+    mdb_ctr run --rm --network "$net" \
         -e PGPASSWORD="$pw" \
         --entrypoint psql "$(image_name pg)" \
         "host=haproxy port=${port} user=postgres dbname=postgres sslmode=require" \
@@ -68,13 +68,13 @@ make down >/dev/null 2>&1 || true
 # megabytes of lag that never closes -- which reads as a replication bug rather
 # than as leftovers from the previous run.
 _pgv="$(env_get MDB_PG_VERSION 17)"
-docker volume rm -f \
-    "${COMPOSE_PROJECT_NAME:-mdb}_etcd1_data" \
-    "${COMPOSE_PROJECT_NAME:-mdb}_etcd2_data" \
-    "${COMPOSE_PROJECT_NAME:-mdb}_etcd3_data" \
-    "${COMPOSE_PROJECT_NAME:-mdb}_patroni1_pg${_pgv}_data" \
-    "${COMPOSE_PROJECT_NAME:-mdb}_patroni2_pg${_pgv}_data" \
-    "${COMPOSE_PROJECT_NAME:-mdb}_patroni3_pg${_pgv}_data" >/dev/null 2>&1 || true
+mdb_ctr volume rm -f \
+    "$(mdb_project_name)_etcd1_data" \
+    "$(mdb_project_name)_etcd2_data" \
+    "$(mdb_project_name)_etcd3_data" \
+    "$(mdb_project_name)_patroni1_pg${_pgv}_data" \
+    "$(mdb_project_name)_patroni2_pg${_pgv}_data" \
+    "$(mdb_project_name)_patroni3_pg${_pgv}_data" >/dev/null 2>&1 || true
 
 # Registered BEFORE the boot, not after. A cleanup registered on the line
 # following `mdb_up` never runs when the boot itself fails -- and a FAILED
@@ -90,7 +90,7 @@ if ! mdb_up PROFILES=ha; then
     # postgres", a replica that had cloned a data directory predating the
     # current secrets, and nothing in compose's output hinted at credentials.
     for n in 1 2 3; do
-        c="${COMPOSE_PROJECT_NAME:-mdb}-patroni${n}"
+        c="$(mdb_project_name)-patroni${n}"
         printf '      ----- %s -----\n' "$c" >&2
         # The API tracebacks are noise: they are connection resets from the
         # healthcheck probing a node that is not answering yet, one per probe.
@@ -99,7 +99,7 @@ if ! mdb_up PROFILES=ha; then
         # "PatroniFatalException: Failed to bootstrap cluster" -- the assertion
         # that bootstrap failed, with the initdb or post-bootstrap error that
         # says WHY scrolled off above it.
-        docker logs "$c" 2>&1 \
+        mdb_ctr logs "$c" 2>&1 \
             | grep -viE '^ +File "|^\s+\^+\s*$|ConnectionResetError' \
             | tail -40 | sed 's/^/      /' >&2 || true
     done
@@ -116,11 +116,17 @@ fi
 wait_for 240 "the Patroni cluster to converge on one leader" bash -c \
     '[[ -n $(scripts/ha leader 2>/dev/null) ]]'
 
-leader="$(scripts/ha leader 2>/dev/null)"
+leader="$(scripts/ha leader 2>/dev/null || true)"
 [[ -n "$leader" ]] || vfail "could not identify the cluster leader"
 
 # Streaming, not merely present: a replica that exists but is not replicating
 # is the exact failure this topology is supposed to make visible.
+# Every poll below ends in `|| true`. lib.sh runs this under `set -e` and
+# pipefail, so a probe that fails once -- patronictl while the cluster has no
+# leader, curl while a node restarts -- ended the whole check on that line,
+# with no vfail message and no retry. On 2026-11-01 that is how check 27
+# failed in CI: "killed leader patroni1", then nothing. A failed probe is an
+# unanswered poll, and the loop's own budget decides when that is a failure.
 streaming=0
 for (( i = 0; i < 180; i++ )); do
     # State is "streaming", not "running". A replica reports "running" while it
@@ -129,7 +135,8 @@ for (( i = 0; i < 180; i++ )); do
     # Accepting "running" would pass on exactly the degraded cluster this is
     # meant to catch.
     streaming="$(scripts/ha roles 2>/dev/null \
-        | awk -F'\t' '$2 == "Replica" && $3 == "streaming"' | wc -l | tr -d ' ')"
+        | awk -F'\t' '$2 == "Replica" && $3 == "streaming"' | wc -l | tr -d ' ' || true)"
+    streaming="${streaming:-0}"
     (( streaming >= 2 )) && break
     sleep 1
 done
@@ -140,7 +147,7 @@ vinfo "cluster converged: leader=$leader, replicas=$replicas"
 
 # etcd must have a real quorum. Section 21.2 is explicit that a two-node etcd
 # is worse than one node, so a 2-member cluster is a failure, not a warning.
-members="$(docker compose exec -T etcd1 etcdctl member list 2>/dev/null | grep -c . || echo 0)"
+members="$(mdb_compose exec -T etcd1 etcdctl member list 2>/dev/null | grep -c . || echo 0)"
 (( members >= 3 )) || vfail "etcd has $members member(s); section 21.2 requires a quorum of 3 minimum"
 vinfo "etcd quorum: $members members"
 
@@ -157,9 +164,9 @@ vinfo "etcd quorum: $members members"
 max_lag=1048576
 caught_up=0
 for (( i = 0; i < 180; i++ )); do
-    worst="$(docker compose exec -T patroni1 sh -c 'curl -s http://127.0.0.1:8008/cluster' 2>/dev/null \
+    worst="$(mdb_compose exec -T patroni1 sh -c 'curl -s http://127.0.0.1:8008/cluster' 2>/dev/null \
         | tr ',' '\n' | grep -oE '"lag": *[0-9]+' | grep -oE '[0-9]+' \
-        | sort -n | tail -1)"
+        | sort -n | tail -1 || true)"
     worst="${worst:-999999999}"
     if (( worst < max_lag )); then caught_up=1; break; fi
     sleep 1
@@ -168,15 +175,15 @@ done
 vinfo "replicas caught up (worst lag ${worst} bytes, limit ${max_lag})"
 
 # Write through the HAProxy write port, then kill the leader.
-docker compose exec -T haproxy sh -c 'true' >/dev/null 2>&1 || vfail "haproxy is not running"
+mdb_compose exec -T haproxy sh -c 'true' >/dev/null 2>&1 || vfail "haproxy is not running"
 
-docker compose kill "$leader" >/dev/null 2>&1 || vfail "could not kill the leader"
+mdb_compose kill "$leader" >/dev/null 2>&1 || vfail "could not kill the leader"
 vinfo "killed leader $leader"
 
 start=$(date +%s)
 elected=""
 for (( i = 0; i < budget; i++ )); do
-    elected="$(scripts/ha leader 2>/dev/null)"
+    elected="$(scripts/ha leader 2>/dev/null || true)"
     [[ -n "$elected" && "$elected" != "$leader" ]] && break
     sleep 1
 done

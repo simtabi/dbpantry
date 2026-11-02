@@ -18,6 +18,8 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# shellcheck source=backend-lib.sh
+. "$ROOT/scripts/backend-lib.sh"
 cd "$ROOT" || exit 1
 
 # shellcheck source=engine-lib.sh
@@ -26,7 +28,7 @@ cd "$ROOT" || exit 1
 ENV_FILE="${MDB_ENV_FILE:-$ROOT/.env}"
 [[ -f "$ENV_FILE" ]] || ENV_FILE="$ROOT/.env.example"
 
-get() { grep -E "^${1}=" "$ENV_FILE" 2>/dev/null | tail -1 | cut -d= -f2- || true; }
+get() { mdb_env_get "$1" "$ENV_FILE"; }
 log() { printf '[new-project] %s\n' "$*"; }
 die() { printf '[new-project] ERROR: %s\n' "$*" >&2; exit 1; }
 
@@ -85,7 +87,7 @@ engine_exec() {
     if [[ "$IN_CONTAINER" == "1" ]]; then
         "$@"
     else
-        ( cd "$ROOT" && docker compose exec -T "$engine" "$@" )
+        ( cd "$ROOT" && mdb_svc_exec "$engine" "$@" )
     fi
 }
 
@@ -144,17 +146,19 @@ log "provisioned '$DB' on $ENGINE, owned by '$USER_NAME'"
 # -----------------------------------------------------------------------------
 # The paste-ready block (SPEC section 14)
 # -----------------------------------------------------------------------------
+# Values go through mdb_env_quote: anything with whitespace or a special
+# character is double-quoted, so the block pastes into any .env unchanged.
 cat <<BLOCK
 
 ────────────────────────────────────────────────────────────────────────
 Paste into your .env:
 
-DB_CONNECTION=${MDB_ENGINE_DRIVER}
-DB_HOST=${ENGINE}
-DB_PORT=${MDB_ENGINE_PORT}
-DB_DATABASE=${DB}
-DB_USERNAME=${USER_NAME}
-DB_PASSWORD=${PASSWORD}
+DB_CONNECTION=$(mdb_env_quote "${MDB_ENGINE_DRIVER}")
+DB_HOST=$(mdb_env_quote "${ENGINE}")
+DB_PORT=$(mdb_env_quote "${MDB_ENGINE_PORT}")
+DB_DATABASE=$(mdb_env_quote "${DB}")
+DB_USERNAME=$(mdb_env_quote "${USER_NAME}")
+DB_PASSWORD=$(mdb_env_quote "${PASSWORD}")
 BLOCK
 
 if engine_tls_always; then

@@ -9,7 +9,7 @@
 #   MySQL 8.4  generates a self-signed pair into the data directory at init and
 #              reuses it thereafter.
 #   MariaDB 11.4 generates an EPHEMERAL, in-memory certificate on every start
-#              and writes nothing to disk. Verified empirically in DESIGN.md
+#              and writes nothing to disk. Verified empirically in design.md
 #              D-13: have_ssl=YES while ssl_ca/ssl_cert/ssl_key stay empty.
 #
 # The practical consequence is that a client cannot use verify-full against

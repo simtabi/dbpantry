@@ -10,7 +10,7 @@
 # package, which is maintained by the PostgreSQL project. Nothing in the
 # toolkit now depends on a community rebuild.
 
-ARG BASE_IMAGE=debian:12-slim
+ARG BASE_IMAGE=docker.io/library/debian:12-slim
 FROM ${BASE_IMAGE}
 
 ARG PGBOUNCER_VERSION
@@ -21,7 +21,7 @@ RUN set -eux; \
         ca-certificates curl gnupg postgresql-common; \
     # PGDG rather than Debian stable: pgBouncer's transaction-pooling
     # behaviour around prepared statements changed materially in 1.21, and
-    # docs/pooling.md relies on the newer behaviour.
+    # docs/guides/pooling.md relies on the newer behaviour.
     /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y; \
     apt-get update; \
     apt-get install -y --no-install-recommends pgbouncer; \
