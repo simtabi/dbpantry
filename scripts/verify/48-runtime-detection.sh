@@ -5,7 +5,7 @@
 
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
-# dbpantry runs on any OCI runtime with a Compose implementation (DESIGN.md
+# dbpantry runs on any OCI runtime with a Compose implementation (design.md
 # D-60). That holds only while two things stay true:
 #
 #   1. scripts/runtime-lib.sh resolves the runtime the documented way --

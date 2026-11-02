@@ -3,7 +3,7 @@
 #
 # Shared helpers for the dbpantry MySQL-family s6 init stages.
 #
-# One set of scripts serves both engines. DESIGN.md D-17 warned that MySQL
+# One set of scripts serves both engines. design.md D-17 warned that MySQL
 # (Oracle Linux 9) and MariaDB (Ubuntu 24.04) do not share a base OS, and that
 # remains true for package managers and client binary names -- but the thing
 # that actually mattered turned out to be common: BOTH read /etc/mysql/conf.d,

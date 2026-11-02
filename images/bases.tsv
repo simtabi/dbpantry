@@ -2,12 +2,12 @@
 # every derived image is built FROM.
 #
 # Digests were resolved from the live registries during step 1 research and are
-# recorded in DESIGN.md section 3. Every entry is confirmed linux/amd64 +
+# recorded in design.md section 3. Every entry is confirmed linux/amd64 +
 # linux/arm64. Re-pinned by hand (Dependabot does not read this file); never
 # edit a tag without its digest.
 #
 # Only MAINTAINED versions have a row: the newest supported line and the one
-# before it, per engine (DESIGN.md D-57, docs/guides/versions.md). An older version
+# before it, per engine (design.md D-57, docs/guides/versions.md). An older version
 # has no row on purpose. It still runs, through MDB_<ENGINE>_BASE_IMAGE, but it
 # is not built, scanned or verified here.
 #
@@ -35,6 +35,6 @@ cassandra	5.0	docker.io/library/cassandra:5.0.9@sha256:1d18946ead0b0d22ed0371bd7
 ferretdb	2	ghcr.io/ferretdb/ferretdb:2@sha256:5706414241eb84f0515512c37b46db0f1b1eac9e5ceb7e4c2523211c184b1985
 
 # Not an engine: the Go toolchain the gotools stage rebuilds gosu, rclone and
-# postgres_exporter on (DESIGN.md D-51). scripts/build passes it as GO_IMAGE, and
+# postgres_exporter on (design.md D-51). scripts/build passes it as GO_IMAGE, and
 # check 02 fails if a Dockerfile's GO_IMAGE default disagrees with this row.
 toolchain	go	docker.io/library/golang:1.27.3-bookworm@sha256:d9b6a1beb9474adc2a1ce842573639b44b2a0dd49b6669f51d3821baf9ec37c9

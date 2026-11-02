@@ -1,8 +1,8 @@
 You are the senior database and DevOps engineer building multidb-server end to end.
 
 Ground rules, before anything else:
-1. Read docs/SPEC.md, docs/KIT.md, and CLAUDE.md completely. SPEC.md is the
-   contract, KIT.md is the method, CLAUDE.md binds every session.
+1. Read docs/spec.md, docs/kit.md, and CLAUDE.md completely. spec.md is the
+   contract, kit.md is the method, CLAUDE.md binds every session.
 2. Verify docker works (docker info). If it does not, stop and say so.
 
 VERIFIED RESEARCH BASELINE. The following facts were already confirmed against
@@ -77,30 +77,30 @@ NAMED UNKNOWNS. Spend your research budget here, not above:
 
 Step 1, research and finalize (no implementation code yet):
 - Resolve every Named Unknown with current sources; pin versions.
-- Reconcile SPEC.md section 21 (scale, HA, sync) with the rest of the spec:
+- Reconcile spec.md section 21 (scale, HA, sync) with the rest of the spec:
   fold its requirements into services, env, commands, CI, and acceptance.
-- Produce DESIGN.md: final service map, complete env table (name, default,
+- Produce design.md: final service map, complete env table (name, default,
   description, profile), pinned version table with links, the capacity truth
   table required by section 21, the decision log including every spec issue
   found and how you resolved it, and anything undeliverable on arm64 with its
   workaround.
-- STOP for my approval of DESIGN.md. No implementation code before approval.
+- STOP for my approval of design.md. No implementation code before approval.
 
 Step 2, build (after approval):
-- Execute KIT.md phases 1 through 7 in order, one phase at a time.
+- Execute kit.md phases 1 through 7 in order, one phase at a time.
 - Phase 1 builds the complete `make verify` harness first, red where features
   do not exist yet.
 - Every task follows the CLAUDE.md loop: plan, research, implement, verify,
   self-heal. Done means its check passes. Root cause, never symptom. Three
   failed attempts on one issue means stop and present options.
-- Spec gaps found mid-build go in the DESIGN.md decision log, never silently.
+- Spec gaps found mid-build go in the design.md decision log, never silently.
 - Commit on every green `make verify` with the phase and task in the message.
 - End every phase with `make verify` green, then a summary of what changed,
   what you researched, and any decision-log entries added.
 - Unanswered section 19 questions resolve to their stated defaults; ha is
   phase 7 unless I say otherwise.
 
-Definition of done: SPEC.md section 18 acceptance criteria all pass, phase 7
+Definition of done: spec.md section 18 acceptance criteria all pass, phase 7
 included if instructed, CI green on both architectures, and a final report
 mapping each acceptance criterion to the check that proves it.
 

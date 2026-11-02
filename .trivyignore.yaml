@@ -34,11 +34,11 @@ vulnerabilities:
   # Cassandra ships its Java dependencies inside lib/. Until 2026-11 the ones
   # below their security fixes were waived here. The image now replaces guava,
   # snappy-java, jackson, netty and lz4-java with fixed releases pinned by
-  # sha256 in images/cassandra/jars.tsv (DESIGN.md D-55). A new finding in lib/
+  # sha256 in images/cassandra/jars.tsv (design.md D-55). A new finding in lib/
   # means a row in jars.tsv needs raising -- do that, do not add a waiver.
   #
   # The last waiver, CVE-2022-1471 for snakeyaml 1.33 on Cassandra 4.1, was
-  # removed with 4.1 itself (DESIGN.md D-57): 4.1 cannot take snakeyaml 2.x,
+  # removed with 4.1 itself (design.md D-57): 4.1 cannot take snakeyaml 2.x,
   # so it is no longer maintained here rather than shipped under a waiver.
 
   # ---------------------------------------------------------------------------
@@ -48,6 +48,6 @@ vulnerabilities:
   # Go toolchain older than the standard-library fixes, and rclone and the
   # exporter vendored vulnerable gRPC / x/net / x/crypto. Each image now rebuilds
   # them from the same upstream tags on the pinned toolchain in images/bases.tsv,
-  # with those modules raised (DESIGN.md D-51), so the findings are fixed rather
+  # with those modules raised (design.md D-51), so the findings are fixed rather
   # than waived. A finding against them now means the toolchain row or a module
   # floor needs raising -- do that, do not re-add a waiver here.

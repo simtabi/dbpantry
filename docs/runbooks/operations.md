@@ -217,7 +217,7 @@ backs up goes when that goes, and `make destroy` would take it.
 
 Restoring rewrites the data directory, so `pitr-restore` requires a typed
 confirmation. If you are not certain of the target, restore into a copy first;
-[Restore](RESTORE.md) covers that.
+[Restore](restore.md) covers that.
 
 ### The MySQL family
 
@@ -339,13 +339,13 @@ this; a single-node Cassandra with RF=1 is a development setup, not a cluster.
 make self-update      # the toolkit itself; never touches project data
 ```
 
-Database version upgrades are [their own runbook](UPGRADE.md).
+Database version upgrades are [their own runbook](upgrade.md).
 
 ## When something breaks
 
-[Restore](RESTORE.md) is the runbook, and its first section is about not
+[Restore](restore.md) is the runbook, and its first section is about not
 restoring until you know which problem you have.
 
 ---
 
-[← Docs index](../../README.md#documentation)
+[← Docs index](../../readme.md#documentation)

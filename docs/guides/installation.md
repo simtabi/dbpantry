@@ -9,7 +9,7 @@ What you need before `make up`, and what to do when the usual things go wrong.
 | A container runtime | Docker 24 / Podman 4.7 / nerdctl 1.x | Plus a Compose v2-compatible implementation. See [Container runtimes](runtimes.md) |
 | RAM for the runtime's VM | 4 GB | 8 GB if you run Cassandra, which alone wants ~2 GB |
 | Disk | 20 GB | Images are large; PostgreSQL alone with extensions is ~1 GB per major |
-| `make` | any | Preinstalled on macOS and Linux; on Windows see [WINDOWS.md](../runbooks/WINDOWS.md) |
+| `make` | any | Preinstalled on macOS and Linux; on Windows see [windows.md](../runbooks/windows.md) |
 | `bash` | 3.2 | macOS ships 3.2 from 2007 and every script here supports it |
 
 Check the first one:
@@ -30,7 +30,7 @@ Everything runs on **amd64 and arm64**, including Apple Silicon, and CI proves
 both. Two things are not identical across architectures:
 
 - **PostgreSQL extensions**: a small number are amd64-only. `make build` says
-  which were skipped rather than failing, and `DESIGN.md` lists them.
+  which were skipped rather than failing, and `design.md` lists them.
 - **Emulation is not supported.** Running an amd64 image under QEMU on Apple
   Silicon appears to work and then corrupts data under load. If an engine has
   no arm64 image, the toolkit refuses rather than emulating.
@@ -93,7 +93,7 @@ day.
 
 ## When it goes wrong
 
-**`make: command not found` on Windows.** Use WSL2. See [WINDOWS.md](../runbooks/WINDOWS.md).
+**`make: command not found` on Windows.** Use WSL2. See [windows.md](../runbooks/windows.md).
 
 **Port already in use.** `make up` refuses before starting anything and names
 the port and the setting:
@@ -131,9 +131,9 @@ exempts 7.0.14 and later, but by the version `uname -r` reports, and Ubuntu's
 about 2 GB to itself; give the runtime 8 GB or raise `MDB_CASSANDRA_HEAP`.
 
 **`make build` fails on a PostgreSQL extension.** Check whether it is one of the
-amd64-only extensions listed in `DESIGN.md`. If it is not, that is a bug worth
+amd64-only extensions listed in `design.md`. If it is not, that is a bug worth
 reporting.
 
 ---
 
-[← Docs index](../../README.md#documentation)
+[← Docs index](../../readme.md#documentation)

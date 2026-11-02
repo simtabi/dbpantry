@@ -173,7 +173,7 @@ migrate; if it is affected, stay on 7.0.
 
 ## Cassandra 4.1 → 5.0
 
-Cassandra 4.1 is no longer maintained here (DESIGN.md D-57). Not automated
+Cassandra 4.1 is no longer maintained here (design.md D-57). Not automated
 either; on a single node the volume copy keeps the old data untouched. Rehearsed
 for 4.1.12 → 5.0.9 on 2026-11-01: 200 of 200 rows on 5.0, `upgradesstables`
 clean, and the 4.1 volume unchanged.
@@ -217,4 +217,4 @@ docker volume rm mdb_pg17_data
 
 ---
 
-[← Docs index](../../README.md#documentation)
+[← Docs index](../../readme.md#documentation)

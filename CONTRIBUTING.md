@@ -30,7 +30,7 @@ per file in `scripts/`, checks in `scripts/verify/`, engine descriptors in
 `engines/`, image sources in `images/`, files mounted into third-party
 containers in `config/`, and documentation in `docs/guides/`,
 `docs/runbooks/` and `docs/reference/`. The reasoning is in
-[docs/REORGANIZATION_PLAN.md](docs/REORGANIZATION_PLAN.md).
+[docs/reorganization-plan.md](docs/reorganization-plan.md).
 
 A container runtime is required: Docker (Desktop, OrbStack, Colima, Rancher
 Desktop) or Podman; nerdctl is best effort. CI runs on Docker. Check yours with
@@ -61,12 +61,12 @@ mocked. Scripts reach the runtime only through `scripts/runtime-lib.sh`; see
 - No emoji in commit messages.
 - Name the phase and task where it applies, e.g. `phase 2: pg image s6 tree`.
 - A pull request should describe what changed, which check proves it, and any
-  entry it added to the `DESIGN.md` decision log.
+  entry it added to the `design.md` decision log.
 
 ## Spec gaps
 
-If `docs/reference/SPEC.md` is ambiguous, wrong, or silent on something you need, do not
-deviate quietly. Add an entry to the `DESIGN.md` decision log recording what the
+If `docs/reference/spec.md` is ambiguous, wrong, or silent on something you need, do not
+deviate quietly. Add an entry to the `design.md` decision log recording what the
 spec said, what you did, and why — then proceed.
 
 ## Reporting security issues

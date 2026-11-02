@@ -11,7 +11,7 @@ ARG GO_IMAGE=docker.io/library/golang:1.27.3-bookworm@sha256:d9b6a1beb9474adc2a1
 
 # =============================================================================
 # Go tools, rebuilt from their upstream release tags on a patched toolchain
-# (DESIGN.md D-51). The released binaries carry the Go standard library of the
+# (design.md D-51). The released binaries carry the Go standard library of the
 # day they were cut, and their CVEs with it; the same tag rebuilt on current Go
 # does not. Cross-compiled on the build platform: arm64 is never emulated.
 # =============================================================================
@@ -51,12 +51,12 @@ USER root
 ENV DEBIAN_FRONTEND=noninteractive
 
 # Ubuntu 24.04, so apt. The base already carries tar, xz, zstd, gosu, procps
-# and openssl; curl and unzip are what it lacks (DESIGN.md D-17).
+# and openssl; curl and unzip are what it lacks (design.md D-17).
 RUN set -eux; \
     apt-get update; \
     apt-get install -y --no-install-recommends ca-certificates curl unzip; \
     # An Ubuntu 22.04 base -- 10.11, which is no longer maintained here but
-    # can still be built through MDB_MARIADB_BASE_IMAGE (DESIGN.md D-57) --
+    # can still be built through MDB_MARIADB_BASE_IMAGE (design.md D-57) --
     # ships libssl3 below its security update, so it is upgraded where it is
     # installed. The maintained bases are Ubuntu 24.04, which ships libssl3t64
     # instead, and their pinned packages do not move.
@@ -67,7 +67,7 @@ RUN set -eux; \
 
 # rclone from upstream rather than the distribution, so both engine images
 # carry the same version (SPEC section 6.1).
-# gosu, rclone from the gotools stage (DESIGN.md D-51). gosu replaces
+# gosu, rclone from the gotools stage (design.md D-51). gosu replaces
 # the base image's copy in place, so its entrypoint keeps calling the same path.
 COPY --from=gotools /out/gosu /out/rclone /usr/local/bin/
 RUN set -eux; gosu --version; gosu nobody true; rclone version | head -1

@@ -40,7 +40,7 @@ mdb_runtime_ready || die "$MDB_RUNTIME is not running"
 # socket lives somewhere else on rootless Podman, inside a VM on Podman machine,
 # Colima and Rancher Desktop, and does not exist at all for nerdctl -- and it
 # handed a scanner root-equivalent control of the engine to read one image
-# (DESIGN.md D-60).
+# (design.md D-60).
 SCAN_TMP="$(mktemp -d "${TMPDIR:-/tmp}/mdb-scan.XXXXXX")"
 trap 'rm -rf "$SCAN_TMP"' EXIT
 trivy_archive() {

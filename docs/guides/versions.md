@@ -15,7 +15,7 @@ the two newest **long-term** releases. A release supported only until the next o
 ships — MySQL Innovation, MariaDB rolling, MongoDB minor releases — would drop off
 this table every quarter, so it is not tracked.
 
-The reasoning is in [DESIGN.md D-57](../../DESIGN.md).
+The reasoning is in [design.md D-57](../../design.md).
 
 ## Maintained versions
 
@@ -47,7 +47,7 @@ Three engines differ from two lines, each for a reason:
   4.1 release moves to snakeyaml 2.x, and none is planned: the move to 2.4
   ([CASSANDRA-20928](https://issues.apache.org/jira/browse/CASSANDRA-20928)) is
   in 6.0 only. Cassandra regains a second line when 6.0 reaches GA
-  ([D-57](../../DESIGN.md)); it is alpha today.
+  ([D-57](../../design.md)); it is alpha today.
 - **FerretDB** publishes one supported line, 2.x.
 
 One oddity: MariaDB 11.4 was the last LTS with five years of community binaries,
@@ -96,7 +96,7 @@ release, and the CHANGELOG says so. Your data is never touched: volumes are per
 engine and per major, so a `.env` still naming the old version fails
 `make check-env` and leaves its volume exactly as it was. Then either:
 
-- **upgrade** — [Upgrade](../runbooks/UPGRADE.md) covers each engine, including building the
+- **upgrade** — [Upgrade](../runbooks/upgrade.md) covers each engine, including building the
   old image once from its override so `make upgrade` can read it; or
 - **stay** — keep the version and add its `MDB_<ENGINE>_BASE_IMAGE`, unsupported.
 
@@ -109,4 +109,4 @@ edits and nothing else.
 
 ---
 
-[← Docs index](../../README.md#documentation)
+[← Docs index](../../readme.md#documentation)

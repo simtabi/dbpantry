@@ -7,7 +7,7 @@ source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
 need_runtime
 
-# This check exists because of DESIGN.md D-09, which is the most dangerous
+# This check exists because of design.md D-09, which is the most dangerous
 # integration hazard found in step 1.
 #
 # The official postgres image sets STOPSIGNAL SIGINT (fast shutdown). s6 sends

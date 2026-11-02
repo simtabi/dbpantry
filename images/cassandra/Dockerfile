@@ -13,7 +13,7 @@ ARG GO_IMAGE=docker.io/library/golang:1.27.3-bookworm@sha256:d9b6a1beb9474adc2a1
 
 # =============================================================================
 # Go tools, rebuilt from their upstream release tags on a patched toolchain
-# (DESIGN.md D-51). The released binaries carry the Go standard library of the
+# (design.md D-51). The released binaries carry the Go standard library of the
 # day they were cut, and their CVEs with it; the same tag rebuilt on current Go
 # does not. Cross-compiled on the build platform: arm64 is never emulated.
 # =============================================================================
@@ -33,7 +33,7 @@ FROM ${BASE_IMAGE}
 ARG ENGINE_VERSION=5.0
 ARG S6_OVERLAY_VERSION=3.2.3.2
 # true when scripts/build or compose builds from MDB_CASSANDRA_BASE_IMAGE, an
-# unmaintained series (DESIGN.md D-57). jars.tsv has no rows for one, so its
+# unmaintained series (design.md D-57). jars.tsv has no rows for one, so its
 # vendored JARs are left as upstream shipped them; the image is unsupported.
 ARG UNSUPPORTED_VERSION=false
 
@@ -59,7 +59,7 @@ RUN set -eux; \
 # snappy-java, jackson, netty and lz4-java below their security fixes, with no
 # newer Cassandra release to repin to. Each
 # is replaced with a fixed release from Maven Central, pinned by sha256 in
-# jars.tsv (DESIGN.md D-55). The series is read from the base image itself, so
+# jars.tsv (design.md D-55). The series is read from the base image itself, so
 # a BASE_IMAGE and ENGINE_VERSION that disagree fail here rather than install
 # the other series' JARs. `cassandra -v` then starts the JVM on the new
 # classpath; the boot checks prove the rest.
@@ -75,7 +75,7 @@ RUN set -eux; \
         replace-jars /usr/local/share/mdb/cassandra-jars.tsv "$series" "${CASSANDRA_HOME:?}/lib"; \
     cassandra -v
 
-# gosu from the gotools stage (DESIGN.md D-51). gosu replaces
+# gosu from the gotools stage (design.md D-51). gosu replaces
 # the base image's copy in place, so its entrypoint keeps calling the same path.
 COPY --from=gotools /out/gosu /usr/local/bin/
 RUN set -eux; gosu --version; gosu nobody true
@@ -106,7 +106,7 @@ RUN set -eux; \
     mkdir -p /mdb/overrides /run/mdb
 
 # Gracetimes at the s6 defaults; raising them only makes the container idle
-# after everything is already down (DESIGN.md D-27).
+# after everything is already down (design.md D-27).
 ENV S6_CMD_WAIT_FOR_SERVICES_MAXTIME=0 \
     S6_BEHAVIOUR_IF_STAGE2_FAILS=2 \
     S6_KEEP_ENV=1

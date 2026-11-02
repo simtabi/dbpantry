@@ -21,7 +21,7 @@ export MDB_ROOT
 # shellcheck source=../engine-lib.sh
 . "$MDB_ROOT/scripts/engine-lib.sh"
 
-# Every container call goes through the runtime layer (DESIGN.md D-60).
+# Every container call goes through the runtime layer (design.md D-60).
 # shellcheck source=../runtime-lib.sh
 . "$MDB_ROOT/scripts/runtime-lib.sh"
 
@@ -49,7 +49,7 @@ vskip() {
 
 # A container runtime is required. CLAUDE.md is explicit: if none is available
 # we stop and say so rather than mocking, so this is a FAIL and never a SKIP.
-# Which runtime is decided once, in scripts/runtime-lib.sh (DESIGN.md D-60).
+# Which runtime is decided once, in scripts/runtime-lib.sh (design.md D-60).
 need_runtime() {
     mdb_runtime_init >/dev/null 2>&1 \
         || vfail "no container runtime found (CONTAINER_RUNTIME=${CONTAINER_RUNTIME:-auto}); see docs/guides/runtimes.md"

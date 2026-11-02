@@ -65,7 +65,7 @@ fi
 # -----------------------------------------------------------------------------
 
 # Importing from a live external server is the ONBOARDING case: migrating an
-# existing native or Homebrew database into the toolkit (docs/runbooks/ONBOARDING.md).
+# existing native or Homebrew database into the toolkit (docs/runbooks/onboarding.md).
 if [[ -n "$FROM_HOST" ]]; then
     [[ -n "$FROM_USER" ]] || die "--from-host also needs --from-user"
     stamp="$(date -u '+%Y%m%dT%H%M%SZ')"

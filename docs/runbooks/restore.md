@@ -79,7 +79,7 @@ Common causes, most likely first:
 **Version mismatch.** `MDB_PG_VERSION` was changed and PostgreSQL is pointed at
 a data directory from another major. Set the variable back to the version that
 wrote the data and it starts. Volumes are per major precisely so this is
-recoverable rather than destructive — see [Upgrade](UPGRADE.md) to migrate.
+recoverable rather than destructive — see [Upgrade](upgrade.md) to migrate.
 
 **Unclean shutdown.** Databases recover from this themselves on start. Let it
 finish; do not interrupt recovery and do not restore over it.
@@ -120,4 +120,4 @@ that failed is not a backup.
 
 ---
 
-[← Docs index](../../README.md#documentation)
+[← Docs index](../../readme.md#documentation)

@@ -12,7 +12,7 @@ need_runtime
 # Per-major volumes make the switch safe AND reversible, so this check asserts
 # both halves: the new major runs, and the old data still exists.
 #
-# 17 -> 18 are the two maintained majors (DESIGN.md D-57). 18 also moved the
+# 17 -> 18 are the two maintained majors (design.md D-57). 18 also moved the
 # data mount one level up, to /var/lib/postgresql, so each side mounts its own.
 
 prefix="${MDB_IMAGE_PREFIX:-ghcr.io/simtabi}"

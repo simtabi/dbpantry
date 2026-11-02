@@ -9,12 +9,12 @@
 # upgrade is a non-event and rollback is changing one line in .env back.
 #
 # pg_upgrade --link is faster on large datasets and is documented in
-# docs/runbooks/UPGRADE.md as the manual path; it is not automated here because it
+# docs/runbooks/upgrade.md as the manual path; it is not automated here because it
 # mutates the source data directory, which would throw away that guarantee.
 #
 # Usage: scripts/upgrade --engine pg --from 17 --to 18
 #
-# FROM may be a version that is no longer maintained (DESIGN.md D-57) -- that is
+# FROM may be a version that is no longer maintained (design.md D-57) -- that is
 # the usual reason to upgrade. Its image then has to be built from
 # MDB_<ENGINE>_BASE_IMAGE first; the error below says how.
 
@@ -62,7 +62,7 @@ pg_mount() {
 }
 
 # tr rather than ${ENGINE^^}: that expansion is bash 4 only and macOS ships
-# bash 3.2, where it is a syntax error (DESIGN.md D-24).
+# bash 3.2, where it is a syntax error (design.md D-24).
 ENGINE_UPPER="$(printf '%s' "$ENGINE" | tr '[:lower:]' '[:upper:]')"
 
 mdb_ctr volume inspect "$vol_from" >/dev/null 2>&1 \

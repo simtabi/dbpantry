@@ -86,7 +86,7 @@ for key in COMPOSE_PROJECT_NAME MDB_PROFILES MDB_TZ MDB_BIND_ADDR \
 done
 
 # -----------------------------------------------------------------------------
-# 3. Engine versions: maintained, or explicitly unsupported (DESIGN.md D-57)
+# 3. Engine versions: maintained, or explicitly unsupported (design.md D-57)
 # -----------------------------------------------------------------------------
 # The menu in each descriptor is the MAINTAINED versions: the newest supported
 # line and the one before it. Those are built, scanned and verified in CI from

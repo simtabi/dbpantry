@@ -22,7 +22,7 @@ Maintained by Docker in partnership with upstream, on the library namespace.
 | `mongo` | MongoDB (referenced, not rebuilt — see [licensing](../guides/licensing.md)) |
 | `cassandra` | Cassandra engine base; vulnerable vendored JARs replaced from Maven Central (see below) |
 | `debian` | the `cli` image base |
-| `golang` | build stage only: rebuilds gosu, rclone and postgres_exporter from their upstream tags ([D-51](../../DESIGN.md)); never shipped |
+| `golang` | build stage only: rebuilds gosu, rclone and postgres_exporter from their upstream tags ([D-51](../../design.md)); never shipped |
 | `caddy` | UI front door |
 | `haproxy` | HA routing |
 | `adminer` | SQL UI |
@@ -60,7 +60,7 @@ on both architectures from the PostgreSQL project itself.
 One image changes what its base ships. Cassandra vendors its Java dependencies
 in `lib/`, and where those are below their security fixes with no newer
 Cassandra release to repin to, the image replaces them
-([D-55](../../DESIGN.md)).
+([D-55](../../design.md)).
 
 | Image | Replaced from | Pinned in | Checked by |
 |---|---|---|---|
@@ -68,7 +68,7 @@ Cassandra release to repin to, the image replaces them
 
 A JAR is only replaced when the fixed release is still binary-compatible with
 the Cassandra series that loads it. snakeyaml 2.x is not, for 4.1, which is why
-4.1 is no longer maintained here ([D-57](../../DESIGN.md)) rather than shipped under a
+4.1 is no longer maintained here ([D-57](../../design.md)) rather than shipped under a
 waiver. `.trivyignore.yaml` has no Cassandra entries.
 
 ## Pinning
@@ -85,4 +85,4 @@ judge: this project does not build, scan or verify it.
 
 ---
 
-[← Docs index](../../README.md#documentation)
+[← Docs index](../../readme.md#documentation)

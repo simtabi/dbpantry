@@ -5,7 +5,7 @@
 
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
-# The docs were reorganised into guides/, runbooks/ and reference/ (DESIGN.md
+# The docs were reorganised into guides/, runbooks/ and reference/ (design.md
 # D-59), which rewrote some two hundred relative links at once. A link that
 # points nowhere fails silently: GitHub renders it, and the reader finds out
 # with a 404 at the moment they needed the page. A grep reads every link on
@@ -45,6 +45,21 @@ for f in "${docs[@]}"; do
         links=$(( links + 1 ))
         if [ ! -e "$dir/$path" ]; then
             printf '      %s: %s\n' "$f" "$target" >&2
+            broken=$(( broken + 1 ))
+            continue
+        fi
+        # macOS filesystems ignore case, so README.md "exists" when only
+        # readme.md does, and the link breaks only on Linux and on GitHub.
+        # Compare the last component against the real directory listing.
+        base="$(basename "${path%/}")"
+        case "$base" in .|..|'') continue ;; esac
+        parent="$(dirname "$dir/${path%/}")"
+        exact=0
+        for entry in "$parent"/* "$parent"/.[!.]*; do
+            if [ "${entry##*/}" = "$base" ]; then exact=1; break; fi
+        done
+        if (( ! exact )); then
+            printf '      %s: %s (wrong case)\n' "$f" "$target" >&2
             broken=$(( broken + 1 ))
         fi
     done < <(awk '/^[[:space:]]*```/ {fence = !fence; next} !fence' "$f" \

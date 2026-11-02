@@ -131,13 +131,13 @@ after you need them.
 | You want to | Read |
 |---|---|
 | Understand every setting | [Configuration](configuration.md) |
-| Put this on a VPS | [Operations](../runbooks/OPERATIONS.md) |
+| Put this on a VPS | [Operations](../runbooks/operations.md) |
 | Handle a thousand connections | [Connection pooling](pooling.md) |
-| Restore under pressure | [Restore](../runbooks/RESTORE.md) |
-| Move an existing database in | [Onboarding](../runbooks/ONBOARDING.md) |
-| Change PostgreSQL major version | [Upgrade](../runbooks/UPGRADE.md) |
+| Restore under pressure | [Restore](../runbooks/restore.md) |
+| Move an existing database in | [Onboarding](../runbooks/onboarding.md) |
+| Change PostgreSQL major version | [Upgrade](../runbooks/upgrade.md) |
 | Add a database engine | [Adding an engine](adding-an-engine.md) |
 
 ---
 
-[← Docs index](../../README.md#documentation)
+[← Docs index](../../readme.md#documentation)

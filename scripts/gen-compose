@@ -104,7 +104,7 @@ for engine in $(engine_list); do
     # env file, then the descriptor default -- the order compose itself uses.
     # A maintained version has a digest-pinned row in images/bases.tsv; any
     # other has none, and runs only from MDB_<ENGINE>_BASE_IMAGE, which
-    # check-env requires and reports as unsupported (DESIGN.md D-57).
+    # check-env requires and reports as unsupported (design.md D-57).
     vvar="MDB_${upper}_VERSION"
     resolved="${!vvar:-$(get "$vvar")}"
     resolved="${resolved:-$MDB_ENGINE_DEFAULT_VERSION}"

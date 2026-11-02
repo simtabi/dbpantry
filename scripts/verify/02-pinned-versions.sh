@@ -7,7 +7,7 @@ source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
 cd "$MDB_ROOT" || exit 1
 
-# DESIGN.md D-05 is why this check exists rather than being a convention:
+# design.md D-05 is why this check exists rather than being a convention:
 # nfrastack/db-backup:latest currently publishes ONLY linux/arm64, so an amd64
 # runner following a floating tag fails outright. Pinning prevents it.
 #

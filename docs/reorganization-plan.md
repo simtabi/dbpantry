@@ -1,7 +1,7 @@
 # Reorganization plan
 
 Status: executed on branch `refactor/reorganize` (2026-11-01). Decision record:
-[D-59](../DESIGN.md#7-decision-log).
+[D-59](../design.md#7-decision-log).
 
 ## Principle
 
@@ -76,8 +76,8 @@ the issue template and `CLAUDE.md`, and checks 01, 03, 42 and 44.
 | `scripts/` (flat) | One script per Makefile target, and the scripts are a documented interface (`scripts/backup --engine ...`). Sub-folders would lengthen every path without a grouping a reader needs. |
 | `scripts/verify/` | The harness is addressed as "check NN" everywhere; its location is part of that contract. |
 | `engines/`, `images/`, `rls/` | Already one concern each. |
-| `DESIGN.md`, `CLAUDE.md` at the root | The build contract names them there (KIT section 2). |
-| `README.md`, `CHANGELOG.md`, `CONTRIBUTING.md`, `SECURITY.md`, `CODE_OF_CONDUCT.md`, `LICENSE` | GitHub looks for them at the root. |
+| `design.md`, `CLAUDE.md` at the root | The build contract names them there (KIT section 2). |
+| `readme.md`, `changelog.md`, `CONTRIBUTING.md`, `SECURITY.md`, `CODE_OF_CONDUCT.md`, `LICENSE` | GitHub looks for them at the root. |
 | `backups/`, `certs/`, `secrets/` | Runtime output, gitignored, mounted by path. |
 
 ## Errors, bugs and inconsistencies to fix in the same pass
@@ -85,7 +85,7 @@ the issue template and `CLAUDE.md`, and checks 01, 03, 42 and 44.
 - check 28 leaves a `*_readonly_password.txt` secret behind on every run;
 - check 21 leaves its round-trip dumps in `backups/` and its `roundtrip`
   databases in the engines;
-- `DESIGN.md` uses D-51 for two different decisions, and seven decisions sit
+- `design.md` uses D-51 for two different decisions, and seven decisions sit
   after the end of the document instead of in the decision log;
 - workflow comments say actions are pinned to commits while they float on major
   tags, per the Simtabi action rule;
@@ -133,4 +133,4 @@ the new location by the next `make up`. The old copies are safe to delete.
   work.
 - **GFS retention is documented but only the daily tier exists.**
   `MDB_BACKUP_RETAIN_WEEKLY` and `MDB_BACKUP_RETAIN_MONTHLY` are read by
-  nothing; OPERATIONS.md now says so. Implementing the tiers is open work.
+  nothing; operations.md now says so. Implementing the tiers is open work.

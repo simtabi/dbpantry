@@ -1,6 +1,6 @@
 # Runtime adapters
 
-Each file here teaches `scripts/runtime-lib.sh` (DESIGN.md D-60) about one
+Each file here teaches `scripts/runtime-lib.sh` (design.md D-60) about one
 container runtime. The core knows no runtime by name. It loads these files in
 filename order, and that order is the auto-detection priority. To add a backend,
 add a file. You don't need to edit the core or any caller.

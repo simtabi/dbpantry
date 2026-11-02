@@ -1,6 +1,6 @@
 # Acceptance
 
-Every acceptance criterion in [SPEC](SPEC.md) section 18, mapped to the check
+Every acceptance criterion in [SPEC](spec.md) section 18, mapped to the check
 that proves it — and the ones nothing proves yet, named rather than omitted.
 
 The harness is the definition of done: SPEC section 18 *is* `scripts/verify/`,
@@ -105,4 +105,4 @@ this limit.
 
 ---
 
-[← Docs index](../../README.md#documentation)
+[← Docs index](../../readme.md#documentation)

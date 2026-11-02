@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # shellcheck shell=bash
 #
-# The container runtime layer (DESIGN.md D-60).
+# The container runtime layer (design.md D-60).
 #
 # Every script talks to the container engine through this file and never names
 # a runtime CLI itself. That is the whole abstraction: one place decides which

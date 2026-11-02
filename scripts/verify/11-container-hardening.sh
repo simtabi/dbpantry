@@ -7,7 +7,7 @@ source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
 need_runtime
 
-# DESIGN.md D-18 and D-19.
+# design.md D-18 and D-19.
 #
 # D-19: s6-overlay must start as root to run its init stages, then drop to the
 # engine user. So the container user IS root, and the honest assertion is that

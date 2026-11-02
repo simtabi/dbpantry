@@ -5,7 +5,7 @@
 # Bases come from images/bases.tsv, the single source of truth for what every
 # image is built FROM, so a digest is never written twice.
 #
-# bases.tsv holds MAINTAINED versions only (DESIGN.md D-57). Any other version
+# bases.tsv holds MAINTAINED versions only (design.md D-57). Any other version
 # builds from MDB_<ENGINE>_BASE_IMAGE in .env, digest-pinned. Such an image is
 # UNSUPPORTED: it is labelled so, the build says so, and nothing here scans or
 # verifies it.

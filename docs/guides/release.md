@@ -78,7 +78,7 @@ order, and each refuses as early as it can:
 
 | Job | What it does | Refuses when |
 |---|---|---|
-| resolve release | reads the version from the tag and the images from the engine descriptors | the tag is not on `main`, `CHANGELOG.md` has no section for it, or MongoDB is in the matrix |
+| resolve release | reads the version from the tag and the images from the engine descriptors | the tag is not on `main`, `changelog.md` has no section for it, or MongoDB is in the matrix |
 | scan | builds every image on both architectures and runs the Trivy gate | any image fails to build or has a fixable HIGH or CRITICAL finding |
 | verify | runs `make verify` on amd64 and arm64 | any check fails |
 | publish | builds again, scans again, pushes each architecture, and attaches its SBOM and build provenance | the second scan fails |
@@ -102,7 +102,7 @@ gh attestation verify oci://ghcr.io/simtabi/dbpantry-pg:17-0.1.1 --owner simtabi
 ## Release notes
 
 Every release carries a real description, taken from that version's
-`CHANGELOG.md` section — never auto-generated notes alone and never "see
+`changelog.md` section — never auto-generated notes alone and never "see
 CHANGELOG". The workflow extracts the `## [X.Y.Z]` block and passes it as the
 release body, with the contributor list appended.
 
@@ -113,7 +113,7 @@ workflow runs it before anything is built. Preview the next release's notes with
 scripts/release-notes Unreleased
 ```
 
-`CHANGELOG.md` follows Keep a Changelog. An entry says what changed for someone
+`changelog.md` follows Keep a Changelog. An entry says what changed for someone
 running this, not what was edited.
 
 ## Before tagging
@@ -132,16 +132,16 @@ for it.
 
 Then confirm, by hand:
 
-- `CHANGELOG.md` has a section for the version, and it is honest about breaking changes
+- `changelog.md` has a section for the version, and it is honest about breaking changes
 - `.env.example` documents every new variable (check 05 enforces this, but read it)
 - no engine version reached end of upstream support without a note
-- `DESIGN.md` records any decision made during the cycle
+- `design.md` records any decision made during the cycle
 
 ## Cutting a release
 
 1. In a pull request, rename `## [Unreleased]` to `## [X.Y.Z] - YYYY-MM-DD`, add
    an empty `## [Unreleased]` above it, and update the compare links at the
-   bottom of `CHANGELOG.md`. `scripts/release-notes X.Y.Z` prints the body the
+   bottom of `changelog.md`. `scripts/release-notes X.Y.Z` prints the body the
    release will carry.
 2. Merge it, once CI is green.
 3. Tag the merge commit on `main` and push the tag (see [Tagging](#tagging)).
@@ -176,4 +176,4 @@ that matters.
 
 ---
 
-[← Docs index](../../README.md#documentation)
+[← Docs index](../../readme.md#documentation)
