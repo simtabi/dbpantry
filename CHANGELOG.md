@@ -113,6 +113,11 @@ image, replacing Cassandra's vulnerable vendored JARs rather than waiving them.
   and it logged "complete" either way, so a corrupt or truncated dump left an empty or partial
   database behind a success message. It now prints the client's last lines and exits non-zero,
   saying the database was already recreated (check 56, which runs in a scratch checkout).
+- **`make init-prod` claimed the backups were encrypted; they never were.** It set
+  `MDB_BACKUP_ENCRYPT=true` and printed "backups encrypted", but nothing reads that variable:
+  dumps in `backups/` and their S3 copies are plaintext, and only the pgBackRest repository is
+  encrypted. `init --prod` now says so, the variable is documented as reserved, and `check-env`
+  warns on `true` (check 06). Real dump encryption is future work.
 - Patroni HA (Compose too): `pg_hba` was under `bootstrap:`, so after any member restart the image's
   hardening rewrote it without replication rules and replicas were refused. Members also lacked the
   root to postgres `pg_ident` map, so host-side `make backup`, restore and psql failed with peer auth.

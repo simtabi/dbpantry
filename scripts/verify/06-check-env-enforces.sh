@@ -32,6 +32,21 @@ if MDB_ENV_FILE="$tmp/.env2" "$MDB_ROOT/scripts/check-env" >/dev/null 2>&1; then
 fi
 vinfo "plaintext password rejected"
 
+# MDB_BACKUP_ENCRYPT is read by nothing: dumps are plaintext. init --prod set it
+# to true and printed "backups encrypted". init must not claim it, and
+# check-env must say, without blocking an existing .env.prod, that true does
+# nothing.
+if grep -nE 'MDB_BACKUP_ENCRYPT=true|backups encrypted' "$MDB_ROOT/scripts/init" >/dev/null; then
+    vfail "scripts/init still sets MDB_BACKUP_ENCRYPT=true or claims the backups are encrypted"
+fi
+cp "$MDB_ROOT/.env.example" "$tmp/.env-encrypt"
+printf 'MDB_BACKUP_ENCRYPT=true\n' >> "$tmp/.env-encrypt"
+out="$(MDB_ENV_FILE="$tmp/.env-encrypt" "$MDB_ROOT/scripts/check-env" 2>&1)" \
+    || vfail "MDB_BACKUP_ENCRYPT=true must warn, not fail an existing .env: $(tail -3 <<<"$out")"
+grep -q 'MDB_BACKUP_ENCRYPT=true.*not encrypted\|nothing encrypts' <<<"$out" \
+    || vfail "check-env is silent about MDB_BACKUP_ENCRYPT=true, which nothing implements"
+vinfo "unimplemented MDB_BACKUP_ENCRYPT=true: init no longer claims it, check-env warns"
+
 # The unmodified template must pass.
 cp "$MDB_ROOT/.env.example" "$tmp/.env3"
 MDB_ENV_FILE="$tmp/.env3" "$MDB_ROOT/scripts/check-env" >/dev/null 2>&1 \

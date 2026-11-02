@@ -106,8 +106,6 @@ Point applications at **6432**.
 MDB_BACKUP_DIR=backups
 MDB_BACKUP_SCHEDULE=0300
 MDB_BACKUP_COMPRESSION=ZSTD
-MDB_BACKUP_ENCRYPT=true
-MDB_BACKUP_ENCRYPT_PASSPHRASE_FILE=secrets/backup_passphrase.txt
 MDB_BACKUP_RETAIN_DAILY=7
 MDB_BACKUP_RETAIN_WEEKLY=4
 MDB_BACKUP_RETAIN_MONTHLY=6
@@ -120,6 +118,12 @@ files in the directory are left alone. That includes the backup checks in
 `make verify`, which run against this same directory. Only the daily window is
 enforced today: `MDB_BACKUP_RETAIN_WEEKLY` and `MDB_BACKUP_RETAIN_MONTHLY` are
 read by nothing yet.
+
+Dumps are compressed and checksummed, **not encrypted**, both in `MDB_BACKUP_DIR` and in the copy
+pushed to S3. `MDB_BACKUP_ENCRYPT` is reserved: `true` does nothing, and `make check-env` warns
+when it is set (a warning, so an existing `.env.prod` from an older `init --prod` still starts).
+Encrypt the bucket on the provider side and keep `backups/` on an encrypted disk. The PITR
+repository is different: pgBackRest encrypts it before it leaves the machine.
 
 Two things that are not optional on a server:
 

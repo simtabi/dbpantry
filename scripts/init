@@ -149,7 +149,6 @@ if (( PROD )); then
         -e 's|^MDB_PG_SLOW_MS=.*|MDB_PG_SLOW_MS=0|' \
         -e 's|^MDB_MYSQL_SLOW_SECONDS=.*|MDB_MYSQL_SLOW_SECONDS=0|' \
         -e 's|^MDB_MARIADB_SLOW_SECONDS=.*|MDB_MARIADB_SLOW_SECONDS=0|' \
-        -e 's|^MDB_BACKUP_ENCRYPT=.*|MDB_BACKUP_ENCRYPT=true|' \
         -e 's|^MDB_PG_PITR=.*|MDB_PG_PITR=true|' \
         -e 's|^MDB_PGBACKREST_REPO_TYPE=.*|MDB_PGBACKREST_REPO_TYPE=s3|' \
         -e 's|^#MDB_PG_HOST_PORT=.*|#MDB_PG_HOST_PORT=|' \
@@ -158,7 +157,11 @@ if (( PROD )); then
         "$TARGET" > "$tmp"
     mv "$tmp" "$TARGET"
 
-    printf '  TLS enforced, no engine ports published, backups encrypted\n'
+    printf '  TLS enforced, no engine ports published\n'
+    # Said every time, because the opposite was printed here until it was
+    # found to be false: nothing encrypts the dumps (MDB_BACKUP_ENCRYPT is
+    # reserved). Only the pgBackRest repository has a cipher.
+    printf '  dumps in %s are NOT encrypted; only the pgBackRest PITR repository is\n' "$(mdb_env_get MDB_BACKUP_DIR "$TARGET")"
     printf '  UI login: admin / (see secrets/ui_password.txt)\n'
     printf '\n'
     # shellcheck disable=SC2016  # backticks are prose here, not substitution
