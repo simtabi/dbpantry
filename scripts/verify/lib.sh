@@ -293,6 +293,121 @@ mdb_cleanup() {
 }
 trap mdb_cleanup EXIT
 
+# A throwaway checkout with its own stack, for checks that change state the
+# operator owns: secrets, databases, volumes.
+#
+# Most checks run against the checkout's own .env, project and secrets/, which
+# is fine for reading and fatal for writing: a rotation check rotated the real
+# passwords, and a retention run once deleted 175 real dumps. This copies the
+# tree WITHOUT .git, backups/, secrets/, certs/, .env and overrides/local,
+# writes a fresh .env (a unique COMPOSE_PROJECT_NAME, every host port moved to
+# a free high port, backups in the scratch tree) and generates new secrets and
+# certificates there with scripts/init. Run commands inside it with
+# `(cd "$dir" && ...)`: every script there resolves its root, .env and secrets
+# from its own location, never this checkout's.
+#
+# Cleanup stops that project and deletes its volumes (only that project's,
+# by the project name) and then the tree. It refuses to clean anything whose
+# project name is not the generated one.
+#
+# Usage: scratch_stack PROFILES; then use $SCRATCH_DIR and $SCRATCH_PROJECT.
+# Not in $(...): the cleanup it registers would be lost with the subshell.
+_port_busy() {
+    if command -v lsof >/dev/null 2>&1; then
+        lsof -nP -iTCP:"$1" -sTCP:LISTEN >/dev/null 2>&1
+    else
+        (exec 3<>"/dev/tcp/127.0.0.1/$1") 2>/dev/null
+    fi
+}
+
+scratch_stack() {
+    local profiles="$1" sdir proj base key
+    sdir="$(mktemp -d "${TMPDIR:-/tmp}/mdb-scratch.XXXXXX")" || vfail "mktemp failed"
+    proj="mdbscratch$(od -An -N4 -tx1 /dev/urandom | tr -d ' \n')"
+    SCRATCH_PROJECT="$proj"; SCRATCH_DIR="$sdir"
+    # Registered first, so a failure below still removes the tree.
+    add_cleanup "scratch_stack_cleanup '$sdir' '$proj'"
+    export SCRATCH_PROJECT SCRATCH_DIR
+    # Anchored: an unanchored "certs" also drops scripts/certs.
+    rsync -a --exclude /.git --exclude /backups --exclude /secrets --exclude /certs \
+        --exclude /.env --exclude /.env.prod --exclude /overrides/local "$MDB_ROOT/" "$sdir/" \
+        || vfail "could not copy the checkout to $sdir"
+    mkdir -p "$sdir/backups"
+    # init ends with check-env, which fails here whenever the operator's own
+    # stack holds the default ports; the ports are moved below and checked then.
+    ( cd "$sdir" && scripts/init >/dev/null 2>&1 ) || true
+    [[ -s "$sdir/.env" && -s "$sdir/secrets/pg_superuser_password.txt" && -s "$sdir/certs/ca.crt" \
+       && "$sdir/secrets" != "$MDB_ROOT/secrets" ]] \
+        || vfail "scripts/init did not create the scratch checkout's .env, secrets and certs"
+    # Every port key moves to a run of free high ports. The active lines are
+    # deleted rather than overridden: check-env reads every assignment.
+    base=$(( 41000 + (RANDOM % 200) * 100 ))
+    sed -i.bak -E '/^(COMPOSE_PROJECT_NAME|MDB_PROFILES|MDB_BACKUP_DIR|MDB_NETWORK_SUBNET|MDB_[A-Z0-9_]*PORT)=/d' "$sdir/.env" \
+        && rm -f "$sdir/.env.bak"
+    {
+        printf '\n# scratch_stack (verify): never the operator project\n'
+        printf 'COMPOSE_PROJECT_NAME=%s\n' "$proj"
+        printf 'MDB_PROFILES="%s"\n' "$profiles"
+        printf 'MDB_BACKUP_DIR="%s"\n' "$sdir/backups"
+        # Its own subnet too: the operator's mdb_net already holds the default.
+        printf 'MDB_NETWORK_SUBNET=10.%s.%s.0/24\n' "$(( 200 + RANDOM % 50 ))" "$(( RANDOM % 250 ))"
+        for key in $(grep -oE '^#?MDB_[A-Z0-9_]*PORT=' "$MDB_ROOT/.env.example" | tr -d '#=' | sort -u); do
+            # A random base can still land on a listener (another tool's
+            # ephemeral port), which check-env then rightly refuses.
+            while _port_busy "$base"; do base=$(( base + 1 )); done
+            printf '%s=%s\n' "$key" "$base"
+            base=$(( base + 1 ))
+        done
+    } >> "$sdir/.env"
+    # Last assignment wins for both Compose and mdb_env_get; make sure.
+    [[ "$(mdb_env_get COMPOSE_PROJECT_NAME "$sdir/.env")" == "$proj" ]] \
+        || vfail "the scratch .env does not resolve to the scratch project"
+    scratch_run scripts/check-env --quiet >/dev/null 2>&1 \
+        || vfail "check-env rejects the scratch .env: $(scratch_run scripts/check-env 2>&1 | tail -5)"
+}
+
+# Run a command in the scratch checkout, with nothing from this process that
+# could point it back at the operator's: Compose reads COMPOSE_* from the
+# environment before .env.
+scratch_run() {
+    [[ -n "${SCRATCH_DIR:-}" && "$SCRATCH_DIR" != "$MDB_ROOT" ]] || vfail "scratch_run before scratch_stack"
+    ( cd "$SCRATCH_DIR" && env -u COMPOSE_PROJECT_NAME -u COMPOSE_FILE -u COMPOSE_PROFILES \
+        -u MDB_ENV_FILE -u ENV_FILE -u MDB_BACKUP_DIR -u MDB_BACKEND -u MDB_BACKEND_READY \
+        MDB_RT_ROOT="$SCRATCH_DIR" "$@" )
+}
+
+# `make up` in the scratch stack, with mdb_up's failure tail.
+scratch_up() {
+    local out rc=0
+    out="$(scratch_run make up "$@" 2>&1)" || rc=$?
+    (( rc == 0 )) || printf '%s\n' "$out" | tail -25 | sed 's/^/      /' >&2
+    return "$rc"
+}
+
+# A service exec in the scratch stack.
+scratch_exec() {
+    # shellcheck disable=SC2016  # expanded by the inner bash
+    scratch_run bash -c '. scripts/backend-lib.sh && mdb_svc_exec "$@"' scratch_exec "$@"
+}
+
+# Every named service in the scratch stack is healthy.
+scratch_healthy() {
+    # shellcheck disable=SC2016  # expanded by the inner bash
+    scratch_run bash -c '. scripts/backend-lib.sh && for s in "$@"; do mdb_svc_healthy "$s" || exit 1; done' scratch_healthy "$@"
+}
+
+scratch_stack_cleanup() {
+    local sdir="$1" proj="$2" v
+    [[ "$proj" == mdbscratch* && -d "$sdir" && "$sdir" != "$MDB_ROOT" && "$sdir" == */mdb-scratch.* ]] || return 0
+    if [[ "$(mdb_env_get COMPOSE_PROJECT_NAME "$sdir/.env" 2>/dev/null)" == "$proj" ]]; then
+        SCRATCH_DIR="$sdir" scratch_run make down >/dev/null 2>&1 || true
+    fi
+    for v in $(mdb_ctr volume ls -q --filter "label=com.docker.compose.project=$proj" 2>/dev/null); do
+        mdb_ctr volume rm -f "$v" >/dev/null 2>&1 || true
+    done
+    rm -rf "$sdir"
+}
+
 # Wait until a command succeeds, or fail after a budget in seconds.
 wait_for() {
     local budget="$1" what="$2"; shift 2

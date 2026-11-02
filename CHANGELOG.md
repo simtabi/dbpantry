@@ -109,6 +109,23 @@ image, replacing Cassandra's vulnerable vendored JARs rather than waiving them.
   exist and is not a known generated file.
 
 ### Fixed
+- **`make rotate-secrets` never rotated a MySQL or MariaDB project user.** Root logged in with
+  the user's freshly generated password instead of its own, so every user failed with a warning,
+  kept its old password, and the run still exited 0. Only `'root'@'localhost'` was changed, so
+  `'root'@'%'` kept accepting the old password over TCP, and read-only companions were never
+  rotated. Root now authenticates with its current password, every host row of a user is altered,
+  the new passwords go in on stdin rather than the command line, read-only users are included,
+  and any user left on its old password makes the run exit non-zero (check 57, in a scratch
+  checkout).
+- **`scripts/restore` reported success when the restore failed.** Its pipe ended in `|| true`
+  and it logged "complete" either way, so a corrupt or truncated dump left an empty or partial
+  database behind a success message. It now prints the client's last lines and exits non-zero,
+  saying the database was already recreated (check 56, which runs in a scratch checkout).
+- **`make init-prod` claimed the backups were encrypted; they never were.** It set
+  `MDB_BACKUP_ENCRYPT=true` and printed "backups encrypted", but nothing reads that variable:
+  dumps in `backups/` and their S3 copies are plaintext, and only the pgBackRest repository is
+  encrypted. `init --prod` now says so, the variable is documented as reserved, and `check-env`
+  warns on `true` (check 06). Real dump encryption is future work.
 - Patroni HA (Compose too): `pg_hba` was under `bootstrap:`, so after any member restart the image's
   hardening rewrote it without replication rules and replicas were refused. Members also lacked the
   root to postgres `pg_ident` map, so host-side `make backup`, restore and psql failed with peer auth.

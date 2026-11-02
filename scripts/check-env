@@ -483,6 +483,20 @@ fi
 # all -- two switches for one thing, free to disagree.
 
 # -----------------------------------------------------------------------------
+# 5b. Reserved settings: present in .env, implemented by nothing yet
+# -----------------------------------------------------------------------------
+# MDB_BACKUP_ENCRYPT=true was set by init --prod, which then printed "backups
+# encrypted" over dumps that were plaintext. A warning rather than an error:
+# every .env.prod written by that init has it, and refusing to start a
+# running production stack over a switch that never did anything trades a
+# false claim for an outage. The warning is what removes the false claim.
+if [[ "$(get MDB_BACKUP_ENCRYPT)" == "true" ]]; then
+    warn "MDB_BACKUP_ENCRYPT=true does nothing: dumps are NOT encrypted, in
+       MDB_BACKUP_DIR or on S3 (nothing encrypts them yet). Set it to false and
+       encrypt the disk and the bucket; see docs/runbooks/operations.md (Backups)."
+fi
+
+# -----------------------------------------------------------------------------
 # 6. Secret files referenced must be resolvable once initialised
 # -----------------------------------------------------------------------------
 while IFS= read -r line; do

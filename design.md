@@ -168,7 +168,7 @@ Reproduced from spec.md section 21.1 as the sizing contract:
 |---|---|---|---|
 | `MDB_BACKUP_SCHEDULE` | `0300` | Nightly start (HHMM) | `backup` |
 | `MDB_BACKUP_COMPRESSION` | `ZSTD` | Maps to `DBnn_COMPRESSION` | `backup` |
-| `MDB_BACKUP_ENCRYPT` | `false` dev / `true` prod | Maps to `DBnn_ENCRYPT` | `backup` |
+| `MDB_BACKUP_ENCRYPT` | `false` | Reserved: nothing encrypts dumps yet; check-env warns on `true` | `backup` |
 | `MDB_BACKUP_RETAIN_DAILY/WEEKLY/MONTHLY` | `7` / `4` / `6` | GFS retention tiers | `backup` |
 | `MDB_S3_*` (`BUCKET`, `KEY_ID`, `KEY_SECRET`, `REGION`, `HOST`) | unset | S3-compatible target; wiring present, disabled until set | `backup` |
 | `MDB_BACKUP_NOTIFY_URL` | unset | Failure webhook so backups never fail silently | `backup` |
