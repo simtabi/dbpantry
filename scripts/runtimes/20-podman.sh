@@ -1,5 +1,5 @@
 # shellcheck shell=bash
-# Runtime adapter: Podman, native or through podman machine (see readme.md).
+# Runtime adapter: Podman, native or through podman machine (see README.md).
 
 mdb_runtime_register podman
 

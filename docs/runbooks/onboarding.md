@@ -104,4 +104,4 @@ not merge their access.
 
 ---
 
-[← Docs index](../../readme.md#documentation)
+[← Docs index](../../README.md#documentation)

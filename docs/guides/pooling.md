@@ -82,7 +82,7 @@ at the end of every transaction, so anything that lives on a *session* breaks:
 
 This matters for the RLS kit: `SET LOCAL app.tenant_id` is correct precisely
 because it is discarded at commit, so a pooled connection cannot carry one
-tenant's identity into the next request. See [the RLS kit](../../rls/readme.md).
+tenant's identity into the next request. See [the RLS kit](../../rls/README.md).
 
 If you need session state, use `session` pool mode and accept a much lower
 multiplexing ratio.
@@ -171,4 +171,4 @@ one either.
 
 ---
 
-[← Docs index](../../readme.md#documentation)
+[← Docs index](../../README.md#documentation)

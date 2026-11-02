@@ -77,7 +77,7 @@ the issue template and `CLAUDE.md`, and checks 01, 03, 42 and 44.
 | `scripts/verify/` | The harness is addressed as "check NN" everywhere; its location is part of that contract. |
 | `engines/`, `images/`, `rls/` | Already one concern each. |
 | `design.md`, `CLAUDE.md` at the root | The build contract names them there (KIT section 2). |
-| `readme.md`, `changelog.md`, `CONTRIBUTING.md`, `SECURITY.md`, `CODE_OF_CONDUCT.md`, `LICENSE` | GitHub looks for them at the root. |
+| `README.md`, `CHANGELOG.md`, `CONTRIBUTING.md`, `SECURITY.md`, `CODE_OF_CONDUCT.md`, `LICENSE` | GitHub looks for them at the root. |
 | `backups/`, `certs/`, `secrets/` | Runtime output, gitignored, mounted by path. |
 
 ## Errors, bugs and inconsistencies to fix in the same pass

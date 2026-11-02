@@ -199,7 +199,7 @@ multidb-server/
   rls/
   docs/             # operations.md restore.md upgrade.md windows.md onboarding.md (migrate existing native/homebrew databases into the toolkit)
   .github/workflows/
-  readme.md CONTRIBUTING.md SECURITY.md changelog.md LICENSE (MIT)
+  README.md CONTRIBUTING.md SECURITY.md CHANGELOG.md LICENSE (MIT)
 ```
 - Data safety in the Makefile: make down never touches data; make destroy removes volumes only after typed confirmation naming the volume. make self-update upgrades the toolkit itself (git pull, image pull, CHANGELOG migration notes surfaced) without touching project data.
 

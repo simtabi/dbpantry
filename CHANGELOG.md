@@ -13,9 +13,10 @@ project to dbpantry and fixes the findings that failed the Trivy gate on every
 image, replacing Cassandra's vulnerable vendored JARs rather than waiving them.
 
 ### Changed
-- Markdown files use lowercase slug names (design.md D-61): `readme.md`, `changelog.md`, `design.md`,
-  `docs/runbooks/*.md`, `docs/reference/spec.md`, `kit.md` and others. `CLAUDE.md`, `CONTRIBUTING.md`,
-  `SECURITY.md` and `CODE_OF_CONDUCT.md` keep the names their tools look for.
+- Markdown files use lowercase slug names (design.md D-61): `design.md`, `docs/runbooks/*.md`,
+  `docs/reference/spec.md`, `kit.md` and others. Git and GitHub conventional names stay upper case:
+  `README.md` (also `rls/README.md` and `scripts/runtimes/README.md`), `CHANGELOG.md`, `CONTRIBUTING.md`,
+  `SECURITY.md`, `CODE_OF_CONDUCT.md`, `LICENSE`, `CLAUDE.md` and `.github/PULL_REQUEST_TEMPLATE.md`.
 
 - **Each engine now maintains its current and latest version only** (design.md D-57,
   [Supported versions](docs/guides/versions.md)): the newest supported line and the one before it,
@@ -56,7 +57,7 @@ image, replacing Cassandra's vulnerable vendored JARs rather than waiving them.
   - `make runtime` / `scripts/runtime info` shows what was detected.
   - There are guides for [Docker and the Docker-API products](docs/guides/runtime-docker.md),
     [Podman](docs/guides/runtime-podman.md) and [nerdctl](docs/guides/runtime-nerdctl.md).
-  - Runtimes are pluggable adapters in `scripts/runtimes/` (interface in `scripts/runtimes/readme.md`); a new backend is a new file. Kubernetes, LXC/Incus and Apple's `container` tool are planned as follow-up adapters.
+  - Runtimes are pluggable adapters in `scripts/runtimes/` (interface in `scripts/runtimes/README.md`); a new backend is a new file. Kubernetes, LXC/Incus and Apple's `container` tool are planned as follow-up adapters.
   - The Podman adapter refuses a rootless connection on a rootful podman machine, because `podman compose` would use the other container store.
 - Checks 48 (runtime detection, make's project name, no direct `docker` calls), 49
   (fully-qualified image references) and 50 (quoted env values, and readers that unquote them).

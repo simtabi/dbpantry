@@ -20,7 +20,7 @@ disclosure.
 The most recent minor release of dbpantry is supported. Engine images track
 upstream PostgreSQL, MySQL, and MariaDB support windows; an engine major that
 upstream has ended support for is removed from the version menu at the next
-minor release, announced in `changelog.md`.
+minor release, announced in `CHANGELOG.md`.
 
 ## Verifying what you run
 

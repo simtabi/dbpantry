@@ -51,6 +51,7 @@ so a green `make verify` is the criteria being met rather than a proxy for it.
 | Runtime detection (Docker, Podman, nerdctl, overrides) is correct, a new adapter plugs in without core changes, make honours the env file's project name, and no script calls a container CLI directly | `48-runtime-detection` |
 | Every image reference is fully qualified, so Podman and nerdctl resolve the same image as Docker | `49-images-fully-qualified` |
 | Env values with spaces or special characters are double-quoted, and every reader unquotes them | `50-env-values-quoted` |
+| Markdown files use lowercase slug names, except git and GitHub conventional files (README.md, CHANGELOG.md, ...) | `51-markdown-names` |
 | The off-site push is wired, authenticated, and fails loudly | `39-offsite-backup` |
 | Configuration reproduces, data persists, recovery data outlives `destroy` | `41-state-survives` |
 | Every image is official, upstream, or justified | `42-image-provenance` |
@@ -105,4 +106,4 @@ this limit.
 
 ---
 
-[← Docs index](../../readme.md#documentation)
+[← Docs index](../../README.md#documentation)
