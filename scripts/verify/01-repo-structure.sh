@@ -106,4 +106,11 @@ if [[ -n "$missing_keep" ]]; then
 fi
 vinfo "every engine's overrides/ directory is tracked"
 
+# A check's network goes through track_network, which removes it after the
+# containers. `network rm` as an add_cleanup command runs while a tracked
+# container is still attached, fails silently, and leaked one network per run.
+leaky="$(grep -lE "add_cleanup .*network rm" "$MDB_ROOT"/scripts/verify/[0-9]*.sh 2>/dev/null | grep -v /01-repo-structure.sh || true)"
+[[ -z "$leaky" ]] || vfail "remove check networks with track_network, not add_cleanup: ${leaky//$MDB_ROOT\//}"
+vinfo "check networks are removed after their containers"
+
 vinfo "layout matches SPEC section 15"

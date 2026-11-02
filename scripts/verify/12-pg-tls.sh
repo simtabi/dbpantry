@@ -24,7 +24,7 @@ need_image "$img"
 net="mdb-verify-tls-net-$$"
 name="mdb-verify-tls-$$"
 track_container "$name"
-add_cleanup "mdb_ctr network rm '$net'"
+track_network "$net"
 
 mdb_ctr network create "$net" >/dev/null
 

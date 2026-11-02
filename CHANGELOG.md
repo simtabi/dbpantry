@@ -87,6 +87,9 @@ image, replacing Cassandra's vulnerable vendored JARs rather than waiving them.
   exist and is not a known generated file.
 
 ### Fixed
+- The verify harness leaked one network per run of checks 12 and 33: it removed the network before
+  the container still attached to it. Networks are now removed last (`track_network`), and check 01
+  rejects the old pattern.
 - **`make` ignored `COMPOSE_PROJECT_NAME` in `.env`.** The Makefile exported a bare `mdb`
   default, which beats `.env` in Compose, so a second checkout drove the first checkout's
   containers and data volumes. The name is now read from the env file. `scripts/destroy`,

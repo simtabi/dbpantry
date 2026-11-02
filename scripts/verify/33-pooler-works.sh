@@ -39,7 +39,7 @@ secrets="$(mktemp -d)"
 
 track_container "$pg"
 track_container "$bouncer"
-add_cleanup "mdb_ctr network rm '$net' >/dev/null 2>&1 || true"
+track_network "$net"
 add_cleanup "rm -rf '$secrets'"
 
 printf 'mdb-throwaway-bouncer\n' > "$secrets/pgbouncer_password.txt"
