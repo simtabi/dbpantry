@@ -1,0 +1,335 @@
+{{- $root := . }}
+{{- $e := .Values.engines.pg }}
+{{- if and $e.enabled $e.ha.enabled (eq $e.ha.provider "patroni") }}
+{{- $ctx := dict "root" $root "name" "pg" "engine" $e }}
+{{- $full := include "dbpantry.fullname" $ctx }}
+{{- $p := $e.ha.patroni }}
+{{- $sa := printf "%s-patroni" (include "dbpantry.fullname" $ctx) }}
+{{- $img := $p.imageRef | default (printf "%s/%s:%s" $root.Values.global.imageRegistry $p.image (toString $e.tag)) }}
+# PostgreSQL under Patroni, with the Kubernetes API as the DCS (design.md
+# D-65): the leader lock is the ConfigMap <scope>-leader, and Patroni labels
+# each pod role=primary or role=replica, which the Services below select on.
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ $sa }}
+  labels:
+    {{- include "dbpantry.labels" $ctx | nindent 4 }}
+---
+# What Patroni's Kubernetes DCS needs, in this namespace only.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ $sa }}
+  labels:
+    {{- include "dbpantry.labels" $ctx | nindent 4 }}
+rules:
+  - apiGroups: [""]
+    resources: [configmaps]
+    verbs: [create, get, list, patch, update, watch, delete]
+  - apiGroups: [""]
+    resources: [endpoints]
+    verbs: [get, list, patch, update, watch, create, delete]
+  - apiGroups: [""]
+    resources: [pods]
+    verbs: [get, list, patch, update, watch]
+  - apiGroups: [""]
+    resources: [services]
+    verbs: [create]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ $sa }}
+  labels:
+    {{- include "dbpantry.labels" $ctx | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ $sa }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ $sa }}
+    namespace: {{ $root.Release.Namespace }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $full }}-hl
+  labels:
+    {{- include "dbpantry.labels" $ctx | nindent 4 }}
+spec:
+  clusterIP: None
+  publishNotReadyAddresses: true
+  selector:
+    {{- include "dbpantry.selector" $ctx | nindent 4 }}
+  ports:
+    - name: db
+      port: 5432
+      targetPort: db
+    - name: patroni
+      port: 8008
+      targetPort: patroni
+---
+# Writes: whichever member Patroni has labelled primary.
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "dbpantry.svcname" $ctx }}
+  labels:
+    {{- include "dbpantry.labels" $ctx | nindent 4 }}
+  {{- with $root.Values.service.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  type: {{ $root.Values.service.type }}
+  selector:
+    {{- include "dbpantry.selector" $ctx | nindent 4 }}
+    role: primary
+  ports:
+    - name: db
+      port: 5432
+      targetPort: db
+---
+# Reads: the replicas.
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "dbpantry.svcname" $ctx }}-ro
+  labels:
+    {{- include "dbpantry.labels" $ctx | nindent 4 }}
+spec:
+  type: {{ $root.Values.service.type }}
+  selector:
+    {{- include "dbpantry.selector" $ctx | nindent 4 }}
+    role: replica
+  ports:
+    - name: db
+      port: 5432
+      targetPort: db
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ $full }}
+  labels:
+    {{- include "dbpantry.labels" $ctx | nindent 4 }}
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      {{- include "dbpantry.selector" $ctx | nindent 6 }}
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ $full }}
+  labels:
+    {{- include "dbpantry.labels" $ctx | nindent 4 }}
+spec:
+  serviceName: {{ $full }}-hl
+  replicas: {{ $e.ha.replicas }}
+  # Patroni serialises the bootstrap through the leader lock, so members can
+  # start together.
+  podManagementPolicy: Parallel
+  updateStrategy:
+    type: RollingUpdate
+  persistentVolumeClaimRetentionPolicy:
+    whenDeleted: Retain
+    whenScaled: Retain
+  selector:
+    matchLabels:
+      {{- include "dbpantry.selector" $ctx | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "dbpantry.labels" $ctx | nindent 8 }}
+        # Patroni lists its members by these labels plus cluster-name.
+        cluster-name: {{ $e.ha.clusterName | quote }}
+        {{- with $root.Values.global.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      annotations:
+        checksum/env: {{ toJson (list $root.Values.global.env $e.ha) | sha256sum }}
+        {{- with $root.Values.global.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      serviceAccountName: {{ $sa }}
+      # Patroni talks to the Kubernetes API: it is the DCS.
+      automountServiceAccountToken: true
+      terminationGracePeriodSeconds: {{ $root.Values.global.terminationGracePeriodSeconds }}
+      {{- with $root.Values.global.priorityClassName }}
+      priorityClassName: {{ . }}
+      {{- end }}
+      {{- with $root.Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $root.Values.global.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $root.Values.global.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      affinity:
+        {{- if $root.Values.global.affinity }}
+        {{- toYaml $root.Values.global.affinity | nindent 8 }}
+        {{- else }}
+        # Spread members over nodes where there are several; a one-node
+        # cluster still schedules all three (a rehearsal, as under Compose).
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                topologyKey: kubernetes.io/hostname
+                labelSelector:
+                  matchLabels:
+                    {{- include "dbpantry.selector" $ctx | nindent 20 }}
+        {{- end }}
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        # Named after the service, like every engine's container.
+        - name: pg
+          image: {{ $img }}
+          imagePullPolicy: {{ $root.Values.global.imagePullPolicy }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+              add: [CHOWN, SETUID, SETGID, DAC_OVERRIDE, FOWNER]
+          ports:
+            - name: db
+              containerPort: 5432
+            - name: patroni
+              containerPort: 8008
+          env:
+            {{- range $k, $v := $root.Values.global.env }}
+            - name: {{ $k }}
+              value: {{ toString $v | quote }}
+            {{- end }}
+            - name: PATRONI_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: MDB_PATRONI_CONNECT_ADDRESS
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+            - name: MDB_PATRONI_K8S_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: MDB_PATRONI_DCS
+              value: kubernetes
+            - name: MDB_PATRONI_K8S_LABELS
+              value: {{ printf "{app.kubernetes.io/name: dbpantry, app.kubernetes.io/instance: %s, app.kubernetes.io/component: pg}" $root.Release.Name | quote }}
+            - name: PATRONI_SCOPE
+              value: {{ $e.ha.clusterName | quote }}
+            # A child of the volume, never the mount point: see compose.ha.yml.
+            - name: PGDATA
+              value: {{ printf "%s/pgdata" $p.dataPath }}
+            - name: MDB_PG_SYNC_MODE
+              value: {{ toString $e.ha.syncMode | quote }}
+            {{- with $e.env.MDB_TZ }}
+            - name: MDB_TZ
+              value: {{ toString . | quote }}
+            {{- end }}
+          resources:
+            {{- if $e.resources }}
+            {{- toYaml $e.resources | nindent 12 }}
+            {{- else }}
+            requests:
+              cpu: {{ toString $e.cpu | quote }}
+              memory: {{ include "dbpantry.qty" $e.memory }}
+            limits:
+              memory: {{ include "dbpantry.qty" $e.memory }}
+            {{- end }}
+          # Any member answering its REST API is healthy; leadership is what
+          # the role label and the Services are for (see compose.ha.yml).
+          startupProbe:
+            exec:
+              command: ['sh', '-c', 'curl -fsS http://127.0.0.1:8008/health >/dev/null']
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: {{ div (int $p.startupSeconds) 10 }}
+          readinessProbe:
+            exec:
+              command: ['sh', '-c', 'curl -fsS http://127.0.0.1:8008/health >/dev/null']
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+          livenessProbe:
+            exec:
+              command: ['sh', '-c', 'curl -fsS http://127.0.0.1:8008/liveness >/dev/null']
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 6
+          volumeMounts:
+            - name: data
+              mountPath: {{ $p.dataPath }}
+            - name: secrets
+              mountPath: /run/secrets
+              readOnly: true
+            - name: certs
+              mountPath: /certs
+              readOnly: true
+            {{- if $e.shm }}
+            - name: shm
+              mountPath: /dev/shm
+            {{- end }}
+      volumes:
+        # The Secret is mounted at /run/secrets, which is also where
+        # /var/run/secrets/kubernetes.io/serviceaccount (Patroni's hard-coded
+        # token path) lands. A read-only Secret volume cannot grow that
+        # mountpoint, so the projection carries an empty-looking directory for
+        # it; the service account token is then mounted over it.
+        - name: secrets
+          projected:
+            defaultMode: 0400
+            sources:
+              - secret:
+                  name: {{ $root.Values.global.secretName }}
+              - downwardAPI:
+                  items:
+                    - path: kubernetes.io/serviceaccount/.mountpoint
+                      fieldRef:
+                        fieldPath: metadata.namespace
+        # Patroni enables TLS and needs /certs/pg/server.{crt,key}: not optional.
+        - name: certs
+          secret:
+            secretName: {{ printf "%s-pg" $root.Values.global.certsSecretPrefix }}
+            defaultMode: 0400
+            items:
+              - key: ca.crt
+                path: ca.crt
+              - key: server.crt
+                path: pg/server.crt
+              - key: server.key
+                path: pg/server.key
+        {{- if $e.shm }}
+        - name: shm
+          emptyDir:
+            medium: Memory
+            sizeLimit: {{ include "dbpantry.qty" $e.shm }}
+        {{- end }}
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+        labels:
+          {{- include "dbpantry.selector" $ctx | nindent 10 }}
+      spec:
+        accessModes: [ReadWriteOnce]
+        {{- with $root.Values.global.storageClass }}
+        storageClassName: {{ . }}
+        {{- end }}
+        resources:
+          requests:
+            storage: {{ $e.storage }}
+{{- end }}

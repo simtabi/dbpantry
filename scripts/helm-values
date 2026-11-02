@@ -15,6 +15,13 @@
 #   MDB_<ENGINE>_MEM_LIMIT / _CPU_LIMIT  memory and cpu (requests and limits)
 #   MDB_PG_SHM                   the size of PostgreSQL's /dev/shm
 #   MDB_K8S_STORAGE_CLASS        global.storageClass
+#   the ha profile               PostgreSQL HA (engines.pg.ha): Patroni, or
+#                                CloudNativePG with MDB_K8S_HA_PROVIDER=cnpg;
+#                                MDB_HA_CLUSTER_NAME, MDB_PG_SYNC_MODE,
+#                                MDB_K8S_HA_REPLICAS
+#   the backup profile           backup CronJobs (backup.*): MDB_BACKUP_SCHEDULE
+#                                (HHMM, daily) or MDB_K8S_BACKUP_SCHEDULE (cron),
+#                                MDB_TZ as the time zone
 #   every variable the engine's Compose service passes (its environment:
 #   block in compose.engines.yml), resolved the way Compose resolves it: the
 #   environment, then .env, then the ${VAR:-default} default. Empty values are
@@ -37,7 +44,7 @@ out=""
 while (( $# )); do
     case "$1" in
         -o) out="${2:?-o needs a file}"; shift 2 ;;
-        -h|--help) sed -n '2,22p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+        -h|--help) sed -n '2,31p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
         *) printf 'helm-values: unknown argument: %s\n' "$1" >&2; exit 2 ;;
     esac
 done
@@ -95,6 +102,49 @@ profiles="${COMPOSE_PROFILES:-$(setting MDB_PROFILES)}"
 profiles="${profiles:-pg,ui}"
 profiles=",${profiles// /},"
 
+has_profile() { case "$profiles" in *",$1,"*) return 0 ;; esac; return 1; }
+
+# PostgreSQL HA. Its own profile, as under Compose (`make up PROFILES=pg,ha`).
+render_ha() {
+    local v
+    printf '    ha:\n'
+    if has_profile ha; then printf '      enabled: true\n'; else printf '      enabled: false\n'; fi
+    v="$(setting MDB_K8S_HA_PROVIDER)"; v="${v:-patroni}"
+    case "$v" in
+        patroni|cnpg) ;;
+        *) printf 'helm-values: MDB_K8S_HA_PROVIDER must be patroni or cnpg, not %s\n' "$v" >&2; return 1 ;;
+    esac
+    printf '      provider: %s\n' "$(q "$v")"
+    v="$(setting MDB_HA_CLUSTER_NAME)"; [[ -z "$v" ]] || printf '      clusterName: %s\n' "$(q "$v")"
+    v="$(setting MDB_PG_SYNC_MODE)"; [[ -z "$v" ]] || printf '      syncMode: %s\n' "$(q "$v")"
+    v="$(setting MDB_K8S_HA_REPLICAS)"
+    if [[ -n "$v" ]]; then
+        [[ "$v" =~ ^[0-9]+$ ]] || { printf 'helm-values: MDB_K8S_HA_REPLICAS must be a number, not %s\n' "$v" >&2; return 1; }
+        printf '      replicas: %s\n' "$(q "$v")"
+    fi
+}
+
+# MDB_BACKUP_SCHEDULE is HHMM, daily (0300); a cron line overrides it.
+render_backup() {
+    local v hh mm
+    printf 'backup:\n'
+    if has_profile backup; then printf '  enabled: true\n'; else printf '  enabled: false\n'; fi
+    v="$(setting MDB_K8S_BACKUP_SCHEDULE)"
+    if [[ -z "$v" ]]; then
+        v="$(setting MDB_BACKUP_SCHEDULE)"; v="${v:-0300}"
+        [[ "$v" =~ ^([0-2][0-9])([0-5][0-9])$ ]] \
+            || { printf 'helm-values: MDB_BACKUP_SCHEDULE must be HHMM, not %s (or set MDB_K8S_BACKUP_SCHEDULE to a cron line)\n' "$v" >&2; return 1; }
+        hh=$((10#${BASH_REMATCH[1]})); mm=$((10#${BASH_REMATCH[2]}))
+        v="$mm $hh * * *"
+    fi
+    printf '  schedule: %s\n' "$(q "$v")"
+    v="$(setting MDB_TZ)"; [[ -z "$v" ]] || printf '  timeZone: %s\n' "$(q "$v")"
+    v="$(setting MDB_K8S_BACKUP_STORAGE)"; v="${v:-20Gi}"
+    printf '  storage: %s\n' "$(q "$v")"
+    # The backend creates the claims: see backup.createClaims in values.yaml.
+    printf '  createClaims: false\n'
+}
+
 render() {
     local sc eng ENG enabled v mem cpu key expr val
     printf '# Rendered by scripts/helm-values from %s. Do not edit: change .env.\n' "$(basename "$ENV_FILE")"
@@ -122,6 +172,7 @@ render() {
         if [[ "$eng" == pg ]]; then
             v="$(setting MDB_PG_SHM)"
             [[ -z "$v" ]] || printf '    shm: %s\n' "$(q "$v")"
+            render_ha
         fi
         printf '    env:\n'
         while IFS=$'\t' read -r key expr; do
@@ -135,6 +186,7 @@ render() {
             printf '      %s: %s\n' "$key" "$(q "$val")"
         done < <(service_env "$eng")
     done
+    render_backup
 }
 
 # Profiles that have no Kubernetes workload yet.
@@ -142,8 +194,11 @@ skipped=""
 IFS=, read -r -a plist <<<"${profiles//,,/,}"
 for p in ${plist[@]+"${plist[@]}"}; do
     [[ -n "$p" ]] || continue
-    case " $ENGINES " in *" $p "*) ;; *) skipped="${skipped:+$skipped, }$p" ;; esac
+    case " $ENGINES ha backup " in *" $p "*) ;; *) skipped="${skipped:+$skipped, }$p" ;; esac
 done
+if has_profile ha && ! has_profile pg; then
+    printf 'helm-values: the ha profile needs pg too (MDB_PROFILES="pg,ha")\n' >&2
+fi
 [[ -z "$skipped" ]] || printf 'helm-values: not deployed on Kubernetes yet: %s (docs/guides/kubernetes.md)\n' "$skipped" >&2
 
 if [[ -n "$out" ]]; then

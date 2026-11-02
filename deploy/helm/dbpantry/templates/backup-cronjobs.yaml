@@ -1,0 +1,153 @@
+{{- $root := . }}
+{{- if .Values.backup.enabled }}
+{{- $b := .Values.backup }}
+{{- range $name := $b.engines }}
+{{- $e := index $root.Values.engines $name }}
+{{- if $e.enabled }}
+{{- $ctx := dict "root" $root "name" (printf "backup-%s" $name) "engine" $e }}
+{{- $host := include "dbpantry.svcname" (dict "root" $root "name" $name) }}
+{{- if $b.createClaims }}
+# Where this engine's scheduled dumps live, and the only place their
+# retention prunes. Labelled with the release, so `make destroy` deletes it
+# with the data; its name does not start with pitr-.
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ $root.Release.Name }}-backups-{{ $name }}
+  labels:
+    {{- include "dbpantry.labels" $ctx | nindent 4 }}
+  annotations:
+    # Survive `helm uninstall` (make down), like the engine volumes.
+    helm.sh/resource-policy: keep
+spec:
+  accessModes: [ReadWriteOnce]
+  {{- with $root.Values.global.storageClass }}
+  storageClassName: {{ . }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ $b.storage }}
+{{- end }}
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ $root.Release.Name }}-backup-{{ $name }}
+  labels:
+    {{- include "dbpantry.labels" $ctx | nindent 4 }}
+spec:
+  schedule: {{ $b.schedule | quote }}
+  {{- with $b.timeZone }}
+  timeZone: {{ . | quote }}
+  {{- end }}
+  # One dump at a time per engine, and never a pile-up after an outage.
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 3600
+  successfulJobsHistoryLimit: {{ $b.successfulJobsHistoryLimit }}
+  failedJobsHistoryLimit: {{ $b.failedJobsHistoryLimit }}
+  jobTemplate:
+    metadata:
+      labels:
+        {{- include "dbpantry.labels" $ctx | nindent 8 }}
+    spec:
+      backoffLimit: 1
+      activeDeadlineSeconds: {{ $b.activeDeadlineSeconds }}
+      template:
+        metadata:
+          labels:
+            {{- include "dbpantry.labels" $ctx | nindent 12 }}
+        spec:
+          restartPolicy: Never
+          serviceAccountName: {{ include "dbpantry.serviceAccountName" $root }}
+          automountServiceAccountToken: false
+          {{- with $root.Values.global.imagePullSecrets }}
+          imagePullSecrets:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with $root.Values.global.nodeSelector }}
+          nodeSelector:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with $root.Values.global.tolerations }}
+          tolerations:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          securityContext:
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+            - name: backup
+              # The engine's own image, for its own dump client (see the
+              # backup sidecars in docker-compose.yml).
+              image: {{ include "dbpantry.image" (dict "root" $root "engine" $e) }}
+              imagePullPolicy: {{ $root.Values.global.imagePullPolicy }}
+              securityContext:
+                allowPrivilegeEscalation: false
+                capabilities:
+                  drop: [ALL]
+                  add: [CHOWN, SETUID, SETGID, DAC_OVERRIDE, FOWNER]
+              # scripts/backup, the file `make backup` runs, unpacked from the
+              # bundle: it needs its libraries and engines/, which no image
+              # carries. One run, then prune inside /backups only.
+              command:
+                - bash
+                - -c
+                - |
+                  set -euo pipefail
+                  mkdir -p /tmp/mdb
+                  tar -xf /mdb-bundle/bundle.tar -C /tmp/mdb
+                  cd /tmp/mdb
+                  # A new pod's network can lag its start by a second or two,
+                  # and scripts/backup tries once: wait for the server first.
+                  for _ in $(seq 1 60); do
+                    (exec 3<>/dev/tcp/{{ $host }}/{{ if eq $name "pg" }}5432{{ else }}3306{{ end }}) 2>/dev/null && break
+                    sleep 2
+                  done
+                  exec bash scripts/backup --engine {{ $name }}
+              env:
+                - name: MDB_IN_CONTAINER
+                  value: "1"
+                - name: MDB_BACKUP_DIR
+                  value: /backups
+                {{- if eq $name "pg" }}
+                - name: PGHOST
+                  value: {{ $host | quote }}
+                - name: PGUSER
+                  value: postgres
+                - name: PGSSLMODE
+                  value: prefer
+                {{- else }}
+                - name: MYSQL_HOST
+                  value: {{ $host | quote }}
+                {{- end }}
+              resources:
+                requests:
+                  cpu: 100m
+                  memory: 128Mi
+                limits:
+                  memory: 1Gi
+              volumeMounts:
+                - name: backups
+                  mountPath: /backups
+                - name: bundle
+                  mountPath: /mdb-bundle
+                  readOnly: true
+                - name: secrets
+                  mountPath: /run/secrets
+                  readOnly: true
+          volumes:
+            - name: backups
+              persistentVolumeClaim:
+                claimName: {{ $root.Release.Name }}-backups-{{ $name }}
+            - name: bundle
+              secret:
+                secretName: {{ $b.bundleSecret }}
+                defaultMode: 0400
+            - name: secrets
+              secret:
+                secretName: {{ $root.Values.global.secretName }}
+                defaultMode: 0400
+{{- end }}
+{{- end }}
+{{- end }}

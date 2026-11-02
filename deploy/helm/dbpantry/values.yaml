@@ -87,6 +87,34 @@ engines:
     probe: ['sh', '-c', 'test ! -f /run/mdb/converge-failed && pg_isready -U "${POSTGRES_USER:-postgres}" -h /var/run/postgresql']
     startupSeconds: 300
     resources: {}
+    # High availability (design.md D-65): the `ha` profile in MDB_PROFILES
+    # turns it on, and replaces the standalone StatefulSet. Either way the
+    # Service "pg" follows the primary and "pg-ro" balances over the replicas.
+    ha:
+      enabled: false
+      # patroni (default): the dbpantry-patroni image, the same PostgreSQL as
+      #   the standalone one, with the leader lock in ConfigMaps (the
+      #   Kubernetes DCS): no etcd, no HAProxy.
+      # cnpg (opt-in): a CloudNativePG Cluster. Needs the CloudNativePG
+      #   operator already installed in the cluster; runs CloudNativePG's
+      #   PostgreSQL image, not dbpantry-pg (see docs/guides/kubernetes.md).
+      provider: patroni
+      replicas: 3
+      # Patroni scope (MDB_HA_CLUSTER_NAME): the ConfigMaps are <scope>-leader,
+      # <scope>-config, ...
+      clusterName: mdb-pg
+      syncMode: "false"
+      patroni:
+        image: dbpantry-patroni
+        imageRef: ""
+        dataPath: /var/lib/postgresql/patroni
+        startupSeconds: 600
+      cnpg:
+        imageName: ghcr.io/cloudnative-pg/postgresql:17
+        # Where the operator runs; the NetworkPolicy lets it reach the pods.
+        operatorNamespace: cnpg-system
+        # postgresql.parameters of the Cluster.
+        parameters: {}
   mysql:
     enabled: false
     image: dbpantry-mysql
@@ -175,3 +203,32 @@ engines:
     probe: ['sh', '-c', "nodetool status | grep -q '^UN'"]
     startupSeconds: 600
     resources: {}
+
+# Scheduled backups (design.md D-65): the `backup` profile turns them on. One
+# CronJob per enabled engine that Compose has a backup sidecar for (pg, mysql,
+# mariadb), running scripts/backup, the same file `make backup` runs, against
+# the engine's Service. Dumps and their retention (MDB_BACKUP_RETAIN_DAILY)
+# stay inside each engine's PersistentVolumeClaim "<release>-backups-<engine>"
+# (size: storage below): nothing in the checkout's
+# backups/ is read or pruned. Copy dumps out with kubectl cp, or set
+# MDB_S3_BUCKET for the off-site push.
+backup:
+  enabled: false
+  # Cron, in the cluster's time zone unless timeZone is set.
+  schedule: "0 3 * * *"
+  timeZone: ""
+  storage: 20Gi
+  # Render each engine's backup PersistentVolumeClaim. On storage that binds
+  # on first use (WaitForFirstConsumer: kind, most clouds) a claim nobody has
+  # mounted yet stays Pending until the first job runs, and `helm --wait`
+  # times out on it. `make up` therefore sets this to false and creates the
+  # claims itself, outside the release; plain `helm install --wait` users on
+  # such storage should do the same, or install without --wait.
+  createClaims: true
+  engines: [pg, mysql, mariadb]
+  # Secret with scripts/, engines/ and .env as a tar archive; `make up`
+  # creates it. scripts/backup needs its libraries and the engine descriptors.
+  bundleSecret: dbpantry-backup-bundle
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  activeDeadlineSeconds: 7200

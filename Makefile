@@ -149,8 +149,9 @@ test-profile: ## Boot the tmpfs speed profile and run its checks
 .PHONY: psql
 psql: ## PostgreSQL shell (socket-first)
 	@# Socket-first: faster than TCP and it removes a network surface entirely
-	@# (SPEC section 10.1).
-	@$(RUNTIME) exec pg psql -h /var/run/postgresql -U $(or $(USER_NAME),postgres)
+	@# (SPEC section 10.1). The pod's PGHOST wins: CloudNativePG's socket is
+	@# /controller/run.
+	@$(RUNTIME) exec pg sh -c 'exec psql -h "$${PGHOST:-/var/run/postgresql}" -U "$$1"' sh $(or $(USER_NAME),postgres)
 
 .PHONY: mysql
 mysql: ## MySQL shell (socket-first)

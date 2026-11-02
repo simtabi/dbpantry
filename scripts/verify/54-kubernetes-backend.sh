@@ -62,6 +62,11 @@ for t in kubectl helm kind; do
 printf '$t %s\n' "\$*" >> "\$STUB_LOG"
 case "\$*" in
     *"get pods"*) printf '%b' "\${STUB_PODS:-}" ;;
+    *"get pvc "*) [[ -z "\${STUB_NO_PVC:-}" ]] || exit 1 ;;
+    *"-pg-superuser "*)
+        for a in "\$@"; do [[ "\$a" == --from-file=password=* ]] && cat "\${a#--from-file=password=}" > "\$STUB_LOG.superpw"; done
+        printf 'kind: Secret\n' ;;
+    *"create -f -"*) cat >> "\$STUB_LOG.stdin" ;;
     *--dry-run=client*) printf 'kind: Secret\n' ;;
     *" apply "*) cat >/dev/null ;;
 esac
@@ -110,27 +115,77 @@ got="$(kube ctx 'mdb_svc_health pg')"
 
 kube ctx 'mdb_svc_exec -u postgres pg id' STUB_PODS='pg proj-pg-0 Running True\n' >/dev/null
 # The switch script spans lines in the log; its call starts and ends like this.
-if ! grep -q -- ' exec -i proj-pg-0 -c pg -- sh -c ' "$log" || ! grep -q -- ' sh postgres id$' "$log"; then
+if ! grep -q -- ' exec -i proj-pg-0 -- sh -c ' "$log" || ! grep -q -- ' sh postgres id$' "$log"; then
     vfail "exec -u did not drop to the user in the pod: $(cat "$log")"
 fi
-vinfo "every kubectl call is pinned to MDB_K8S_CONTEXT; terminating pods are not running; exec -u switches user"
+# HA (D-65): commands reach the primary, wherever it is in the list, and a
+# backup job's pod is not a service of the stack.
+pods='pg proj-pg-0 Running True replica\npg proj-pg-1 Running True primary\nbackup-pg proj-backup-pg-1 Running True -\n'
+kube ctx 'mdb_svc_exec pg true' STUB_PODS="$pods" >/dev/null
+grep -q -- ' exec -i proj-pg-1 -- true$' "$log" || vfail "exec did not pick the primary: $(grep ' exec ' "$log")"
+got="$(kube ctx 'mdb_be_running' STUB_PODS="$pods")"
+[[ "$got" == pg ]] || vfail "a backup job's pod is listed as running: [$got]"
+vinfo "every kubectl call is pinned to MDB_K8S_CONTEXT; terminating pods are not running; exec -u switches user; exec reaches the HA primary"
 
 kube ctx 'mdb_be_secrets_sync' >/dev/null
 grep -q 'create secret generic dbpantry-secrets .*pg_superuser_password.txt' "$log" || vfail "secrets/ was not synced"
 grep -q 'create secret generic dbpantry-certs-pg ' "$log" || vfail "certs/pg was not synced"
 grep -q 'ca.key' "$log" && vfail "the CA private key was sent to the cluster"
+# CloudNativePG uses the basic-auth password byte for byte: the file's trailing
+# newline became part of it, and every client sending the file's contents was
+# refused ("password authentication failed for user postgres").
+[[ "$(od -c < "$log.superpw" 2>/dev/null | head -1)" == "$(printf pw | od -c | head -1)" ]] \
+    || vfail "the CloudNativePG superuser Secret password is not the file without its newline: $(od -c < "$log.superpw" 2>/dev/null | head -1)"
+# make down hibernates a CloudNativePG Cluster with kubectl annotate, which then
+# owns that annotation; helm 4 applies server-side, so the next make up failed
+# with "conflict with kubectl-annotate ... cnpg.io/hibernation". up wakes it
+# first by removing the annotation (which also drops kubectl's ownership).
+kube ctx '_mdb_k8s_cnpg_wake' >/dev/null
+grep -q -- ' annotate clusters.postgresql.cnpg.io proj-pg cnpg.io/hibernation-' "$log" \
+    || vfail "make up does not wake a hibernated CloudNativePG Cluster before helm: $(cat "$log")"
 kube kind-dev 'mdb_be_image_load img:1' >/dev/null
 grep -qx 'kind load docker-image img:1 --name dev' "$log" || vfail "a kind context did not kind-load the image"
 kube orbstack 'mdb_be_image_load img:1' >/dev/null
 grep -q '^kind' "$log" && vfail "OrbStack (shared image store) ran kind"
 vinfo "secrets and certs sync without the CA key; images load into kind only"
 
-# Check 05 scans config files, not scripts, so the settings the backend reads
-# from .env are checked here: every one must be documented in .env.example.
-for key in MDB_BACKEND $(grep -oE '(^|[^_A-Z])MDB_K8S_[A-Z_]+' scripts/backends/kubernetes.sh | grep -oE 'MDB_K8S_[A-Z_]+' | sort -u); do
-    grep -qE "^#? *$key=" .env.example || vfail "$key is read by the Kubernetes backend but not documented in .env.example"
+# Backup claims come from the backend, not the chart: on WaitForFirstConsumer
+# storage an unmounted claim stays Pending and `helm --wait` times out on it.
+printf 'global:\n  storageClass: "fast"\nengines:\n  pg:\n    enabled: true\n  mysql:\n    enabled: false\n  mariadb:\n    enabled: true\nbackup:\n  enabled: true\n  storage: "5Gi"\n' > "$tmp/values.yaml"
+: > "$log.stdin"
+kube ctx "_mdb_k8s_backup_claims '$tmp/values.yaml'" STUB_NO_PVC=1 >/dev/null
+grep -qx '  name: proj-backups-pg' "$log.stdin" || vfail "no backup claim was created for pg: $(cat "$log.stdin")"
+grep -qx '  name: proj-backups-mariadb' "$log.stdin" || vfail "no backup claim was created for mariadb"
+grep -q 'proj-backups-mysql' "$log.stdin" && vfail "a backup claim was created for a disabled engine"
+grep -qx '      storage: 5Gi' "$log.stdin" || vfail "the backup claim ignored backup.storage"
+grep -qx '  storageClassName: fast' "$log.stdin" || vfail "the backup claim ignored global.storageClass"
+: > "$log.stdin"
+kube ctx "_mdb_k8s_backup_claims '$tmp/values.yaml'" >/dev/null
+[[ -s "$log.stdin" ]] && vfail "an existing backup claim was recreated"
+# shellcheck disable=SC2016  # a literal line of the backend
+grep -qF '_mdb_k8s_backup_claims "$values"' scripts/backends/kubernetes.sh || vfail "make up does not create the backup claims"
+vinfo "backup claims are created by the backend for enabled engines, never recreated"
+
+# Check 05 scans config files, not scripts, so the settings the backend and
+# scripts/helm-values read from .env are checked here: every one must be
+# documented in .env.example.
+for key in MDB_BACKEND $(grep -ohE '(^|[^_A-Z])MDB_K8S_[A-Z_]+' scripts/backends/kubernetes.sh scripts/helm-values | grep -oE 'MDB_K8S_[A-Z_]+' | sort -u); do
+    grep -qE "^#? *$key=" .env.example || vfail "$key is read by the Kubernetes backend or helm-values but not documented in .env.example"
 done
 vinfo "MDB_BACKEND and every MDB_K8S_ setting are documented in .env.example"
+
+# make destroy keeps recovery volumes unless --include-recovery. On Kubernetes
+# the scheduled dumps live in a PVC (<release>-backups-<engine>), and a destroy
+# that took them with the data would repeat the incident the scratch-backup
+# rules exist for: the data and every dump of it gone in one command.
+eval "$(sed -n '/^is_recovery_volume()/,/^}/p' scripts/destroy)"
+for v in proj-backups-pg proj-backups-mysql pitr-proj-pg-0 proj_pg_pitr; do
+    is_recovery_volume "$v" || vfail "make destroy --all would delete $v (a recovery volume)"
+done
+for v in data-proj-pg-0 proj_pg_data proj-pg-1; do
+    is_recovery_volume "$v" && vfail "$v is a data volume but destroy treats it as recovery"
+done
+vinfo "destroy --all keeps the backup and pitr volumes"
 
 # --- 3. the chart -----------------------------------------------------------------
 command -v helm >/dev/null 2>&1 || vskip "helm is not installed; the chart was not linted"

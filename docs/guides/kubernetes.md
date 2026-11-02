@@ -94,6 +94,80 @@ privilege escalation, every capability dropped except the five the init needs
 level. It does not pass "restricted", because the images start as root and
 drop to the engine's user, exactly as they do under Compose.
 
+## High availability
+
+Add `ha` to `MDB_PROFILES` (with `pg`) and `make up` replaces the single
+PostgreSQL StatefulSet with a cluster of `MDB_K8S_HA_REPLICAS` (default 3).
+Either way, Service `pg` always points at the primary and `pg-ro` balances
+over the replicas, so applications use the same host names as with Compose.
+`make backup`, `make psql` and the backup jobs reach the primary.
+
+### Patroni (default)
+
+`MDB_K8S_HA_PROVIDER=patroni` runs the dbpantry-patroni image, which has the
+same PostgreSQL and extensions as the standalone engine. Patroni stores the
+leader lock in ConfigMaps (`<MDB_HA_CLUSTER_NAME>-leader`, `-config`), so
+there is no etcd and no HAProxy. Its namespaced Role can only touch
+ConfigMaps, Endpoints, Pods and Services in the release namespace.
+`scripts/ha status` shows the members.
+
+`make down` keeps the ConfigMaps with the data. `make destroy` deletes both:
+a new cluster on fresh volumes would otherwise wait for a leader that
+"already initialised".
+
+### CloudNativePG
+
+`MDB_K8S_HA_PROVIDER=cnpg` renders a CloudNativePG `Cluster` instead. The
+operator must already be installed in the cluster, and the chart refuses to
+render without it:
+
+```bash
+kubectl --context <ctx> apply --server-side -f \
+  https://raw.githubusercontent.com/cloudnative-pg/cloudnative-pg/release-1.30/releases/cnpg-1.30.1.yaml
+```
+
+The operator owns the pods, failover and its own `<release>-pg-rw/-ro/-r`
+Services. The chart adds `pg` and `pg-ro`. Differences from Patroni:
+
+- It runs CloudNativePG's PostgreSQL image (`engines.pg.ha.cnpg.imageName`),
+  not dbpantry-pg, so the dbpantry extensions are not in it.
+- The superuser password is `secrets/pg_superuser_password.txt`, published as
+  the basic-auth Secret `<release>-pg-superuser`.
+- `make down` hibernates the Cluster (`cnpg.io/hibernation=on`): the pods
+  stop and the volumes stay. `make up` wakes it, and `make destroy` deletes
+  the Cluster, then its volumes.
+- `scripts/ha` is Patroni-only; use `kubectl cnpg status`.
+
+## Scheduled backups
+
+With `backup` in `MDB_PROFILES`, each of pg, mysql and mariadb gets a CronJob
+`<release>-backup-<engine>`. It runs daily at `MDB_BACKUP_SCHEDULE` (HHMM, in
+`MDB_TZ`), or on the full cron line in `MDB_K8S_BACKUP_SCHEDULE`. The job runs
+the same `scripts/backup` as the Compose sidecar against the engine Service.
+It writes dumps and `.sha256` files to the claim `<release>-backups-<engine>`
+(`MDB_K8S_BACKUP_STORAGE`, default 20Gi), then prunes artifacts older than
+`MDB_BACKUP_RETAIN_DAILY` days in that claim only. Files that are not
+dbpantry artifacts are never pruned. The job waits up to 2 minutes for the
+database port before it starts.
+
+`make up` creates the claims, not the chart (`backup.createClaims: false`).
+On storage classes that bind on first use (`WaitForFirstConsumer`, as with
+local-path and most cloud classes), a claim the chart owned kept
+`helm --wait` waiting for a job that would not run until 03:00. `make down`
+and `make destroy` keep the claims, which are recovery volumes like `pitr`.
+`make destroy --include-recovery` deletes them too.
+
+Run a backup now, or read one back:
+
+```bash
+kubectl -n <ns> create job --from=cronjob/<release>-backup-pg manual-1
+make backup ENGINE=pg      # host side: streams into MDB_BACKUP_DIR (environment) or backups/
+```
+
+Dumps in the claim stay in the cluster. Copy them off the cluster, for
+example with a pod that mounts the claim plus `kubectl cp`, or object storage
+of your own.
+
 ## Reaching the databases
 
 Inside the cluster, connect to the Service: `pg.<namespace>.svc:5432`. From
@@ -109,8 +183,8 @@ The Services are `ClusterIP`. Set `service.type: LoadBalancer` in an
 ## Differences from Compose
 
 - **Not on Kubernetes yet:** the poolers, the UIs (Adminer, CloudBeaver,
-  Caddy), the exporters, the scheduled backup sidecar and HA. `make up` names
-  any profile it skips. `make pitr` restore and `make upgrade` need the
+  Caddy) and the exporters. `make up` names any profile it skips. HA and
+  scheduled backups are covered above. `make pitr` restore and `make upgrade` need the
   Compose backend and refuse to run here.
 - **No Ingress.** The database protocols are not HTTP, so an Ingress cannot
   carry them; use a Service of type LoadBalancer, or a TCP route in your
@@ -132,4 +206,7 @@ The Services are `ClusterIP`. Set `service.type: LoadBalancer` in an
 | `needs MDB_K8S_CONTEXT` | set it in `.env`; see `kubectl config get-contexts` |
 | Helm says `TLS handshake timeout` while kubectl works | the API server name resolves to an IPv6 address that does not answer, and Helm does not fall back to IPv4. Seen with OrbStack's `k8s.orb.local`. Point a kubeconfig context at `https://127.0.0.1:26443` with `tls-server-name: k8s.orb.local` |
 | `ErrImagePull` on kind | build the images first, or set `MDB_K8S_LOAD_IMAGES=true` |
+| `another operation (install/upgrade/rollback) is in progress` | an interrupted `make up` left the release `pending-upgrade`. Run `helm --kube-context <ctx> -n <ns> history <release>`, then `helm ... rollback <release> <last deployed revision>`, and run `make up` again |
+| CloudNativePG: `conflict with "kubectl-annotate" ... cnpg.io/hibernation` | a Cluster hibernated by an older dbpantry. Run `kubectl annotate clusters.postgresql.cnpg.io <release>-pg cnpg.io/hibernation-`, then `make up` (current versions do this themselves) |
+| HA: a replica logs `no pg_hba.conf entry for replication` | a dbpantry-patroni image from before D-65; rebuild or pull it and delete the pod |
 | MongoDB: `Permission denied` on the password file | the chart mounts MongoDB's Secret `0444` because its entrypoint reads it as `mongodb`; keep `engines.mongodb.secretMode` |
