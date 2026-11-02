@@ -325,6 +325,14 @@ services:
     image: quay.io/prometheuscommunity/postgres-exporter:v0.20.1@sha256:ac5ec343104fae0e2d84a27bb8d69b38430a11910c5382cad85d478d2bab713e
     restart: unless-stopped
     <<: *hardening
+    # secrets/ is 0700 and its files 0600, owned by the operator. The image's
+    # own user (nobody) cannot open the password file on a Linux host -- it
+    # crash-looped there while Docker Desktop and OrbStack, whose file sharing
+    # ignores those permissions, hid it. Root with ALL capabilities dropped
+    # except DAC_READ_SEARCH can read (not write) files whatever their owner,
+    # and nothing more; check 24 replays this against real permissions.
+    user: "0:0"
+    cap_add: [DAC_READ_SEARCH]
     environment:
       # The exporter reads the password from a file rather than taking it in
       # the connection string, so no credential appears in `docker inspect`.
@@ -341,6 +349,9 @@ services:
     image: docker.io/prom/mysqld-exporter:v0.19.0@sha256:eacb4b18e2ec1e0abdf2d64851b68526c964f6d9cb3e9458fb5d5f5062ea94c1
     restart: unless-stopped
     <<: *hardening
+    # As pg-exporter: read the 0600 password file on a Linux host.
+    user: "0:0"
+    cap_add: [DAC_READ_SEARCH]
     command:
       - "--mysqld.address=mysql:3306"
       - "--mysqld.username=root"
