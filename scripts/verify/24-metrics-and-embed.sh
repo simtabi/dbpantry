@@ -72,3 +72,33 @@ for svc in pg-exporter mysql-exporter; do
 done
 [[ -z "$published" ]] || vfail "an exporter is published to the host: $published"
 vinfo "exporters reachable internally, published to nothing"
+
+# --- the exporters can read their password on a Linux host ------------------
+# secrets/ is 0700 and its files 0600, owned by the operator. Docker Desktop
+# and OrbStack hide that behind their file sharing; on a Linux host both
+# exporters ran as nobody, could not open their password file, and crash-looped
+# under restart: unless-stopped (found in CI, where the wait above timed out).
+# Replay each exporter's user and capabilities, read from the container Compose
+# created, against a volume with exactly those permissions.
+permvol="mdb-verify-exporter-perms-$$"
+mdb_ctr volume create "$permvol" >/dev/null
+track_volume "$permvol"
+mdb_ctr run --rm --user 0 --entrypoint sh -v "$permvol:/s" "$img" -c \
+    'echo pw > /s/p.txt && chown -R 4242:4242 /s && chmod 0700 /s && chmod 0600 /s/p.txt' \
+    >/dev/null 2>&1 || vfail "could not prepare the permissions volume"
+for svc in pg-exporter mysqld-exporter; do
+    id="$(mdb_compose ps -q "$svc" 2>/dev/null | head -1)"
+    [[ -n "$id" ]] || vfail "$svc has no container under the metrics profile"
+    user="$(mdb_ctr inspect -f '{{.Config.User}}' "$id" 2>/dev/null)"
+    eimg="$(mdb_ctr inspect -f '{{.Config.Image}}' "$id" 2>/dev/null)"
+    caps="$(mdb_ctr inspect -f '{{range .HostConfig.CapAdd}}{{.}} {{end}}' "$id" 2>/dev/null)"
+    args=(--user "${user:-0}" --cap-drop ALL --security-opt no-new-privileges:true)
+    for c in $caps; do args+=(--cap-add "$c"); done
+    probe="mdb-verify-exporter-perm-$svc-$$"
+    track_container "$probe"
+    got="$(mdb_ctr run --name "$probe" "${args[@]}" -v "$permvol:/run/secrets:ro" \
+        --entrypoint cat "$eimg" /run/secrets/p.txt 2>&1 || true)"
+    [[ "$got" == pw ]] \
+        || vfail "$svc (user '${user:-image default}', cap_add '${caps:-none}') cannot read a 0600 secret in a 0700 directory, as on a Linux host: $got"
+done
+vinfo "both exporters read their password through Linux file permissions"
