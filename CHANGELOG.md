@@ -49,6 +49,9 @@ image, replacing Cassandra's vulnerable vendored JARs rather than waiving them.
   D-52 to D-57, which sat after the end of the document, are back in the decision log.
 
 ### Added
+- **Apple container (macOS 26) through socktainer** (design.md D-63,
+  [Apple container](docs/guides/runtime-apple-container.md)): detected as a Docker provider;
+  `compose.apple.yml` sizes each engine's VM and is required there; builds pass `--load`.
 - **A deployment backend layer** (design.md D-62, [scripts/backends](scripts/backends/README.md)):
   `MDB_BACKEND=compose` (the default, and the only backend so far) selects how the stack is deployed,
   separately from `CONTAINER_RUNTIME`. Scripts reach databases through service-level verbs

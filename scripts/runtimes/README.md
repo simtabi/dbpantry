@@ -6,7 +6,8 @@ filename order, and that order is the auto-detection priority. To add a backend,
 add a file. You don't need to edit the core or any caller.
 
 ```
-10-docker.sh    Docker Engine and every Docker-API product (Desktop, OrbStack, Colima, Rancher Desktop/moby)
+10-docker.sh    Docker Engine and every Docker-API product (Desktop, OrbStack, Colima, Rancher Desktop/moby,
+                Apple container through socktainer)
 20-podman.sh    Podman, native or podman machine
 30-nerdctl.sh   containerd through nerdctl (best effort)
 ```
@@ -38,8 +39,10 @@ flavor that the core knows how to drive.
 
 ## Planned backends
 
-Kubernetes, LXC/Incus and Apple's `container` tool are planned as follow-up
-adapters. None of them speaks the Compose Specification, so each adapter will
+Kubernetes and LXC/Incus are planned as deployment backends
+(`scripts/backends/`, design.md D-62), not runtime adapters. Apple's
+`container` tool is reached through socktainer's Docker API, so it is part of
+`10-docker.sh`. None of the others speaks the Compose Specification, so each adapter will
 also need a deployment path that maps services to its own objects (manifests,
 instances, `container run`). They aren't usable yet. `CONTAINER_RUNTIME` lists
 only the adapters that are present in this directory.

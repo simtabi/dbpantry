@@ -53,6 +53,7 @@ so a green `make verify` is the criteria being met rather than a proxy for it.
 | Env values with spaces or special characters are double-quoted, and every reader unquotes them | `50-env-values-quoted` |
 | Markdown files use lowercase slug names, except git and GitHub conventional files (README.md, CHANGELOG.md, ...) | `51-markdown-names` |
 | Scripts reach services only through the backend layer, every backend implements the verb contract, and the Compose backend runs the same commands as before | `52-backend-layer` |
+| Apple container through socktainer is detected, refused without compose.apple.yml, and builds load into its image store | `53-apple-container` |
 | The off-site push is wired, authenticated, and fails loudly | `39-offsite-backup` |
 | Configuration reproduces, data persists, recovery data outlives `destroy` | `41-state-survives` |
 | Every image is official, upstream, or justified | `42-image-provenance` |
