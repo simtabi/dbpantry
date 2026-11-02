@@ -312,6 +312,14 @@ trap mdb_cleanup EXIT
 #
 # Usage: scratch_stack PROFILES; then use $SCRATCH_DIR and $SCRATCH_PROJECT.
 # Not in $(...): the cleanup it registers would be lost with the subshell.
+_port_busy() {
+    if command -v lsof >/dev/null 2>&1; then
+        lsof -nP -iTCP:"$1" -sTCP:LISTEN >/dev/null 2>&1
+    else
+        (exec 3<>"/dev/tcp/127.0.0.1/$1") 2>/dev/null
+    fi
+}
+
 scratch_stack() {
     local profiles="$1" sdir proj base key
     sdir="$(mktemp -d "${TMPDIR:-/tmp}/mdb-scratch.XXXXXX")" || vfail "mktemp failed"
@@ -344,6 +352,9 @@ scratch_stack() {
         # Its own subnet too: the operator's mdb_net already holds the default.
         printf 'MDB_NETWORK_SUBNET=10.%s.%s.0/24\n' "$(( 200 + RANDOM % 50 ))" "$(( RANDOM % 250 ))"
         for key in $(grep -oE '^#?MDB_[A-Z0-9_]*PORT=' "$MDB_ROOT/.env.example" | tr -d '#=' | sort -u); do
+            # A random base can still land on a listener (another tool's
+            # ephemeral port), which check-env then rightly refuses.
+            while _port_busy "$base"; do base=$(( base + 1 )); done
             printf '%s=%s\n' "$key" "$base"
             base=$(( base + 1 ))
         done
