@@ -360,7 +360,7 @@ scratch_stack() {
         done
     } >> "$sdir/.env"
     # Last assignment wins for both Compose and mdb_env_get; make sure.
-    [[ "$(cd "$sdir" && . scripts/backend-lib.sh && mdb_env_get COMPOSE_PROJECT_NAME .env)" == "$proj" ]] \
+    [[ "$(mdb_env_get COMPOSE_PROJECT_NAME "$sdir/.env")" == "$proj" ]] \
         || vfail "the scratch .env does not resolve to the scratch project"
     scratch_run scripts/check-env --quiet >/dev/null 2>&1 \
         || vfail "check-env rejects the scratch .env: $(scratch_run scripts/check-env 2>&1 | tail -5)"
@@ -399,7 +399,7 @@ scratch_healthy() {
 scratch_stack_cleanup() {
     local sdir="$1" proj="$2" v
     [[ "$proj" == mdbscratch* && -d "$sdir" && "$sdir" != "$MDB_ROOT" && "$sdir" == */mdb-scratch.* ]] || return 0
-    if [[ "$(cd "$sdir" && . scripts/backend-lib.sh && mdb_env_get COMPOSE_PROJECT_NAME .env 2>/dev/null)" == "$proj" ]]; then
+    if [[ "$(mdb_env_get COMPOSE_PROJECT_NAME "$sdir/.env" 2>/dev/null)" == "$proj" ]]; then
         SCRATCH_DIR="$sdir" scratch_run make down >/dev/null 2>&1 || true
     fi
     for v in $(mdb_ctr volume ls -q --filter "label=com.docker.compose.project=$proj" 2>/dev/null); do
