@@ -25,6 +25,20 @@ get() { mdb_env_get "$1" "$ENV_FILE"; }
 publish="$(get MDB_PUBLISH)"; publish="${publish:-none}"
 base="$(get MDB_PORT_BASE)"; base="${base:-54000}"
 project="$(get COMPOSE_PROJECT_NAME)"; project="${project:-mdb}"
+backend="${MDB_BACKEND:-$(get MDB_BACKEND)}"
+
+# On Kubernetes, MDB_PUBLISH does not apply: the chart's Services are
+# ClusterIP, and the chart's notes (printed by helm) list their host names.
+if [ "${backend:-compose}" = kubernetes ]; then
+    cat <<EOT
+
+  Applications in the cluster connect to the Services listed above.
+  From this machine: scripts/runtime forward  (kubectl port-forward).
+  Shells work either way: make psql, make mysql, make mongo.
+
+EOT
+    exit 0
+fi
 
 case "$publish" in
     none)

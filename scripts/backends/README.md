@@ -7,6 +7,7 @@ choice (`CONTAINER_RUNTIME`, `scripts/runtimes/`, D-60).
 
 ```
 compose.sh      Docker Compose, podman compose or nerdctl compose (the default)
+kubernetes.sh   the Helm chart in deploy/helm/dbpantry, via kubectl and helm (D-64)
 ```
 
 Backends kept outside the repo, or under test, load from the directories in
@@ -35,6 +36,7 @@ selected one lacks a verb.
 | `image_load` | `mdb_be_image_load REF` | make a locally built image visible to the backend |
 | `secrets_sync` | `mdb_be_secrets_sync` | publish `secrets/` to the backend |
 | `info` | `mdb_be_info` | lines for `scripts/runtime info` |
+| `forward` | `mdb_be_forward` | reach the services from this machine until interrupted (`scripts/runtime forward`) |
 
 `_mdb_svc_args "$@"` splits `[-u USER] SVC CMD...` for a backend: it sets
 `_MDB_SVC_USER` and `_MDB_SVC`, and `shift "$_MDB_SVC_SHIFT"` leaves the command.

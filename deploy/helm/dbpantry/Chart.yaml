@@ -1,0 +1,11 @@
+apiVersion: v2
+name: dbpantry
+description: dbpantry database engines (PostgreSQL, MySQL, MariaDB, MongoDB, Cassandra) on Kubernetes
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+kubeVersion: ">=1.27.0-0"
+home: https://github.com/simtabi/dbpantry
+sources:
+  - https://github.com/simtabi/dbpantry
+keywords: [postgresql, mysql, mariadb, mongodb, cassandra, database]

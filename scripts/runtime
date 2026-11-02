@@ -11,6 +11,8 @@
 #   scripts/runtime down|status|logs [args]
 #   scripts/runtime exec SVC CMD... a command in a service, with a terminal
 #                                   when there is one (make psql and friends)
+#   scripts/runtime forward         reach the services from this machine
+#                                   (Kubernetes: kubectl port-forward)
 #
 # MDB_BACKEND picks the backend (scripts/backend-lib.sh, design.md D-62);
 # CONTAINER_RUNTIME and MDB_COMPOSE pick the runtime (scripts/runtime-lib.sh,
@@ -44,6 +46,8 @@ case "$cmd" in
         mdb_be_logs "$@" ;;
     exec)
         mdb_svc_exec_tty "$@" ;;
+    forward)
+        mdb_be_forward "$@" ;;
     info)
         mdb_backend_init || exit 1
         mdb_be_info
@@ -73,6 +77,6 @@ case "$cmd" in
         fi
         ;;
     *)
-        printf 'usage: scripts/runtime info|name|backend|ctr|compose|up|down|status|logs|exec [args]\n' >&2
+        printf 'usage: scripts/runtime info|name|backend|ctr|compose|up|down|status|logs|exec|forward [args]\n' >&2
         exit 2 ;;
 esac

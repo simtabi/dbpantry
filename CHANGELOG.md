@@ -49,11 +49,16 @@ image, replacing Cassandra's vulnerable vendored JARs rather than waiving them.
   D-52 to D-57, which sat after the end of the document, are back in the decision log.
 
 ### Added
+- **Kubernetes** (design.md D-64, [Kubernetes](docs/guides/kubernetes.md)): `MDB_BACKEND=kubernetes`
+  deploys PG, MySQL, MariaDB, MongoDB and Cassandra with the Helm chart in `deploy/helm/dbpantry`,
+  configured from `.env` (`scripts/helm-values`) and deployed only to `MDB_K8S_CONTEXT`. `make up`,
+  `down`, `psql`, `backup`, `restore` and `destroy` work through `kubectl exec`; volumes outlive
+  `make down`; `scripts/runtime forward` port-forwards the engines. Tested on OrbStack and kind.
 - **Apple container (macOS 26) through socktainer** (design.md D-63,
   [Apple container](docs/guides/runtime-apple-container.md)): detected as a Docker provider;
   `compose.apple.yml` sizes each engine's VM and is required there; builds pass `--load`.
 - **A deployment backend layer** (design.md D-62, [scripts/backends](scripts/backends/README.md)):
-  `MDB_BACKEND=compose` (the default, and the only backend so far) selects how the stack is deployed,
+  `MDB_BACKEND=compose` (the default) selects how the stack is deployed,
   separately from `CONTAINER_RUNTIME`. Scripts reach databases through service-level verbs
   (`mdb_svc_exec`, `mdb_be_running`, ...) instead of `docker compose exec`, and `scripts/runtime` gains
   `backend`, `up`, `down`, `status`, `logs` and `exec`. Behaviour on Compose is unchanged (check 52).
