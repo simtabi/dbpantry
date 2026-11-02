@@ -94,6 +94,7 @@ Read once, to learn how the toolkit works and how to set it up.
 
 - [Installation](docs/guides/installation.md) — prerequisites and first run
 - [Container runtimes](docs/guides/runtimes.md) — Docker, OrbStack, Colima, Rancher Desktop, Podman, nerdctl ([Docker](docs/guides/runtime-docker.md) · [Podman](docs/guides/runtime-podman.md) · [nerdctl](docs/guides/runtime-nerdctl.md))
+- [Kubernetes](docs/guides/kubernetes.md) — the Helm chart, `MDB_BACKEND=kubernetes`, OrbStack, kind and real clusters
 - [Getting started](docs/guides/getting-started.md) — a new project connected in under a minute
 - [Configuration](docs/guides/configuration.md) — every `MDB_` variable
 - [Supported versions](docs/guides/versions.md) — which versions are maintained, and running any other

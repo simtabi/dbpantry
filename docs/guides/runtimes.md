@@ -83,22 +83,20 @@ any backend that implements the verbs in
 [scripts/backends/README.md](../../scripts/backends/README.md).
 `scripts/runtime backend` prints the one in use.
 
+Backends so far:
+
+| `MDB_BACKEND` | Deploys with | Guide |
+|---|---|---|
+| `compose` (default) | the Compose files, on the runtime above | this page |
+| `kubernetes` | the Helm chart in `deploy/helm/dbpantry`, to `MDB_K8S_CONTEXT` | [Kubernetes](kubernetes.md) |
+
 ## Planned
 
-These backends are being added on top of that layer:
-
-- **Kubernetes**, including the clusters built into OrbStack, Docker Desktop
-  and Rancher Desktop. A local cluster already runs fine next to dbpantry.
 - **LXC / LXD / Incus.**
 
 Apple's `container` tool (macOS 26) needed no backend of its own: socktainer
 serves the Docker API on top of it, so it is the docker runtime with a memory
 overlay ([Apple container](runtime-apple-container.md)).
-
-None of these speaks the Compose Specification, so each adapter will also need
-its own deployment path, mapping services to manifests, instances or
-`container run`. That's why they get adapters of their own and aren't treated
-as aliases of `docker`.
 
 ## What differs between runtimes
 
