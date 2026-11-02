@@ -165,6 +165,17 @@ mdb_ctr rm -f -v "$old_c" >/dev/null 2>&1 || true
 # ---------------------------------------------------------------------------
 log "starting $ENGINE $TO on a fresh volume"
 
+# The restore used to end in `|| true`, so a client that could not connect, or
+# stopped at the first error, still led to "Upgrade staged successfully" over a
+# partial copy whenever at least one database had made it across.
+errlog="$WORK/${ENGINE}${TO}_restore_${stamp}.log"
+restore_failed() {
+    grep -v 'Using a password on the command line' "$errlog" | tail -n 20 >&2 || true
+    die "restore into $ENGINE $TO failed (full log: ${errlog#"$ROOT"/}).
+       The OLD volume $vol_from is untouched, so nothing is lost; the partial
+       $vol_to can be removed with: make destroy --volume $vol_to"
+}
+
 case "$ENGINE" in
     pg)
         mdb_ctr run -d --name "$new_c" -e POSTGRES_PASSWORD=mdb-throwaway-upgrade \
@@ -176,7 +187,11 @@ case "$ENGINE" in
         done
         sleep 3
         log "restoring"
-        mdb_ctr exec -i "$new_c" psql -U postgres -q < "$dump" >/dev/null 2>&1 || true
+        # Without ON_ERROR_STOP psql reports statement errors (the role
+        # "postgres" already exists, say) and carries on, which is wanted; a
+        # non-zero exit means it could not connect or read the dump at all.
+        mdb_ctr exec -i "$new_c" psql -U postgres -q < "$dump" >/dev/null 2>"$errlog" \
+            || restore_failed
 
         count="$(mdb_ctr exec "$new_c" psql -U postgres -tAc \
             "SELECT count(*) FROM pg_database WHERE datallowconn AND NOT datistemplate" | tr -d ' ')"
@@ -190,7 +205,8 @@ case "$ENGINE" in
             sleep 1
         done
         log "restoring"
-        mdb_ctr exec -i "$new_c" "$client" -uroot -p"$root_pw" < "$dump" >/dev/null 2>&1 || true
+        mdb_ctr exec -i "$new_c" "$client" -uroot -p"$root_pw" < "$dump" >/dev/null 2>"$errlog" \
+            || restore_failed
 
         count="$(mdb_ctr exec "$new_c" "$client" -uroot -p"$root_pw" -N -B -e \
             "SELECT count(*) FROM information_schema.schemata
