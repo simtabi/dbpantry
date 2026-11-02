@@ -21,9 +21,11 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-# shellcheck source=runtime-lib.sh
-. "$ROOT/scripts/runtime-lib.sh"
+# shellcheck source=backend-lib.sh
+. "$ROOT/scripts/backend-lib.sh"
 cd "$ROOT" || exit 1
+# A major upgrade runs the old and new server side by side on Compose volumes.
+mdb_backend_require compose || exit 64
 
 PROJECT="$(mdb_project_name)"
 PREFIX="${MDB_IMAGE_PREFIX:-ghcr.io/simtabi}"

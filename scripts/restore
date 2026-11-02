@@ -11,8 +11,8 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-# shellcheck source=runtime-lib.sh
-. "$ROOT/scripts/runtime-lib.sh"
+# shellcheck source=backend-lib.sh
+. "$ROOT/scripts/backend-lib.sh"
 ENV_FILE="${MDB_ENV_FILE:-$ROOT/.env}"
 [[ -f "$ENV_FILE" ]] || ENV_FILE="$ROOT/.env.example"
 
@@ -42,7 +42,7 @@ engine_exec() {
     if [[ "$IN_CONTAINER" == "1" ]]; then
         "$@"
     else
-        ( cd "$ROOT" && mdb_compose exec -T "$engine" "$@" )
+        ( cd "$ROOT" && mdb_svc_exec "$engine" "$@" )
     fi
 }
 

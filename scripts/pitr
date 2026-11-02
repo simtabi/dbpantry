@@ -16,8 +16,8 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-# shellcheck source=runtime-lib.sh
-. "$ROOT/scripts/runtime-lib.sh"
+# shellcheck source=backend-lib.sh
+. "$ROOT/scripts/backend-lib.sh"
 cd "$ROOT" || exit 1
 
 log() { printf '[pitr] %s\n' "$*"; }
@@ -72,7 +72,7 @@ pitr_enabled || die "PITR is off for $ENGINE. Set MDB_${upper}_PITR=true and res
        neither archive_mode nor log_bin can be enabled without one, so this is
        not a live toggle."
 
-pgbr() { mdb_compose exec -T -u postgres "$svc" pgbackrest --stanza="$stanza" "$@"; }
+pgbr() { mdb_svc_exec -u postgres "$svc" pgbackrest --stanza="$stanza" "$@"; }
 
 # -----------------------------------------------------------------------------
 # MySQL family: the binary log
@@ -82,7 +82,7 @@ if is_mysql_family; then
     dir="$(binlog_dir)"
 
     my() {
-        mdb_compose exec -T "$svc" "$client" --protocol=socket -uroot \
+        mdb_svc_exec "$svc" "$client" --protocol=socket -uroot \
             -p"$(root_pw)" -N -B -e "$1" 2>/dev/null
     }
 
@@ -109,7 +109,7 @@ if is_mysql_family; then
     # final file stops at the byte offset.
     files_through() {
         local target_file="$1" f out=""
-        for f in $(mdb_compose exec -T "$svc" sh -c "ls -1 '$dir' 2>/dev/null" \
+        for f in $(mdb_svc_exec "$svc" sh -c "ls -1 '$dir' 2>/dev/null" \
                     | tr -d '\r' | grep -E '^binlog\.[0-9]+$' | sort); do
             out="$out $dir/$f"
             [ "$f" = "$target_file" ] && break
@@ -120,7 +120,7 @@ if is_mysql_family; then
     case "$verb" in
         info)
             log "binary logs in $dir (their own volume, not inside the data directory)"
-            mdb_compose exec -T "$svc" sh -c "ls -lh '$dir' 2>/dev/null" || true
+            mdb_svc_exec "$svc" sh -c "ls -lh '$dir' 2>/dev/null" || true
             printf '\n'
             log "current coordinate: $(coordinate_now)"
             printf '\n'
@@ -184,11 +184,11 @@ if is_mysql_family; then
 
             log "replaying:$logs"
             # shellcheck disable=SC2086  # $logs is a deliberate argument list
-            mdb_compose exec -T "$svc" "$tool" ${stop_args[@]+"${stop_args[@]}"} $logs \
+            mdb_svc_exec "$svc" "$tool" ${stop_args[@]+"${stop_args[@]}"} $logs \
                 > /tmp/mdb-replay.$$.sql 2>/dev/null \
                 || { rm -f "/tmp/mdb-replay.$$.sql"; die "reading the binary log failed"; }
 
-            mdb_compose exec -T "$svc" "$client" --protocol=socket -uroot -p"$(root_pw)" \
+            mdb_svc_exec "$svc" "$client" --protocol=socket -uroot -p"$(root_pw)" \
                 < "/tmp/mdb-replay.$$.sql" \
                 || { rm -f "/tmp/mdb-replay.$$.sql"; die "applying the binary log failed"; }
             rm -f "/tmp/mdb-replay.$$.sql"
@@ -224,6 +224,9 @@ case "$verb" in
         ;;
 
     restore)
+        # Stop, restore into the data volume, start: Compose verbs on purpose.
+        # On Kubernetes a PITR restore is a Job (docs/guides/kubernetes.md).
+        mdb_backend_require compose || exit 64
         [[ -n "$TARGET" ]] || die "specify a target: --to '2026-08-09 12:34:56' or --to latest"
 
         printf 'This STOPS PostgreSQL and REPLACES its data directory with a recovery\n'

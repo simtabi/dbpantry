@@ -1,21 +1,26 @@
 #!/usr/bin/env bash
 #
-# The container runtime, from the command line and from make.
+# The deployment backend and container runtime, from the command line and make.
 #
 #   scripts/runtime info            what was detected, and why
 #   scripts/runtime name            docker | podman | nerdctl
+#   scripts/runtime backend         compose | kubernetes | incus
 #   scripts/runtime ctr <args>      the container CLI   (docker run ... syntax)
 #   scripts/runtime compose <args>  the Compose command (docker compose ... syntax)
-#   scripts/runtime up [args]       compose [args] up -d, waiting for health
+#   scripts/runtime up [args]       deploy, waiting for health (backend verb)
+#   scripts/runtime down|status|logs [args]
+#   scripts/runtime exec SVC CMD... a command in a service, with a terminal
+#                                   when there is one (make psql and friends)
 #
-# CONTAINER_RUNTIME and MDB_COMPOSE override detection; see scripts/runtime-lib.sh
-# and docs/guides/runtimes.md.
+# MDB_BACKEND picks the backend (scripts/backend-lib.sh, design.md D-62);
+# CONTAINER_RUNTIME and MDB_COMPOSE pick the runtime (scripts/runtime-lib.sh,
+# D-60). See docs/guides/runtimes.md.
 
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-# shellcheck source=runtime-lib.sh
-. "$ROOT/scripts/runtime-lib.sh"
+# shellcheck source=backend-lib.sh
+. "$ROOT/scripts/backend-lib.sh"
 
 cmd="${1:-info}"
 (( $# )) && shift
@@ -27,9 +32,31 @@ case "$cmd" in
         mdb_ctr "$@" ;;
     compose)
         mdb_compose "$@" ;;
+    backend)
+        mdb_backend_init && printf '%s\n' "$MDB_BACKEND" ;;
     up)
-        mdb_compose_up_wait "$@" ;;
+        mdb_be_up "$@" ;;
+    down)
+        mdb_be_down "$@" ;;
+    status)
+        mdb_be_status "$@" ;;
+    logs)
+        mdb_be_logs "$@" ;;
+    exec)
+        mdb_svc_exec_tty "$@" ;;
     info)
+        mdb_backend_init || exit 1
+        mdb_be_info
+        if [[ "$MDB_BACKEND" != compose ]]; then
+            # Images are still built locally, so report the runtime too, but
+            # an unreachable one is not an error on this backend.
+            if mdb_runtime_init 2>/dev/null && mdb_runtime_ready; then
+                printf 'runtime:   %s for image builds, provided by %s\n' "$MDB_RUNTIME" "$(mdb_runtime_provider)"
+            else
+                printf 'runtime:   none reachable (only needed to build images locally)\n'
+            fi
+            exit 0
+        fi
         mdb_runtime_init || exit 1
         printf 'runtime:   %s (CONTAINER_RUNTIME=%s)\n' "$MDB_RUNTIME" "${CONTAINER_RUNTIME:-auto}"
         printf 'cli:       %s\n' "$MDB_CTR_CMD"
@@ -46,6 +73,6 @@ case "$cmd" in
         fi
         ;;
     *)
-        printf 'usage: scripts/runtime info|name|ctr|compose|up [args]\n' >&2
+        printf 'usage: scripts/runtime info|name|backend|ctr|compose|up|down|status|logs|exec [args]\n' >&2
         exit 2 ;;
 esac

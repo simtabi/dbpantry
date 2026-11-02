@@ -49,6 +49,11 @@ image, replacing Cassandra's vulnerable vendored JARs rather than waiving them.
   D-52 to D-57, which sat after the end of the document, are back in the decision log.
 
 ### Added
+- **A deployment backend layer** (design.md D-62, [scripts/backends](scripts/backends/README.md)):
+  `MDB_BACKEND=compose` (the default, and the only backend so far) selects how the stack is deployed,
+  separately from `CONTAINER_RUNTIME`. Scripts reach databases through service-level verbs
+  (`mdb_svc_exec`, `mdb_be_running`, ...) instead of `docker compose exec`, and `scripts/runtime` gains
+  `backend`, `up`, `down`, `status`, `logs` and `exec`. Behaviour on Compose is unchanged (check 52).
 - **dbpantry runs on any OCI runtime with Compose** (design.md D-60,
   [Container runtimes](docs/guides/runtimes.md)): Docker, OrbStack, Colima, Rancher Desktop,
   Podman (rootless included) and nerdctl.

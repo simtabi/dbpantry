@@ -12,8 +12,8 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-# shellcheck source=runtime-lib.sh
-. "$ROOT/scripts/runtime-lib.sh"
+# shellcheck source=backend-lib.sh
+. "$ROOT/scripts/backend-lib.sh"
 cd "$ROOT" || exit 1
 
 PROJECT="$(mdb_project_name)"
@@ -33,8 +33,10 @@ while (( $# )); do
     esac
 done
 
+# The backend lists the project's volumes (Compose: <project>_<volume>;
+# Kubernetes: the release's PersistentVolumeClaims), design.md D-62.
 list_volumes() {
-    mdb_ctr volume ls --format '{{.Name}}' | grep -E "^${PROJECT}_" | sort || true
+    mdb_be_volumes "$PROJECT"
 }
 
 # Recovery repositories -- the pgBackRest repo and the binary logs.
@@ -45,7 +47,7 @@ list_volumes() {
 # They live in separate volumes precisely so this distinction can exist, and
 # --include-recovery is the way to say you meant it.
 is_recovery_volume() {
-    case "$1" in *_pitr) return 0 ;; *) return 1 ;; esac
+    case "$1" in *_pitr|pitr-*) return 0 ;; *) return 1 ;; esac
 }
 
 volumes="$(list_volumes)"
@@ -53,7 +55,7 @@ volumes="$(list_volumes)"
 
 # Destroying a volume out from under a running engine corrupts it rather than
 # removing it cleanly, so the stack has to be down first.
-running="$(mdb_running_services | grep -c . || true)"
+running="$(mdb_be_running | grep -c . || true)"
 if [[ "${running:-0}" != "0" ]]; then
     die "the stack is still running. Run 'make down' first, then destroy."
 fi
@@ -62,8 +64,7 @@ printf '\n'
 printf 'Data volumes for project %s:\n\n' "$PROJECT"
 while IFS= read -r v; do
     [[ -z "$v" ]] && continue
-    size="$(mdb_ctr volume inspect "$v" --format '{{.Mountpoint}}' >/dev/null 2>&1 && echo "" || echo "")"
-    printf '  %s%s\n' "$v" "$size"
+    printf '  %s\n' "$v"
 done <<< "$volumes"
 printf '\n'
 
@@ -94,7 +95,7 @@ if (( ALL )); then
 
     while IFS= read -r v; do
         [[ -z "$v" ]] && continue
-        mdb_ctr volume rm "$v" >/dev/null && log "deleted $v"
+        mdb_be_volume_rm "$v" >/dev/null && log "deleted $v"
     done <<< "$targets"
     if [[ -n "$kept" ]]; then
         log "recovery repositories kept; restore with: make pitr-info"
@@ -114,5 +115,5 @@ printf 'Type the volume name to continue: '
 read -r answer
 [[ "$answer" == "$TARGET" ]] || die "confirmation did not match; nothing was deleted"
 
-mdb_ctr volume rm "$TARGET" >/dev/null
+mdb_be_volume_rm "$TARGET" >/dev/null
 log "deleted $TARGET"

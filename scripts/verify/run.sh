@@ -9,6 +9,14 @@
 #   # tags:   space-separated (fast, pg, mysql, mariadb, tls, backup, ha, ...)
 #   # phase:  the kit.md phase that makes this check pass
 #
+# and optionally
+#
+#   # backends: the deployment backends it runs on (compose kubernetes incus,
+#               or any). Absent means compose: almost every check drives the
+#               Compose stack. Checks tagged "structure" read files only and
+#               run on every backend. On another MDB_BACKEND the rest are
+#               skipped, not failed (design.md D-62).
+#
 # Usage:
 #   run.sh                    run everything
 #   run.sh --structure-only   validate the harness itself, run no checks
@@ -66,6 +74,22 @@ selected() {
 }
 
 meta() { grep -m1 -E "^# $1:" "$2" 2>/dev/null | sed -E "s/^# $1:[[:space:]]*//" || true; }
+
+# Does a check run on the selected backend?
+VERIFY_BACKEND="${MDB_BACKEND:-}"
+if [[ -z "$VERIFY_BACKEND" && -f "$ROOT/.env" ]]; then
+    # shellcheck source=../env-lib.sh
+    . "$ROOT/scripts/env-lib.sh"
+    VERIFY_BACKEND="$(mdb_env_get MDB_BACKEND "$ROOT/.env")"
+fi
+VERIFY_BACKEND="${VERIFY_BACKEND:-compose}"
+on_backend() {
+    local c="$1" b
+    b="$(meta backends "$c")"
+    in_list structure "$(meta tags "$c")" && return 0
+    [[ -n "$b" ]] || b=compose
+    in_list any "$b" || in_list "$VERIFY_BACKEND" "$b"
+}
 
 # bash 3.2 has no mapfile, and macOS ships bash 3.2 (SPEC section 1 makes
 # macOS first-class), so every array is built with a read loop instead.
@@ -148,6 +172,13 @@ for c in "${CHECKS[@]}"; do
     ran=$(( ran + 1 ))
 
     printf '%s→%s %-34s %s%s%s\n' "$BLU" "$OFF" "$name" "$DIM" "$desc" "$OFF"
+
+    if ! on_backend "$c"; then
+        skip=$(( skip + 1 )); skipped_names+=("$name")
+        printf '  %s· skip%s %snot a %s check (# backends: %s)%s\n' "$YLW" "$OFF" "$DIM" \
+            "$VERIFY_BACKEND" "$(meta backends "$c" | sed 's/^$/compose/')" "$OFF"
+        continue
+    fi
 
     rc=0
     output="$("$c" 2>&1)" || rc=$?

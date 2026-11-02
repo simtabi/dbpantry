@@ -34,13 +34,13 @@ vinfo "no script calls docker, podman or nerdctl directly"
 missing=""
 for f in scripts/*; do
     [[ -f "$f" && -x "$f" ]] || continue
-    case "$f" in scripts/runtime|scripts/runtime-lib.sh) continue ;; esac
+    case "$f" in scripts/runtime|scripts/runtime-lib.sh|scripts/backend-lib.sh) continue ;; esac
     if grep -qE '(^|[^_[:alnum:]])mdb_(ctr|compose|build|running_services|service_[a-z]+|runtime_[a-z]+)\b' "$f" \
-       && ! grep -q 'runtime-lib.sh' "$f"; then
+       && ! grep -qE '(runtime|backend)-lib.sh' "$f"; then
         missing+=" $f"
     fi
 done
-[[ -z "$missing" ]] || vfail "uses the runtime layer without sourcing scripts/runtime-lib.sh:$missing"
+[[ -z "$missing" ]] || vfail "uses the runtime layer without sourcing scripts/runtime-lib.sh or scripts/backend-lib.sh:$missing"
 vinfo "every script that uses the runtime layer sources it"
 
 # --- the project name in .env is the one make uses ----------------------------
