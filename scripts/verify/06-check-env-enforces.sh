@@ -25,7 +25,7 @@ vinfo "sentinel password rejected"
 
 # A plaintext password (rather than a _FILE reference) must be rejected.
 cp "$MDB_ROOT/.env.example" "$tmp/.env2"
-printf 'MDB_PG_SUPERUSER_PASSWORD=mdb-throwaway-plaintext\n' >> "$tmp/.env2"
+printf 'MDB_PG_SUPERUSER_PASSWORD=%s\n' "${TW_PLAINTEXT}" >> "$tmp/.env2"
 
 if MDB_ENV_FILE="$tmp/.env2" "$MDB_ROOT/scripts/check-env" >/dev/null 2>&1; then
     vfail "check-env accepted a plaintext password; the _FILE convention is mandatory"

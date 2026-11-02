@@ -18,8 +18,8 @@ name="mdb-verify-triplet-$$"
 track_container "$name"
 
 mdb_ctr run -d --name "$name" \
-    -e POSTGRES_PASSWORD=mdb-throwaway-verify \
-    -e MDB_PG_DATABASES="alpha:alpha_user:mdb-throwaway-alpha,beta:beta_user:mdb-throwaway-beta" \
+    -e POSTGRES_PASSWORD="${TW_VERIFY}" \
+    -e MDB_PG_DATABASES="alpha:alpha_user:${TW_ALPHA},beta:beta_user:${TW_BETA}" \
     "$img" >/dev/null || vfail "container failed to start with triplet provisioning"
 
 wait_ready 60 "postgres to accept connections" mdb_ctr exec "$name" pg_isready -U postgres
@@ -38,13 +38,13 @@ done
 vinfo "both databases and both roles provisioned"
 
 # Owner must be able to work in its own database.
-mdb_ctr exec -e PGPASSWORD=mdb-throwaway-alpha "$name" \
+mdb_ctr exec -e PGPASSWORD="${TW_ALPHA}" "$name" \
     psql -U alpha_user -d alpha -tAc "CREATE TABLE t(i int); DROP TABLE t;" >/dev/null 2>&1 \
     || vfail "alpha_user cannot create a table in its own database"
 vinfo "alpha_user owns its own database"
 
 # The isolation assertion: alpha_user must NOT reach beta.
-if mdb_ctr exec -e PGPASSWORD=mdb-throwaway-alpha "$name" \
+if mdb_ctr exec -e PGPASSWORD="${TW_ALPHA}" "$name" \
     psql -U alpha_user -d beta -tAc "SELECT 1" >/dev/null 2>&1; then
     vfail "alpha_user connected to database beta; projects are not isolated"
 fi

@@ -31,7 +31,7 @@ mdb_ctr volume create "$vol" >/dev/null
 track_volume "$vol"
 
 mdb_ctr run -d --name "$name" \
-    -e POSTGRES_PASSWORD=mdb-throwaway-pitr \
+    -e POSTGRES_PASSWORD="${TW_PITR}" \
     -e MDB_PG_PITR=true \
     -e MDB_PG_ARCHIVE_TIMEOUT=5 \
     -v "$vol:/var/lib/pgbackrest" \

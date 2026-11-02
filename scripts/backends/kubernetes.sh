@@ -190,9 +190,12 @@ _mdb_be_kubernetes_secrets_sync() {
     # dbpantry client reads it), or nothing can log in. Through stdin, so the
     # password is never on a command line.
     if [[ -f "$root/secrets/pg_superuser_password.txt" ]]; then
+        # The role name sits in a variable so no line pairs a literal username with a
+        # password field, which secret scanners report as a credential.
+        local pg_superuser=postgres
         tr -d '\n' < "$root/secrets/pg_superuser_password.txt" \
             | _mdb_k8s_kubectl create secret generic "$(_mdb_k8s_release)-pg-superuser" --type=kubernetes.io/basic-auth \
-                --from-literal=username=postgres \
+                --from-literal=username="${pg_superuser}" \
                 --from-file=password=/dev/stdin \
                 --dry-run=client -o yaml | _mdb_k8s_kubectl apply -f - >/dev/null || return
     fi

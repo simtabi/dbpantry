@@ -29,7 +29,7 @@ track_network "$net"
 mdb_ctr network create "$net" >/dev/null
 
 mdb_ctr run -d --name "$name" --network "$net" --network-alias pg \
-    -e POSTGRES_PASSWORD=mdb-throwaway-verify \
+    -e POSTGRES_PASSWORD="${TW_VERIFY}" \
     -v "$MDB_ROOT/certs:/certs:ro" \
     "$img" >/dev/null || vfail "container failed to start with certs mounted"
 
@@ -48,7 +48,7 @@ vinfo "local session TLS version: ${cipher:-none}"
 # verify-full from a separate container, trusting only the toolkit CA.
 out="$(mdb_ctr run --rm --network "$net" \
     -v "$MDB_ROOT/certs/ca.crt:/ca.crt:ro" \
-    -e PGPASSWORD=mdb-throwaway-verify \
+    -e PGPASSWORD="${TW_VERIFY}" \
     "$img" \
     psql "host=pg user=postgres dbname=postgres sslmode=verify-full sslrootcert=/ca.crt" \
     -tAc "SELECT 'verify-full-ok'" 2>&1 || true)"

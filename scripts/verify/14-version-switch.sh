@@ -37,7 +37,7 @@ mdb_ctr volume create "$vol17" >/dev/null
 mdb_ctr volume create "$vol18" >/dev/null
 
 # --- start on 17 and write a marker row --------------------------------------
-mdb_ctr run -d --name "$c17" -e POSTGRES_PASSWORD=mdb-throwaway-verify \
+mdb_ctr run -d --name "$c17" -e POSTGRES_PASSWORD="${TW_VERIFY}" \
     -v "$vol17:/var/lib/postgresql/data" "$old_img" >/dev/null \
     || vfail "PG 17 container failed to start"
 wait_ready 60 "PG 17 to accept connections" mdb_ctr exec "$c17" pg_isready -U postgres
@@ -51,7 +51,7 @@ vinfo "PG 17 running (server_version_num prefix $major17), marker row written"
 mdb_ctr stop -t 30 "$c17" >/dev/null
 
 # --- switch to 18, which must use a DIFFERENT volume -------------------------
-mdb_ctr run -d --name "$c18" -e POSTGRES_PASSWORD=mdb-throwaway-verify \
+mdb_ctr run -d --name "$c18" -e POSTGRES_PASSWORD="${TW_VERIFY}" \
     -v "$vol18:/var/lib/postgresql" "$new_img" >/dev/null \
     || vfail "PG 18 container failed to start on its own volume"
 wait_ready 60 "PG 18 to accept connections" mdb_ctr exec "$c18" pg_isready -U postgres

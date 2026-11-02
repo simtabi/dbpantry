@@ -27,6 +27,29 @@ export MDB_ROOT
 
 readonly VERIFY_EXIT_SKIP=3
 
+# Throwaway passwords for containers that live for seconds, generated per run so no
+# credential is ever written in the source. Each keeps the mdb-throwaway- prefix that
+# scripts/verify/03-secret-scan-repo.sh recognises, and labels keep them distinct: a
+# check that needs a wrong password gets one that cannot equal the right one.
+_mdb_tw_salt="$(od -An -N8 -tx1 /dev/urandom | tr -d ' \n')"
+TW_ALPHA="mdb-throwaway-alpha-${_mdb_tw_salt}"
+TW_APP="mdb-throwaway-app-${_mdb_tw_salt}"
+TW_BETA="mdb-throwaway-beta-${_mdb_tw_salt}"
+TW_BOUNCER="mdb-throwaway-bouncer-${_mdb_tw_salt}"
+TW_MYFILE="mdb-throwaway-myfile-${_mdb_tw_salt}"
+TW_MYPITR="mdb-throwaway-mypitr-${_mdb_tw_salt}"
+TW_PGFILE="mdb-throwaway-pgfile-${_mdb_tw_salt}"
+TW_PITR="mdb-throwaway-pitr-${_mdb_tw_salt}"
+TW_PLAINTEXT="mdb-throwaway-plaintext-${_mdb_tw_salt}"
+TW_RLS="mdb-throwaway-rls-${_mdb_tw_salt}"
+TW_RLSAPP="mdb-throwaway-rlsapp-${_mdb_tw_salt}"
+TW_SUPER="mdb-throwaway-super-${_mdb_tw_salt}"
+TW_USER="mdb-throwaway-user-${_mdb_tw_salt}"
+TW_VERIFY="mdb-throwaway-verify-${_mdb_tw_salt}"
+TW_WRONG_PASSWORD="mdb-throwaway-wrong-password-${_mdb_tw_salt}"
+# shellcheck disable=SC2034  # read by the verify checks that source this file
+readonly TW_ALPHA TW_APP TW_BETA TW_BOUNCER TW_MYFILE TW_MYPITR TW_PGFILE TW_PITR TW_PLAINTEXT TW_RLS TW_RLSAPP TW_SUPER TW_USER TW_VERIFY TW_WRONG_PASSWORD
+
 if [[ -t 1 ]] && [[ -z "${NO_COLOR:-}" ]]; then
     C_DIM=$'\033[2m'; C_OFF=$'\033[0m'
 else

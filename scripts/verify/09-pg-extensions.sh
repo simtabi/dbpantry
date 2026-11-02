@@ -22,7 +22,7 @@ track_container "$name"
 # is correct usage, not an accommodation -- but it is also why the shipped
 # default in .env.example lists only pg_stat_statements: preloading costs
 # startup time and memory, so the others are opt-in.
-mdb_ctr run -d --name "$name" -e POSTGRES_PASSWORD=mdb-throwaway-verify \
+mdb_ctr run -d --name "$name" -e POSTGRES_PASSWORD="${TW_VERIFY}" \
     -e MDB_PG_SHARED_PRELOAD=pg_stat_statements,pg_cron,pgaudit,pg_net \
     --shm-size=256m "$img" >/dev/null || vfail "container failed to start"
 

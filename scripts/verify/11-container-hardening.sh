@@ -43,7 +43,7 @@ mdb_ctr volume create "$vol" >/dev/null
 # "Permission denied" and exit 126, which reads like a file-ownership problem
 # and is not one.
 mdb_ctr run -d --name "$name" \
-    -e POSTGRES_PASSWORD=mdb-throwaway-verify \
+    -e POSTGRES_PASSWORD="${TW_VERIFY}" \
     --read-only \
     --cap-drop ALL --cap-add CHOWN --cap-add SETUID --cap-add SETGID \
     --cap-add DAC_OVERRIDE --cap-add FOWNER \

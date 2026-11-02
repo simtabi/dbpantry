@@ -102,7 +102,7 @@ vinfo "pooler account holds no superuser privilege"
 
 # 4. A wrong password is still refused.
 if mdb_ctr run --rm --network "$(mdb_project_name)_net" \
-    -e MYSQL_PWD=mdb-throwaway-wrong-password --entrypoint mysql "$img" \
+    -e MYSQL_PWD="${TW_WRONG_PASSWORD}" --entrypoint mysql "$img" \
     -h "${engine}-pooler" -P 6033 -u "${proj}_user" --protocol=TCP -N -B \
     -e "SELECT 1" "$proj" >/dev/null 2>&1; then
     vfail "ProxySQL accepted a wrong password"

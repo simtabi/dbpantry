@@ -30,7 +30,7 @@ need_file "$MDB_ROOT/rls/rls-template.sql"
 name="mdb-verify-rls-$$"
 track_container "$name"
 
-mdb_ctr run -d --name "$name" -e POSTGRES_PASSWORD=mdb-throwaway-rls "$img" >/dev/null \
+mdb_ctr run -d --name "$name" -e POSTGRES_PASSWORD="${TW_RLS}" "$img" >/dev/null \
     || vfail "container failed to start"
 wait_ready 120 "postgres to accept connections" \
     mdb_ctr exec -u postgres "$name" pg_isready -U postgres
@@ -38,16 +38,16 @@ wait_ready 120 "postgres to accept connections" \
 # Applied as a NON-superuser. A superuser bypasses RLS entirely, so running the
 # demo as postgres would prove nothing at all -- every query would succeed and
 # the check would pass on a policy that does not work.
-mdb_ctr exec -i -u postgres "$name" psql -qtAX -v ON_ERROR_STOP=1 -d postgres >/dev/null 2>&1 <<'SQL' \
+mdb_ctr exec -i -u postgres "$name" psql -qtAX -v ON_ERROR_STOP=1 -d postgres >/dev/null 2>&1 <<SQL \
     || vfail "could not create the tenant-app role"
-CREATE ROLE rlsapp LOGIN PASSWORD 'mdb-throwaway-rlsapp';
+CREATE ROLE rlsapp LOGIN PASSWORD '${TW_RLSAPP}';
 CREATE DATABASE rlsdemo OWNER rlsapp;
 SQL
 
 # PGPASSWORD is required even over the unix socket: pg_hba reserves peer auth
 # for the postgres superuser and demands scram-sha-256 for everyone else, which
 # check 30 exists to keep that way.
-app_pw=mdb-throwaway-rlsapp
+app_pw="${TW_RLSAPP}"
 
 # As the OWNER of the table, which is the case FORCE exists for.
 mdb_ctr exec -i -u postgres -e PGPASSWORD="$app_pw" "$name" psql -qtAX -v ON_ERROR_STOP=1 \

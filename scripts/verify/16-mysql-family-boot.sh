@@ -21,24 +21,24 @@ check_engine() {
     name="mdb-verify-$engine-$$"
     track_container "$name"
 
-    mdb_ctr run -d --name "$name" -e "$pw_env=mdb-throwaway-verify" "$img" >/dev/null \
+    mdb_ctr run -d --name "$name" -e "$pw_env=${TW_VERIFY}" "$img" >/dev/null \
         || vfail "$engine failed to start with only $pw_env set"
 
     wait_ready 90 "$engine to accept connections" \
-        mdb_ctr exec "$name" "$client" -uroot -pmdb-throwaway-verify -e "SELECT 1"
+        mdb_ctr exec "$name" "$client" -uroot -p"${TW_VERIFY}" -e "SELECT 1"
 
     # Baked defaults from SPEC section 6 must actually be in effect.
     local charset collation sql_mode
-    charset="$(mdb_ctr exec "$name" "$client" -uroot -pmdb-throwaway-verify -N -B \
+    charset="$(mdb_ctr exec "$name" "$client" -uroot -p"${TW_VERIFY}" -N -B \
         -e "SELECT @@character_set_server" 2>/dev/null | tr -d ' \r')"
     [[ "$charset" == "utf8mb4" ]] || vfail "$engine character_set_server is '$charset', expected utf8mb4"
 
-    collation="$(mdb_ctr exec "$name" "$client" -uroot -pmdb-throwaway-verify -N -B \
+    collation="$(mdb_ctr exec "$name" "$client" -uroot -p"${TW_VERIFY}" -N -B \
         -e "SELECT @@collation_server" 2>/dev/null | tr -d ' \r')"
     [[ "$collation" == utf8mb4_unicode_ci* ]] \
         || vfail "$engine collation_server is '$collation', expected utf8mb4_unicode_ci"
 
-    sql_mode="$(mdb_ctr exec "$name" "$client" -uroot -pmdb-throwaway-verify -N -B \
+    sql_mode="$(mdb_ctr exec "$name" "$client" -uroot -p"${TW_VERIFY}" -N -B \
         -e "SELECT @@sql_mode" 2>/dev/null | tr -d ' \r')"
     [[ -n "$sql_mode" ]] || vfail "$engine has an empty sql_mode; SPEC section 6 requires it explicit"
 
@@ -64,9 +64,9 @@ check_engine mariadb MARIADB_ROOT_PASSWORD mariadb
 mariadb_c="$CHECKED_CONTAINER"
 
 # Both must be alive at the same time.
-mdb_ctr exec "$mysql_c" mysql -uroot -pmdb-throwaway-verify -e "SELECT 1" >/dev/null 2>&1 \
+mdb_ctr exec "$mysql_c" mysql -uroot -p"${TW_VERIFY}" -e "SELECT 1" >/dev/null 2>&1 \
     || vfail "MySQL stopped responding once MariaDB was up"
-mdb_ctr exec "$mariadb_c" mariadb -uroot -pmdb-throwaway-verify -e "SELECT 1" >/dev/null 2>&1 \
+mdb_ctr exec "$mariadb_c" mariadb -uroot -p"${TW_VERIFY}" -e "SELECT 1" >/dev/null 2>&1 \
     || vfail "MariaDB stopped responding once MySQL was up"
 
 vinfo "MySQL and MariaDB run concurrently"

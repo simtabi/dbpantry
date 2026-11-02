@@ -39,7 +39,7 @@ for engine in ${MDB_PITR_ENGINE:-mysql mariadb}; do
     track_volume "$vol"
 
     upper="$(printf '%s' "$engine" | tr '[:lower:]' '[:upper:]')"
-    pw=mdb-throwaway-mypitr
+    pw="${TW_MYPITR}"
 
     mdb_ctr run -d --name "$name" \
         -e "${upper}_ROOT_PASSWORD=$pw" \

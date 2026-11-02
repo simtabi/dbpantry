@@ -20,6 +20,13 @@
 
 set -euo pipefail
 
+# Throwaway passwords for containers that live for seconds, generated per run so no
+# credential is ever written in the source. Each keeps the mdb-throwaway- prefix that
+# scripts/verify/03-secret-scan-repo.sh recognises, and labels keep them distinct: a
+# check that needs a wrong password gets one that cannot equal the right one.
+_mdb_tw_salt="$(od -An -N8 -tx1 /dev/urandom | tr -d ' \n')"
+TW_UPGRADE="mdb-throwaway-upgrade-${_mdb_tw_salt}"
+
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # shellcheck source=backend-lib.sh
 . "$ROOT/scripts/backend-lib.sh"
@@ -120,7 +127,7 @@ log "starting $ENGINE $FROM against its existing volume (read only as far as you
 
 case "$ENGINE" in
     pg)
-        mdb_ctr run -d --name "$old_c" -e POSTGRES_PASSWORD=mdb-throwaway-upgrade \
+        mdb_ctr run -d --name "$old_c" -e POSTGRES_PASSWORD="${TW_UPGRADE}" \
             -v "$vol_from:$(pg_mount "$FROM")" "$PREFIX/dbpantry-pg:$FROM" >/dev/null \
             || die "could not start $ENGINE $FROM"
         for _ in $(seq 1 120); do
@@ -178,7 +185,7 @@ restore_failed() {
 
 case "$ENGINE" in
     pg)
-        mdb_ctr run -d --name "$new_c" -e POSTGRES_PASSWORD=mdb-throwaway-upgrade \
+        mdb_ctr run -d --name "$new_c" -e POSTGRES_PASSWORD="${TW_UPGRADE}" \
             -v "$vol_to:$(pg_mount "$TO")" "$PREFIX/dbpantry-pg:$TO" >/dev/null \
             || die "could not start $ENGINE $TO"
         for _ in $(seq 1 120); do

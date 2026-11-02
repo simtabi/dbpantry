@@ -42,7 +42,7 @@ track_container "$bouncer"
 track_network "$net"
 add_cleanup "rm -rf '$secrets'"
 
-printf 'mdb-throwaway-bouncer\n' > "$secrets/pgbouncer_password.txt"
+printf '%s\n' "${TW_BOUNCER}" > "$secrets/pgbouncer_password.txt"
 chmod 0600 "$secrets"/*
 
 mdb_ctr network create "$net" >/dev/null || vfail "could not create the test network"
@@ -51,8 +51,8 @@ mdb_ctr network create "$net" >/dev/null || vfail "could not create the test net
 # THIS check and to PostgreSQL -- and, the point of the exercise, never to the
 # pooler.
 mdb_ctr run -d --name "$pg" --network "$net" --network-alias pg \
-    -e POSTGRES_PASSWORD=mdb-throwaway-super \
-    -e MDB_PG_DATABASES="poolapp:poolapp:mdb-throwaway-app" \
+    -e POSTGRES_PASSWORD="${TW_SUPER}" \
+    -e MDB_PG_DATABASES="poolapp:poolapp:${TW_APP}" \
     -v "$secrets:/run/secrets:ro" \
     "$img" >/dev/null || vfail "PostgreSQL failed to start"
 
@@ -106,12 +106,12 @@ via_pooler() {
 }
 
 wait_ready 60 "the pooler to accept connections" \
-    mdb_ctr run --rm --network "$net" -e PGPASSWORD=mdb-throwaway-app \
+    mdb_ctr run --rm --network "$net" -e PGPASSWORD="${TW_APP}" \
         --entrypoint psql "$img" \
         -h "$bouncer" -p 6432 -U poolapp -d poolapp -qtAX -c 'SELECT 1'
 
 # 1. An application user connects through the pooler.
-got="$(via_pooler mdb-throwaway-app poolapp poolapp 'SELECT 42')"
+got="$(via_pooler "${TW_APP}" poolapp poolapp 'SELECT 42')"
 [[ "$got" == "42" ]] || vfail "query through the pooler returned '$got', expected 42"
 vinfo "application user authenticated through the pooler with auth_query"
 
@@ -119,7 +119,7 @@ vinfo "application user authenticated through the pooler with auth_query"
 #    its own credential; finding the app user's password there would mean the
 #    auth_query path is not actually in use.
 if mdb_ctr exec "$bouncer" sh -c 'cat /etc/pgbouncer/userlist.txt 2>/dev/null' \
-     | grep -q 'mdb-throwaway-app'; then
+     | grep -qF "${TW_APP}"; then
     vfail "the pooler stored an application password; auth_query must resolve them instead"
 fi
 vinfo "no application password is stored in the pooler"
@@ -127,7 +127,7 @@ vinfo "no application password is stored in the pooler"
 # 3. Multiplexing: more clients than server connections. DEFAULT_POOL_SIZE=2,
 #    so eight concurrent clients must not open eight backends.
 for _ in 1 2 3 4 5 6 7 8; do
-    mdb_ctr run --rm -d --network "$net" -e PGPASSWORD=mdb-throwaway-app \
+    mdb_ctr run --rm -d --network "$net" -e PGPASSWORD="${TW_APP}" \
         --entrypoint psql "$img" \
         -h "$bouncer" -p 6432 -U poolapp -d poolapp -qtAX \
         -c 'SELECT pg_sleep(3)' >/dev/null 2>&1 || true
@@ -145,7 +145,7 @@ vinfo "8 clients collapsed onto $backends server connection(s) (pool_size 2)"
 # 4. A wrong password is still refused. Asserted on exit status rather than on
 #    the text of the error: matching strings would pass for any failure at all,
 #    including "could not connect", which proves nothing about authentication.
-if via_pooler mdb-throwaway-wrong-password poolapp poolapp 'SELECT 1' >/dev/null 2>&1; then
+if via_pooler "${TW_WRONG_PASSWORD}" poolapp poolapp 'SELECT 1' >/dev/null 2>&1; then
     vfail "the pooler accepted a wrong password"
 fi
 vinfo "wrong password refused through the pooler"

@@ -19,7 +19,7 @@ add_cleanup "rm -rf '$tmp'"
 img="$(image_name pg)"
 need_image "$img"
 
-printf 'mdb-throwaway-pgfile\n' > "$tmp/pgpass"
+printf '%s\n' "${TW_PGFILE}" > "$tmp/pgpass"
 printf 'CREATE TABLE initdb_ran(v text);\nINSERT INTO initdb_ran VALUES ('"'"'yes'"'"');\n' > "$tmp/01-init.sql"
 
 name="mdb-verify-compat-pg-$$"
@@ -38,12 +38,12 @@ mdb_ctr run -d --name "$name" \
 wait_ready 60 "custom_user to accept connections" \
     mdb_ctr exec "$name" pg_isready -U custom_user -d custom_db
 
-mdb_ctr exec -e PGPASSWORD=mdb-throwaway-pgfile "$name" \
+mdb_ctr exec -e PGPASSWORD="${TW_PGFILE}" "$name" \
     psql -U custom_user -d custom_db -tAc "SELECT 1" >/dev/null 2>&1 \
     || vfail "POSTGRES_PASSWORD_FILE was not honoured"
 vinfo "POSTGRES_PASSWORD_FILE, POSTGRES_USER, POSTGRES_DB honoured"
 
-ran="$(mdb_ctr exec -e PGPASSWORD=mdb-throwaway-pgfile "$name" \
+ran="$(mdb_ctr exec -e PGPASSWORD="${TW_PGFILE}" "$name" \
     psql -U custom_user -d custom_db -tAc "SELECT v FROM initdb_ran" 2>/dev/null | tr -d ' ')"
 [[ "$ran" == "yes" ]] || vfail "/docker-entrypoint-initdb.d script did not run"
 vinfo "/docker-entrypoint-initdb.d executed"
@@ -54,7 +54,7 @@ compat_mysql_family() {
     img="$(image_name "$engine")"
     need_image "$img"
 
-    printf 'mdb-throwaway-myfile\n' > "$tmp/${engine}pass"
+    printf '%s\n' "${TW_MYFILE}" > "$tmp/${engine}pass"
     printf 'CREATE TABLE initdb_ran(v text);\nINSERT INTO initdb_ran VALUES ("yes");\n' \
         > "$tmp/${engine}-init.sql"
 
@@ -65,19 +65,19 @@ compat_mysql_family() {
         -e "${prefix}_ROOT_PASSWORD_FILE=/run/secrets/pw" \
         -e "${prefix}_DATABASE=custom_db" \
         -e "${prefix}_USER=custom_user" \
-        -e "${prefix}_PASSWORD=mdb-throwaway-user" \
+        -e "${prefix}_PASSWORD=${TW_USER}" \
         -v "$tmp/${engine}pass:/run/secrets/pw:ro" \
         -v "$tmp/${engine}-init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro" \
         "$img" >/dev/null || vfail "$engine failed to start with ${prefix}_ROOT_PASSWORD_FILE"
 
     wait_ready 90 "$engine custom_user to connect" \
-        mdb_ctr exec "$name" "$client" -ucustom_user -pmdb-throwaway-user custom_db -e "SELECT 1"
+        mdb_ctr exec "$name" "$client" -ucustom_user -p"${TW_USER}" custom_db -e "SELECT 1"
 
-    mdb_ctr exec "$name" "$client" -uroot -pmdb-throwaway-myfile -e "SELECT 1" >/dev/null 2>&1 \
+    mdb_ctr exec "$name" "$client" -uroot -p"${TW_MYFILE}" -e "SELECT 1" >/dev/null 2>&1 \
         || vfail "${prefix}_ROOT_PASSWORD_FILE was not honoured"
 
     local ran
-    ran="$(mdb_ctr exec "$name" "$client" -ucustom_user -pmdb-throwaway-user custom_db -N -B \
+    ran="$(mdb_ctr exec "$name" "$client" -ucustom_user -p"${TW_USER}" custom_db -N -B \
         -e "SELECT v FROM initdb_ran" 2>/dev/null | tr -d ' \r')"
     [[ "$ran" == "yes" ]] || vfail "$engine /docker-entrypoint-initdb.d script did not run"
 

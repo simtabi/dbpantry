@@ -28,7 +28,7 @@ check_family() {
     track_volume "$sockvol"
 
     mdb_ctr run -d --name "$name" \
-        -e "$pw_env=mdb-throwaway-verify" \
+        -e "$pw_env=${TW_VERIFY}" \
         -e MDB_TLS_ENFORCE=true \
         -e MDB_SOCKETS=true \
         -v "$MDB_ROOT/certs:/certs:ro" \
@@ -36,25 +36,25 @@ check_family() {
         "$img" >/dev/null || vfail "$engine failed to start with MDB_TLS_ENFORCE=true"
 
     wait_ready 90 "$engine to accept connections" \
-        mdb_ctr exec "$name" "$client" -uroot -pmdb-throwaway-verify --protocol=socket -e "SELECT 1"
+        mdb_ctr exec "$name" "$client" -uroot -p"${TW_VERIFY}" --protocol=socket -e "SELECT 1"
 
     # require_secure_transport must actually be ON.
     local rst
-    rst="$(mdb_ctr exec "$name" "$client" -uroot -pmdb-throwaway-verify --protocol=socket -N -B \
+    rst="$(mdb_ctr exec "$name" "$client" -uroot -p"${TW_VERIFY}" --protocol=socket -N -B \
         -e "SELECT @@require_secure_transport" 2>/dev/null | tr -d ' \r')"
     [[ "$rst" == "1" || "$rst" == "ON" ]] \
         || vfail "$engine require_secure_transport is '$rst', expected ON"
     vinfo "$engine require_secure_transport=ON"
 
     # A plaintext TCP connection must be REFUSED BY THE SERVER.
-    if mdb_ctr run --rm --network "container:$name" -e MYSQL_PWD=mdb-throwaway-verify "$img" \
+    if mdb_ctr run --rm --network "container:$name" -e MYSQL_PWD="${TW_VERIFY}" "$img" \
         "$client" -h 127.0.0.1 -uroot --ssl-mode=DISABLED -e "SELECT 1" >/dev/null 2>&1; then
         vfail "$engine accepted a plaintext TCP connection under TLS enforcement"
     fi
     vinfo "$engine refused plaintext TCP"
 
     # ...but the socket must still work (SPEC section 9.1).
-    mdb_ctr exec "$name" "$client" -uroot -pmdb-throwaway-verify --protocol=socket -e "SELECT 1" >/dev/null 2>&1 \
+    mdb_ctr exec "$name" "$client" -uroot -p"${TW_VERIFY}" --protocol=socket -e "SELECT 1" >/dev/null 2>&1 \
         || vfail "$engine broke socket connections under TLS enforcement; sockets are a secure transport"
     vinfo "$engine socket connections still work"
 
@@ -69,7 +69,7 @@ need_image "$img"
 name="mdb-verify-tlsenf-pg-$$"
 track_container "$name"
 
-mdb_ctr run -d --name "$name" -e POSTGRES_PASSWORD=mdb-throwaway-verify -e MDB_TLS_ENFORCE=true \
+mdb_ctr run -d --name "$name" -e POSTGRES_PASSWORD="${TW_VERIFY}" -e MDB_TLS_ENFORCE=true \
     -v "$MDB_ROOT/certs:/certs:ro" "$img" >/dev/null \
     || vfail "PG failed to start with TLS enforcement"
 wait_ready 60 "postgres to accept connections" mdb_ctr exec "$name" pg_isready -U postgres

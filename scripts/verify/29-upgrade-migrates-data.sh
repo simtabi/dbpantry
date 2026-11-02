@@ -40,7 +40,7 @@ seed="mdb-verify-upg-seed-$$"
 track_container "$seed"
 
 mdb_ctr volume create "$vol17" >/dev/null
-mdb_ctr run -d --name "$seed" -e POSTGRES_PASSWORD=mdb-throwaway-verify \
+mdb_ctr run -d --name "$seed" -e POSTGRES_PASSWORD="${TW_VERIFY}" \
     -v "$vol17:/var/lib/postgresql/data" "$old_img" >/dev/null \
     || vfail "could not start PG 17 to seed"
 wait_ready 90 "PG 17 to accept connections" mdb_ctr exec "$seed" pg_isready -U postgres
@@ -61,7 +61,7 @@ vinfo "upgrade completed"
 # --- the data arrived on the new major --------------------------------------
 check18="mdb-verify-upg-18-$$"
 track_container "$check18"
-mdb_ctr run -d --name "$check18" -e POSTGRES_PASSWORD=mdb-throwaway-verify \
+mdb_ctr run -d --name "$check18" -e POSTGRES_PASSWORD="${TW_VERIFY}" \
     -v "$vol18:/var/lib/postgresql" "$new_img" >/dev/null
 wait_ready 90 "PG 18 to accept connections" mdb_ctr exec "$check18" pg_isready -U postgres
 
@@ -78,7 +78,7 @@ mdb_ctr rm -f -v "$check18" >/dev/null 2>&1 || true
 # that makes "just set the version back" true rather than hopeful.
 check17="mdb-verify-upg-17-$$"
 track_container "$check17"
-mdb_ctr run -d --name "$check17" -e POSTGRES_PASSWORD=mdb-throwaway-verify \
+mdb_ctr run -d --name "$check17" -e POSTGRES_PASSWORD="${TW_VERIFY}" \
     -v "$vol17:/var/lib/postgresql/data" "$old_img" >/dev/null
 wait_ready 90 "PG 17 to accept connections again" mdb_ctr exec "$check17" pg_isready -U postgres
 

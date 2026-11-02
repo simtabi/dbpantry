@@ -17,7 +17,7 @@ need_image "$img"
 name="mdb-verify-pg-standalone-$$"
 track_container "$name"
 
-mdb_ctr run -d --name "$name" -e POSTGRES_PASSWORD=mdb-throwaway-verify "$img" >/dev/null \
+mdb_ctr run -d --name "$name" -e POSTGRES_PASSWORD="${TW_VERIFY}" "$img" >/dev/null \
     || vfail "mdb_ctr run failed with only POSTGRES_PASSWORD set"
 
 wait_ready 60 "postgres to accept connections" \

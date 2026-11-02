@@ -10,6 +10,13 @@
 
 set -euo pipefail
 
+# Throwaway passwords for containers that live for seconds, generated per run so no
+# credential is ever written in the source. Each keeps the mdb-throwaway- prefix that
+# scripts/verify/03-secret-scan-repo.sh recognises, and labels keep them distinct: a
+# check that needs a wrong password gets one that cannot equal the right one.
+_mdb_tw_salt="$(od -An -N8 -tx1 /dev/urandom | tr -d ' \n')"
+TW_VERIFY="mdb-throwaway-verify-${_mdb_tw_salt}"
+
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # shellcheck source=backend-lib.sh
 . "$ROOT/scripts/backend-lib.sh"
@@ -77,9 +84,9 @@ for engine in $(engine_list); do
     # damaged production to prove production is recoverable would be its own
     # disaster.
     mdb_ctr run -d --name "$c" \
-        -e POSTGRES_PASSWORD=mdb-throwaway-verify \
-        -e MYSQL_ROOT_PASSWORD=mdb-throwaway-verify \
-        -e MARIADB_ROOT_PASSWORD=mdb-throwaway-verify \
+        -e POSTGRES_PASSWORD="${TW_VERIFY}" \
+        -e MYSQL_ROOT_PASSWORD="${TW_VERIFY}" \
+        -e MARIADB_ROOT_PASSWORD="${TW_VERIFY}" \
         "$prefix_img:$ver" >/dev/null 2>&1 || {
             log "$engine: FAILED, could not start a throwaway container"
             failed=$(( failed + 1 )); continue
@@ -90,7 +97,7 @@ for engine in $(engine_list); do
     # shellcheck disable=SC2034  # read by the family hooks
     IN_CONTAINER=0
     engine_exec() { shift; mdb_ctr exec -i "$c" "$@"; }
-    secret() { printf 'mdb-throwaway-verify'; }
+    secret() { printf '%s' "${TW_VERIFY}"; }
     compress_ext() { case "$f" in *.zst) printf '.zst' ;; *) printf '' ;; esac; }
     engine_load_hooks || { log "$engine: no hooks"; failed=$(( failed + 1 )); continue; }
 

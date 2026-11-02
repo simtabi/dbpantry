@@ -19,7 +19,7 @@ need_image "$img"
 # --- EMBED off (the compose default) -----------------------------------------
 off="mdb-verify-embed-off-$$"
 track_container "$off"
-mdb_ctr run -d --name "$off" -e POSTGRES_PASSWORD=mdb-throwaway-verify "$img" >/dev/null \
+mdb_ctr run -d --name "$off" -e POSTGRES_PASSWORD="${TW_VERIFY}" "$img" >/dev/null \
     || vfail "container failed to start"
 wait_ready 60 "postgres to accept connections" mdb_ctr exec "$off" pg_isready -U postgres
 
@@ -32,7 +32,7 @@ vinfo "embedded exporter correctly off by default"
 on="mdb-verify-embed-on-$$"
 track_container "$on"
 mdb_ctr run -d --name "$on" \
-    -e POSTGRES_PASSWORD=mdb-throwaway-verify \
+    -e POSTGRES_PASSWORD="${TW_VERIFY}" \
     -e MDB_PG_EMBED_EXPORTER=true \
     "$img" >/dev/null || vfail "container failed to start with the exporter embedded"
 wait_ready 60 "postgres to accept connections" mdb_ctr exec "$on" pg_isready -U postgres

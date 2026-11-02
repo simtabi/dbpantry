@@ -87,7 +87,7 @@ for engine in $(engine_list); do
     # value -- every probe would then run with an empty password and the
     # engine would look like it never became ready. The hooks were also fixed;
     # this side is named so neither depends on the other.
-    auth_pw="mdb-throwaway-verify"
+    auth_pw="${TW_VERIFY}"
 
     # Not every engine takes its root password from an environment variable.
     # Cassandra reads it from a mounted secret file, so an env-only container

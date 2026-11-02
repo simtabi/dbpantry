@@ -33,7 +33,7 @@ need_image "$img"
 name="mdb-verify-notrust-$$"
 track_container "$name"
 
-mdb_ctr run -d --name "$name" -e POSTGRES_PASSWORD=mdb-throwaway-verify "$img" >/dev/null \
+mdb_ctr run -d --name "$name" -e POSTGRES_PASSWORD="${TW_VERIFY}" "$img" >/dev/null \
     || vfail "container failed to start"
 wait_ready 90 "postgres to accept connections" \
     mdb_ctr exec -u postgres "$name" pg_isready -U postgres
@@ -57,7 +57,7 @@ vinfo "no cleartext password auth"
 
 # The behavioural assertion, not just the file contents: a loopback TCP
 # connection with a WRONG password must be refused.
-if mdb_ctr exec -u postgres -e PGPASSWORD=mdb-throwaway-wrong-password "$name" \
+if mdb_ctr exec -u postgres -e PGPASSWORD="${TW_WRONG_PASSWORD}" "$name" \
     psql -h 127.0.0.1 -U postgres -tAc "SELECT 1" >/dev/null 2>&1; then
     vfail "a loopback TCP connection succeeded with the wrong password; auth is not being enforced"
 fi
@@ -65,7 +65,7 @@ vinfo "loopback TCP refuses a wrong password"
 
 # ...while the right one still works, so the rule is enforcing rather than
 # simply breaking connectivity.
-mdb_ctr exec -u postgres -e PGPASSWORD=mdb-throwaway-verify "$name" \
+mdb_ctr exec -u postgres -e PGPASSWORD="${TW_VERIFY}" "$name" \
     psql -h 127.0.0.1 -U postgres -tAc "SELECT 1" >/dev/null 2>&1 \
     || vfail "loopback TCP refused the CORRECT password; auth is broken, not hardened"
 vinfo "loopback TCP accepts the correct password"

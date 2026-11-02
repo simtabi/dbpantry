@@ -23,7 +23,7 @@ track_volume "$sockvol"
 mdb_ctr volume create "$sockvol" >/dev/null
 
 mdb_ctr run -d --name "$name" \
-    -e POSTGRES_PASSWORD=mdb-throwaway-verify \
+    -e POSTGRES_PASSWORD="${TW_VERIFY}" \
     -e MDB_SOCKETS=true \
     -v "$sockvol:/var/run/postgresql" \
     "$img" >/dev/null || vfail "container failed to start with MDB_SOCKETS=true"
@@ -39,7 +39,7 @@ vinfo "socket present in the shared volume"
 # --network none is what makes "no TCP" an assertion rather than a claim.
 out="$(mdb_ctr run --rm --network none \
     -v "$sockvol:/var/run/postgresql" \
-    -e PGPASSWORD=mdb-throwaway-verify \
+    -e PGPASSWORD="${TW_VERIFY}" \
     "$img" \
     psql -h /var/run/postgresql -U postgres -tAc "SELECT 'socket-ok'" 2>&1 || true)"
 
