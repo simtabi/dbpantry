@@ -1,0 +1,51 @@
+#!/usr/bin/env bash
+#
+# The container runtime, from the command line and from make.
+#
+#   scripts/runtime info            what was detected, and why
+#   scripts/runtime name            docker | podman | nerdctl
+#   scripts/runtime ctr <args>      the container CLI   (docker run ... syntax)
+#   scripts/runtime compose <args>  the Compose command (docker compose ... syntax)
+#   scripts/runtime up [args]       compose [args] up -d, waiting for health
+#
+# CONTAINER_RUNTIME and MDB_COMPOSE override detection; see scripts/runtime-lib.sh
+# and docs/guides/runtimes.md.
+
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# shellcheck source=runtime-lib.sh
+. "$ROOT/scripts/runtime-lib.sh"
+
+cmd="${1:-info}"
+(( $# )) && shift
+
+case "$cmd" in
+    name)
+        mdb_runtime_init && printf '%s\n' "$MDB_RUNTIME" ;;
+    ctr)
+        mdb_ctr "$@" ;;
+    compose)
+        mdb_compose "$@" ;;
+    up)
+        mdb_compose_up_wait "$@" ;;
+    info)
+        mdb_runtime_init || exit 1
+        printf 'runtime:   %s (CONTAINER_RUNTIME=%s)\n' "$MDB_RUNTIME" "${CONTAINER_RUNTIME:-auto}"
+        printf 'cli:       %s\n' "$MDB_CTR_CMD"
+        printf 'compose:   %s [%s]\n' "$MDB_COMPOSE_CMD" "$MDB_COMPOSE_FLAVOR"
+        if mdb_runtime_ready; then
+            printf 'engine:    reachable, provided by %s\n' "$(mdb_runtime_provider)"
+            if mdb_runtime_rootless; then printf 'rootless:  yes\n'; else printf 'rootless:  no\n'; fi
+        else
+            printf 'engine:    NOT reachable (%s info failed)\n' "$MDB_CTR_CMD"
+            exit 1
+        fi
+        if [[ "$MDB_COMPOSE_FLAVOR" != compose-v2 ]]; then
+            printf 'note:      %s has no "up --wait"; dbpantry polls health instead.\n' "$MDB_COMPOSE_FLAVOR"
+        fi
+        ;;
+    *)
+        printf 'usage: scripts/runtime info|name|ctr|compose|up [args]\n' >&2
+        exit 2 ;;
+esac

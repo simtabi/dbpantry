@@ -12,6 +12,8 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# shellcheck source=runtime-lib.sh
+. "$ROOT/scripts/runtime-lib.sh"
 ENV_FILE="${MDB_ENV_FILE:-$ROOT/.env}"
 QUIET=0
 [[ "${1:-}" == "--quiet" ]] && QUIET=1
@@ -40,7 +42,7 @@ warn() { printf '%scheck-env warning%s %s\n' "$YEL" "$OFF" "$1" >&2; }
 
 # Read a key's value from the env file, ignoring comments.
 get() {
-    grep -E "^${1}=" "$ENV_FILE" 2>/dev/null | tail -1 | cut -d= -f2- || true
+    mdb_env_get "$1" "$ENV_FILE"
 }
 
 # -----------------------------------------------------------------------------
@@ -51,7 +53,7 @@ while IFS= read -r line; do
     [[ "$line" =~ ^[[:space:]]*$ ]] && continue
 
     key="${line%%=*}"
-    value="${line#*=}"
+    value="$(mdb_env_unquote "${line#*=}")"
     [[ "$key" == "$line" ]] && continue
 
     # Sentinel values anywhere are fatal.
@@ -181,7 +183,7 @@ fi
 # tracked in a plain string of "port:key " pairs.
 seen_ports=""
 while IFS= read -r line; do
-    key="${line%%=*}"; value="${line#*=}"
+    key="${line%%=*}"; value="$(mdb_env_unquote "${line#*=}")"
     [[ -z "$value" ]] && continue
     case " $seen_ports " in
         *" ${value}:"*)
@@ -262,10 +264,10 @@ if [[ -z "${MDB_CHECK_RENDERING:-}" ]]; then
 fi
 
 ours=""
-if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
+if mdb_runtime_ready; then
     # Space separated, not newline: the membership test below compares
     # " $ours " against *" $value "*, and newlines make every match fail.
-    ours="$(docker ps --filter "label=com.docker.compose.project=${COMPOSE_PROJECT_NAME:-mdb}" \
+    ours="$(mdb_ctr ps --filter "label=com.docker.compose.project=$(mdb_project_name)" \
              --format '{{.Ports}}' 2>/dev/null | grep -oE '[0-9]+->' | tr -d '>-' \
              | sort -u | tr '\n' ' ' || true)"
 fi
@@ -311,7 +313,7 @@ port_in_use() {
 # profile, which is the same thing `make up` is about to bind.
 taken=""
 resolved=""
-if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
+if mdb_runtime_ready; then
     # The SAME profiles that are about to start. Without them compose reports
     # every service in every profile, so HAProxy's 5433 gets flagged when HA is
     # off -- a false alarm that teaches people to ignore this check.
@@ -325,7 +327,7 @@ if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
     # A subshell that cd's and then runs, rather than `cd && cmd`: the latter
     # reads as if-then-else to shellcheck (SC2015) and the trailing || would
     # fire on a cd failure too.
-    resolved="$( { cd "$ROOT" || exit 0; docker compose ${prof_args[@]+"${prof_args[@]}"} config --format json 2>/dev/null; } \
+    resolved="$( { cd "$ROOT" || exit 0; mdb_compose ${prof_args[@]+"${prof_args[@]}"} config --format json 2>/dev/null; } \
         | python3 -c '
 import json,sys
 try:
@@ -343,7 +345,7 @@ fi
 # Fall back to the env file when compose or python is unavailable: a partial
 # check beats none, and this path still catches every explicitly-set port.
 if [[ -z "$resolved" ]]; then
-    resolved="$(grep -E '^MDB_[A-Z0-9_]*(HOST_)?PORT=' "$ENV_FILE" 2>/dev/null | cut -d= -f2- || true)"
+    resolved="$(grep -E '^MDB_[A-Z0-9_]*(HOST_)?PORT=' "$ENV_FILE" 2>/dev/null | cut -d= -f2- | while IFS= read -r v; do mdb_env_unquote "$v"; done || true)"
 fi
 
 while IFS= read -r value; do
@@ -387,6 +389,23 @@ while IFS= read -r value; do
         taken="${taken}       $value${key:+ ($key$hint)}"$'\n'
     fi
 done <<< "$resolved"
+
+# Rootless runtimes cannot publish ports below 1024 by default: Linux reserves
+# them (net.ipv4.ip_unprivileged_port_start), and on macOS Podman's gvproxy runs
+# unprivileged and is refused a privileged port on a specific address such as
+# 127.0.0.1. The failure surfaces from `compose up` as "bind: permission
+# denied" naming neither the setting nor the cause, so say it here (D-60).
+if [[ -n "$resolved" && "${MDB_CHECK_RENDERING:-0}" != "1" ]] && mdb_runtime_rootless; then
+    low=""
+    while IFS= read -r value; do
+        [[ "$value" =~ ^[0-9]+$ ]] && (( value < 1024 )) && low="${low} ${value}"
+    done <<< "$resolved"
+    if [[ -n "$low" ]]; then
+        err "the ${MDB_RUNTIME} engine is rootless and cannot publish port(s)${low}.
+       Move them to 1024 or above, e.g. MDB_CADDY_HTTP_PORT=8080 and
+       MDB_CADDY_HTTPS_PORT=8443 in .env. See docs/guides/runtime-podman.md."
+    fi
+fi
 
 if [[ -n "$taken" ]]; then
     # An error when BOOTING -- binding is about to happen and Docker's own
@@ -465,7 +484,7 @@ fi
 # 6. Secret files referenced must be resolvable once initialised
 # -----------------------------------------------------------------------------
 while IFS= read -r line; do
-    key="${line%%=*}"; value="${line#*=}"
+    key="${line%%=*}"; value="$(mdb_env_unquote "${line#*=}")"
     [[ -z "$value" ]] && continue
     [[ "$value" == secrets/* ]] || continue
     if [[ ! -f "$ROOT/$value" ]] && [[ -f "$ROOT/.env" ]] && [[ "$ENV_FILE" == "$ROOT/.env" ]]; then

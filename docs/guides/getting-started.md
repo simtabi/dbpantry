@@ -86,7 +86,7 @@ networks:
     name: mdb_net
 ```
 
-**For a GUI client that cannot join a Docker network**, publish:
+**For a GUI client that cannot join the compose network**, publish:
 
 ```
 MDB_PUBLISH=direct     # each engine gets its own host port

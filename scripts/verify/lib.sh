@@ -21,6 +21,10 @@ export MDB_ROOT
 # shellcheck source=../engine-lib.sh
 . "$MDB_ROOT/scripts/engine-lib.sh"
 
+# Every container call goes through the runtime layer (DESIGN.md D-60).
+# shellcheck source=../runtime-lib.sh
+. "$MDB_ROOT/scripts/runtime-lib.sh"
+
 readonly VERIFY_EXIT_SKIP=3
 
 if [[ -t 1 ]] && [[ -z "${NO_COLOR:-}" ]]; then
@@ -43,19 +47,24 @@ vskip() {
     exit "$VERIFY_EXIT_SKIP"
 }
 
-# Docker is required. CLAUDE.md is explicit: if docker is unavailable we stop
-# and say so rather than mocking, so this is a FAIL and never a SKIP.
-need_docker() {
-    docker info >/dev/null 2>&1 \
-        || vfail "docker is not running (docker info failed); this harness never mocks it"
+# A container runtime is required. CLAUDE.md is explicit: if none is available
+# we stop and say so rather than mocking, so this is a FAIL and never a SKIP.
+# Which runtime is decided once, in scripts/runtime-lib.sh (DESIGN.md D-60).
+need_runtime() {
+    mdb_runtime_init >/dev/null 2>&1 \
+        || vfail "no container runtime found (CONTAINER_RUNTIME=${CONTAINER_RUNTIME:-auto}); see docs/guides/runtimes.md"
+    mdb_runtime_ready \
+        || vfail "$MDB_RUNTIME is not running ($MDB_CTR_CMD info failed); this harness never mocks it"
 }
+# The historical name, kept so a check written before D-60 still reads.
+need_docker() { need_runtime; }
 
 # Read a variable from .env, falling back to .env.example, then to a default.
 env_get() {
     local key="$1" default="${2:-}" file val
     for file in "$MDB_ROOT/.env" "$MDB_ROOT/.env.example"; do
         [[ -f "$file" ]] || continue
-        val="$(grep -E "^${key}=" "$file" 2>/dev/null | tail -1 | cut -d= -f2- || true)"
+        val="$(mdb_env_get "$key" "$file")"
         if [[ -n "$val" ]]; then printf '%s\n' "$val"; return 0; fi
     done
     printf '%s\n' "$default"
@@ -69,7 +78,7 @@ engine_selected() {
 }
 
 # Does a local image exist?
-image_exists() { docker image inspect "$1" >/dev/null 2>&1; }
+image_exists() { mdb_ctr image inspect "$1" >/dev/null 2>&1; }
 
 # Fully-qualified name for one of our engine images.
 #   image_name pg      -> ghcr.io/simtabi/dbpantry-pg:17
@@ -112,7 +121,7 @@ need_image() {
         MDB_IMAGE_SNAPSHOT="$(mktemp)"
         export MDB_IMAGE_SNAPSHOT
         add_cleanup "rm -f '$MDB_IMAGE_SNAPSHOT'"
-        docker images --format '{{.Repository}}:{{.Tag}}' > "$MDB_IMAGE_SNAPSHOT" 2>/dev/null || true
+        mdb_ctr images --format '{{.Repository}}:{{.Tag}}' > "$MDB_IMAGE_SNAPSHOT" 2>/dev/null || true
     fi
 
     if [[ -n "${MDB_IMAGE_SNAPSHOT:-}" ]] && [[ -f "$MDB_IMAGE_SNAPSHOT" ]] \
@@ -167,7 +176,7 @@ need_image() {
         printf '      %s is a declared version that make build does not cover; building it\n' "$img" >&2
         base="$(awk -v e="$engine" -v v="$want" '$1==e && $2==v {print $3; exit}' \
                 "$MDB_ROOT/images/bases.tsv")"
-        if docker build -f "$MDB_ROOT/images/$engine/Dockerfile" \
+        if mdb_build -f "$MDB_ROOT/images/$engine/Dockerfile" \
                 --build-arg "BASE_IMAGE=$base" \
                 --build-arg "ENGINE_VERSION=$want" \
                 -t "$img" "$MDB_ROOT/images" >/dev/null 2>&1; then
@@ -217,7 +226,7 @@ build_image() {
 
     # Context is images/ so MySQL and MariaDB can share images/_shared.
     base="$(base_image "$engine" "$version")"
-    docker build \
+    mdb_build \
         -f "$MDB_ROOT/images/$engine/Dockerfile" \
         --build-arg "BASE_IMAGE=$base" \
         --build-arg "ENGINE_VERSION=$version" \
@@ -268,10 +277,10 @@ mdb_cleanup() {
         # reached 420 volumes and 34GB here -- which is disk pressure, which is
         # what makes Docker reclaim IMAGES mid-run. The harness was breaking
         # itself, one orphaned volume at a time.
-        if [[ -n "$item" ]]; then docker rm -f -v "$item" >/dev/null 2>&1 || true; fi
+        if [[ -n "$item" ]]; then mdb_ctr rm -f -v "$item" >/dev/null 2>&1 || true; fi
     done
     for item in ${CLEANUP_VOLUMES[@]+"${CLEANUP_VOLUMES[@]}"}; do
-        if [[ -n "$item" ]]; then docker volume rm -f "$item" >/dev/null 2>&1 || true; fi
+        if [[ -n "$item" ]]; then mdb_ctr volume rm -f "$item" >/dev/null 2>&1 || true; fi
     done
 }
 trap mdb_cleanup EXIT

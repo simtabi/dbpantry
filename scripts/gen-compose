@@ -19,6 +19,8 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# shellcheck source=env-lib.sh
+. "$ROOT/scripts/env-lib.sh"
 cd "$ROOT" || exit 1
 
 # shellcheck source=engine-lib.sh
@@ -62,7 +64,7 @@ emit_engine_env() {
 # changing one number instead of hunting through per-engine variables.
 ENV_FILE="${MDB_ENV_FILE:-$ROOT/.env}"
 [ -f "$ENV_FILE" ] || ENV_FILE="$ROOT/.env.example"
-get() { grep -E "^${1}=" "$ENV_FILE" 2>/dev/null | tail -1 | cut -d= -f2- || true; }
+get() { mdb_env_get "$1" "$ENV_FILE"; }
 
 PUBLISH="$(get MDB_PUBLISH)"; PUBLISH="${PUBLISH:-none}"
 PORT_BASE="$(get MDB_PORT_BASE)"; PORT_BASE="${PORT_BASE:-54000}"

@@ -131,7 +131,7 @@ skipped_names=()
 MDB_IMAGE_SNAPSHOT="$(mktemp)"
 export MDB_IMAGE_SNAPSHOT
 trap 'rm -f "$MDB_IMAGE_SNAPSHOT"' EXIT
-docker images --format '{{.Repository}}:{{.Tag}}' > "$MDB_IMAGE_SNAPSHOT" 2>/dev/null || true
+mdb_ctr images --format '{{.Repository}}:{{.Tag}}' > "$MDB_IMAGE_SNAPSHOT" 2>/dev/null || true
 
 printf '%s%s dbpantry verify %s%s\n' "$BLD" "$BLU" "$(date '+%H:%M:%S')" "$OFF"
 [[ -n "${VERIFY_TAGS:-}" ]] && printf '%sfiltering by tag: %s%s\n' "$DIM" "$VERIFY_TAGS" "$OFF"
@@ -199,7 +199,7 @@ if (( fail )); then
         reclaimed=0
         while IFS= read -r img; do
             [[ -n "$img" ]] || continue
-            docker image inspect "$img" >/dev/null 2>&1 || reclaimed=$(( reclaimed + 1 ))
+            mdb_ctr image inspect "$img" >/dev/null 2>&1 || reclaimed=$(( reclaimed + 1 ))
         done < "$MDB_IMAGE_SNAPSHOT"
         if (( reclaimed > 0 )); then
             printf '\n%s%d image(s) that existed when this run started are gone.%s\n' \

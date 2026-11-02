@@ -11,10 +11,12 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# shellcheck source=runtime-lib.sh
+. "$ROOT/scripts/runtime-lib.sh"
 ENV_FILE="${MDB_ENV_FILE:-$ROOT/.env}"
 [[ -f "$ENV_FILE" ]] || ENV_FILE="$ROOT/.env.example"
 
-get() { grep -E "^${1}=" "$ENV_FILE" 2>/dev/null | tail -1 | cut -d= -f2- || true; }
+get() { mdb_env_get "$1" "$ENV_FILE"; }
 log() { printf '[restore] %s\n' "$*"; }
 die() { printf '[restore] ERROR: %s\n' "$*" >&2; exit 1; }
 
@@ -40,7 +42,7 @@ engine_exec() {
     if [[ "$IN_CONTAINER" == "1" ]]; then
         "$@"
     else
-        ( cd "$ROOT" && docker compose exec -T "$engine" "$@" )
+        ( cd "$ROOT" && mdb_compose exec -T "$engine" "$@" )
     fi
 }
 

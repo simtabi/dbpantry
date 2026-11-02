@@ -15,6 +15,8 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# shellcheck source=runtime-lib.sh
+. "$ROOT/scripts/runtime-lib.sh"
 cd "$ROOT" || exit 1
 
 # shellcheck source=engine-lib.sh
@@ -25,19 +27,31 @@ TRIVY_VERSION="${TRIVY_VERSION:-0.73.0}"
 log() { printf '[scan] %s\n' "$*"; }
 die() { printf '[scan] ERROR: %s\n' "$*" >&2; exit 1; }
 
-command -v docker >/dev/null 2>&1 || die "docker is required"
-docker info >/dev/null 2>&1 || die "docker is not running"
+mdb_runtime_init || die "no container runtime found (see docs/guides/runtimes.md)"
+mdb_runtime_ready || die "$MDB_RUNTIME is not running"
 
 # Trivy runs as a container so nothing has to be installed on the host, and it
 # is pinned by version for the same reason every base image is pinned by digest
 # -- including because aquasecurity/trivy-action had 75 of its 76 tags
 # force-pushed in a 2026 supply-chain attack.
-trivy() {
-    docker run --rm \
-        -v /var/run/docker.sock:/var/run/docker.sock \
+#
+# The image reaches Trivy as an archive (`save` + `--input`), not through the
+# engine's API socket. Mounting /var/run/docker.sock only worked on Docker: the
+# socket lives somewhere else on rootless Podman, inside a VM on Podman machine,
+# Colima and Rancher Desktop, and does not exist at all for nerdctl -- and it
+# handed a scanner root-equivalent control of the engine to read one image
+# (DESIGN.md D-60).
+SCAN_TMP="$(mktemp -d "${TMPDIR:-/tmp}/mdb-scan.XXXXXX")"
+trap 'rm -rf "$SCAN_TMP"' EXIT
+trivy_archive() {
+    local img="$1"; shift
+    rm -f "$SCAN_TMP/image.tar"
+    mdb_ctr save -o "$SCAN_TMP/image.tar" "$img" || return 2
+    mdb_ctr run --rm \
+        -v "$SCAN_TMP:/scan:ro" \
         -v "$ROOT/.trivyignore.yaml:/.trivyignore.yaml:ro" \
         -v "${HOME}/.cache/trivy:/root/.cache/trivy" \
-        "aquasec/trivy:${TRIVY_VERSION}" "$@"
+        "docker.io/aquasec/trivy:${TRIVY_VERSION}" image --input /scan/image.tar "$@"
 }
 
 targets=()
@@ -59,21 +73,21 @@ for engine in "${targets[@]}"; do
     else
         engine_load "$engine" >/dev/null 2>&1 || continue
         upper="$(printf '%s' "$engine" | tr '[:lower:]-' '[:upper:]_')"
-        ver="$(grep -E "^MDB_${upper}_VERSION=" .env 2>/dev/null | tail -1 | cut -d= -f2-)"
+        ver="$(mdb_env_get "MDB_${upper}_VERSION" .env)"
         ver="${ver:-$MDB_ENGINE_DEFAULT_VERSION}"
         img="ghcr.io/simtabi/dbpantry-${engine}:${ver}"
     fi
 
-    if ! docker image inspect "$img" >/dev/null 2>&1; then
+    if ! mdb_ctr image inspect "$img" >/dev/null 2>&1; then
         log "$engine: not built, skipping ($img)"
         continue
     fi
 
     log "scanning $img"
     scanned=$(( scanned + 1 ))
-    if ! trivy image --severity HIGH,CRITICAL --ignore-unfixed \
+    if ! trivy_archive "$img" --severity HIGH,CRITICAL --ignore-unfixed \
             --ignorefile /.trivyignore.yaml --exit-code 1 --scanners vuln \
-            --format table "$img"; then
+            --format table; then
         failed=$(( failed + 1 ))
     fi
 done

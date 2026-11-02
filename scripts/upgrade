@@ -21,9 +21,11 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# shellcheck source=runtime-lib.sh
+. "$ROOT/scripts/runtime-lib.sh"
 cd "$ROOT" || exit 1
 
-PROJECT="${COMPOSE_PROJECT_NAME:-mdb}"
+PROJECT="$(mdb_project_name)"
 PREFIX="${MDB_IMAGE_PREFIX:-ghcr.io/simtabi}"
 WORK="$ROOT/backups/upgrade"
 
@@ -63,7 +65,7 @@ pg_mount() {
 # bash 3.2, where it is a syntax error (DESIGN.md D-24).
 ENGINE_UPPER="$(printf '%s' "$ENGINE" | tr '[:lower:]' '[:upper:]')"
 
-docker volume inspect "$vol_from" >/dev/null 2>&1 \
+mdb_ctr volume inspect "$vol_from" >/dev/null 2>&1 \
     || die "no data volume for $ENGINE $FROM ($vol_from); nothing to upgrade from"
 
 # Both images must already be local. Without this the first docker run tries to
@@ -71,7 +73,7 @@ docker volume inspect "$vol_from" >/dev/null 2>&1 \
 # nothing about what is actually wrong.
 for v in "$FROM" "$TO"; do
     img="$PREFIX/dbpantry-$ENGINE:$v"
-    docker image inspect "$img" >/dev/null 2>&1 \
+    mdb_ctr image inspect "$img" >/dev/null 2>&1 \
         || die "image not built: $img
        Build it first: set MDB_${ENGINE_UPPER}_VERSION=$v in .env and run
        scripts/build $ENGINE. A version that is no longer maintained also
@@ -105,7 +107,7 @@ stamp="$(date -u '+%Y%m%dT%H%M%SZ')"
 
 old_c="mdb-upgrade-from-$$"
 new_c="mdb-upgrade-to-$$"
-cleanup() { docker rm -f -v "$old_c" "$new_c" >/dev/null 2>&1 || true; }
+cleanup() { mdb_ctr rm -f -v "$old_c" "$new_c" >/dev/null 2>&1 || true; }
 trap cleanup EXIT
 
 # ---------------------------------------------------------------------------
@@ -116,18 +118,18 @@ log "starting $ENGINE $FROM against its existing volume (read only as far as you
 
 case "$ENGINE" in
     pg)
-        docker run -d --name "$old_c" -e POSTGRES_PASSWORD=mdb-throwaway-upgrade \
+        mdb_ctr run -d --name "$old_c" -e POSTGRES_PASSWORD=mdb-throwaway-upgrade \
             -v "$vol_from:$(pg_mount "$FROM")" "$PREFIX/dbpantry-pg:$FROM" >/dev/null \
             || die "could not start $ENGINE $FROM"
         for _ in $(seq 1 120); do
-            docker exec "$old_c" pg_isready -U postgres >/dev/null 2>&1 && break
+            mdb_ctr exec "$old_c" pg_isready -U postgres >/dev/null 2>&1 && break
             sleep 1
         done
         sleep 3
 
         dump="$WORK/${ENGINE}${FROM}_all_${stamp}.sql"
         log "dumping every database and the globals"
-        docker exec "$old_c" pg_dumpall -U postgres > "$dump" \
+        mdb_ctr exec "$old_c" pg_dumpall -U postgres > "$dump" \
             || die "dump failed; nothing has been changed"
         ;;
     mysql|mariadb)
@@ -136,17 +138,17 @@ case "$ENGINE" in
         dumper="$( [[ "$ENGINE" == mysql ]] && printf 'mysqldump' || printf 'mariadb-dump' )"
         root_pw="$(cat "secrets/${ENGINE}_root_password.txt")"
 
-        docker run -d --name "$old_c" -e "$pw_env=$root_pw" \
+        mdb_ctr run -d --name "$old_c" -e "$pw_env=$root_pw" \
             -v "$vol_from:/var/lib/mysql" "$PREFIX/dbpantry-$ENGINE:$FROM" >/dev/null \
             || die "could not start $ENGINE $FROM"
         for _ in $(seq 1 180); do
-            docker exec "$old_c" "$client" -uroot -p"$root_pw" -e "SELECT 1" >/dev/null 2>&1 && break
+            mdb_ctr exec "$old_c" "$client" -uroot -p"$root_pw" -e "SELECT 1" >/dev/null 2>&1 && break
             sleep 1
         done
 
         dump="$WORK/${ENGINE}${FROM}_all_${stamp}.sql"
         log "dumping every database, with routines and events"
-        docker exec "$old_c" "$dumper" -uroot -p"$root_pw" \
+        mdb_ctr exec "$old_c" "$dumper" -uroot -p"$root_pw" \
             --all-databases --single-transaction --routines --triggers --events --quick \
             > "$dump" 2>/dev/null || die "dump failed; nothing has been changed"
         ;;
@@ -154,7 +156,7 @@ esac
 
 [[ -s "$dump" ]] || die "the dump is empty; refusing to continue"
 log "dumped $(du -h "$dump" | cut -f1) to ${dump#"$ROOT"/}"
-docker rm -f -v "$old_c" >/dev/null 2>&1 || true
+mdb_ctr rm -f -v "$old_c" >/dev/null 2>&1 || true
 
 # ---------------------------------------------------------------------------
 # 2. Restore into a fresh volume for the new major.
@@ -163,32 +165,32 @@ log "starting $ENGINE $TO on a fresh volume"
 
 case "$ENGINE" in
     pg)
-        docker run -d --name "$new_c" -e POSTGRES_PASSWORD=mdb-throwaway-upgrade \
+        mdb_ctr run -d --name "$new_c" -e POSTGRES_PASSWORD=mdb-throwaway-upgrade \
             -v "$vol_to:$(pg_mount "$TO")" "$PREFIX/dbpantry-pg:$TO" >/dev/null \
             || die "could not start $ENGINE $TO"
         for _ in $(seq 1 120); do
-            docker exec "$new_c" pg_isready -U postgres >/dev/null 2>&1 && break
+            mdb_ctr exec "$new_c" pg_isready -U postgres >/dev/null 2>&1 && break
             sleep 1
         done
         sleep 3
         log "restoring"
-        docker exec -i "$new_c" psql -U postgres -q < "$dump" >/dev/null 2>&1 || true
+        mdb_ctr exec -i "$new_c" psql -U postgres -q < "$dump" >/dev/null 2>&1 || true
 
-        count="$(docker exec "$new_c" psql -U postgres -tAc \
+        count="$(mdb_ctr exec "$new_c" psql -U postgres -tAc \
             "SELECT count(*) FROM pg_database WHERE datallowconn AND NOT datistemplate" | tr -d ' ')"
         ;;
     mysql|mariadb)
-        docker run -d --name "$new_c" -e "$pw_env=$root_pw" \
+        mdb_ctr run -d --name "$new_c" -e "$pw_env=$root_pw" \
             -v "$vol_to:/var/lib/mysql" "$PREFIX/dbpantry-$ENGINE:$TO" >/dev/null \
             || die "could not start $ENGINE $TO"
         for _ in $(seq 1 180); do
-            docker exec "$new_c" "$client" -uroot -p"$root_pw" -e "SELECT 1" >/dev/null 2>&1 && break
+            mdb_ctr exec "$new_c" "$client" -uroot -p"$root_pw" -e "SELECT 1" >/dev/null 2>&1 && break
             sleep 1
         done
         log "restoring"
-        docker exec -i "$new_c" "$client" -uroot -p"$root_pw" < "$dump" >/dev/null 2>&1 || true
+        mdb_ctr exec -i "$new_c" "$client" -uroot -p"$root_pw" < "$dump" >/dev/null 2>&1 || true
 
-        count="$(docker exec "$new_c" "$client" -uroot -p"$root_pw" -N -B -e \
+        count="$(mdb_ctr exec "$new_c" "$client" -uroot -p"$root_pw" -N -B -e \
             "SELECT count(*) FROM information_schema.schemata
              WHERE schema_name NOT IN ('information_schema','performance_schema','mysql','sys')" \
              2>/dev/null | tr -d ' \r')"

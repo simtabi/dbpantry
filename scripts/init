@@ -11,6 +11,8 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# shellcheck source=runtime-lib.sh
+. "$ROOT/scripts/runtime-lib.sh"
 cd "$ROOT" || exit 1
 
 PROD=0
@@ -130,10 +132,10 @@ if (( PROD )); then
     # Found by SERVICE, not by a substring of the image name. The pattern used
     # to be /image: caddy:/, which stopped matching the moment the image became
     # one we build -- and the only symptom was "could not compute the UI
-    # password hash (is docker running?)", which blames Docker.
+    # password hash (is the container runtime running? scripts/runtime info)", which blames Docker.
     caddy_image="$(awk '/^  caddy:/{f=1} f && /^[[:space:]]+image:/{print $2; exit}' \
         "$ROOT/docker-compose.yml")"
-    ui_hash="$(docker run --rm "$caddy_image" caddy hash-password --plaintext "$ui_password" 2>/dev/null || true)"
+    ui_hash="$(mdb_ctr run --rm "$caddy_image" caddy hash-password --plaintext "$ui_password" 2>/dev/null || true)"
     if [[ -z "$ui_hash" ]]; then
         printf '  could not compute the UI password hash (is docker running?)\n' >&2
         printf '  set MDB_UI_BASIC_AUTH_HASH manually: caddy hash-password\n' >&2

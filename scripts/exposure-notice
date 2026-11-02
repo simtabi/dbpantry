@@ -14,11 +14,13 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# shellcheck source=env-lib.sh
+. "$ROOT/scripts/env-lib.sh"
 cd "$ROOT" || exit 0
 
 ENV_FILE="${MDB_ENV_FILE:-$ROOT/.env}"
 [ -f "$ENV_FILE" ] || exit 0
-get() { grep -E "^${1}=" "$ENV_FILE" 2>/dev/null | tail -1 | cut -d= -f2- || true; }
+get() { mdb_env_get "$1" "$ENV_FILE"; }
 
 publish="$(get MDB_PUBLISH)"; publish="${publish:-none}"
 base="$(get MDB_PORT_BASE)"; base="${base:-54000}"
@@ -29,7 +31,7 @@ case "$publish" in
         printf '\n  No host ports are published (MDB_PUBLISH=none).\n'
         printf '  Applications join the %s_net network and connect by service name:\n\n' "$project"
         printf '      host=pg  port=5432        host=mysql  port=3306\n\n'
-        printf '  For a GUI client that cannot join a Docker network, set\n'
+        printf '  For a GUI client that cannot join the compose network, set\n'
         printf '  MDB_PUBLISH=direct (or proxy) in .env and re-run make up.\n'
         printf '  Shells work either way: make psql, make mysql, make mongo.\n\n'
         ;;

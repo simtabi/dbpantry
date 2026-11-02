@@ -97,7 +97,7 @@ base, unsupported:
 
 ```
 MDB_MARIADB_VERSION=11.4
-MDB_MARIADB_BASE_IMAGE=mariadb:11.4.13@sha256:1292844148b311e4ed4300022a996d39083f415a963e970cf47cad1b3b18e3a6
+MDB_MARIADB_BASE_IMAGE=docker.io/library/mariadb:11.4.13@sha256:1292844148b311e4ed4300022a996d39083f415a963e970cf47cad1b3b18e3a6
 ```
 
 ```bash
@@ -152,7 +152,7 @@ the copy. Rehearsed for 7.0.39 → 8.0.34 on 2026-11-01: 150 of 150 documents on
 
 ```bash
 make backup-all
-docker compose stop mongodb
+scripts/runtime compose stop mongodb
 docker volume create mdb_mongodb8.0_data
 docker run --rm -v mdb_mongodb7.0_data:/from:ro -v mdb_mongodb8.0_data:/to \
     alpine sh -c 'cp -a /from/. /to/'
@@ -180,8 +180,8 @@ clean, and the 4.1 volume unchanged.
 
 ```bash
 make backup-all
-docker compose exec cassandra nodetool drain     # flush memtables, stop writes
-docker compose stop cassandra
+scripts/runtime compose exec cassandra nodetool drain     # flush memtables, stop writes
+scripts/runtime compose stop cassandra
 docker volume create mdb_cassandra5.0_data
 docker run --rm -v mdb_cassandra4.1_data:/from:ro -v mdb_cassandra5.0_data:/to \
     alpine sh -c 'cp -a /from/. /to/'
@@ -191,7 +191,7 @@ Set `MDB_CASSANDRA_VERSION=5.0`, remove `MDB_CASSANDRA_BASE_IMAGE`, `make up`,
 then rewrite the SSTables in the new format:
 
 ```bash
-docker compose exec cassandra nodetool upgradesstables
+scripts/runtime compose exec cassandra nodetool upgradesstables
 ```
 
 5.0 starts with `storage_compatibility_mode: CASSANDRA_4`, which keeps the files

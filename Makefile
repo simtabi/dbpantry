@@ -8,12 +8,25 @@ SHELL := bash
 .SHELLFLAGS := -euo pipefail -c
 .DEFAULT_GOAL := help
 
-COMPOSE_PROJECT_NAME ?= mdb
-export COMPOSE_PROJECT_NAME
-
 ENV_FILE ?= .env
+
+# One value from the env file, unquoted the way Compose unquotes it
+# (scripts/env-lib.sh): KEY="a b" reads as a b, not "a b".
+env_get = $(shell bash -c '. scripts/env-lib.sh && mdb_env_get "$$1" "$$2"' _ $(1) $(ENV_FILE) 2>/dev/null)
+
+# The project name comes from the command line or the environment, then from
+# COMPOSE_PROJECT_NAME in the env file, then the default. It must be read from
+# the file here: exporting a bare "mdb" default would beat .env (Compose ranks
+# the environment above .env), so a second checkout with its own name would
+# silently drive the first one's containers and volumes. Check 48 keeps it so.
+env_project := $(call env_get,COMPOSE_PROJECT_NAME)
+COMPOSE_PROJECT_NAME ?= $(or $(env_project),mdb)
+export COMPOSE_PROJECT_NAME
 ENV_FILE_PROD ?= .env.prod
-COMPOSE  := docker compose
+# Every container call goes through scripts/runtime, which picks Docker, Podman
+# or nerdctl (CONTAINER_RUNTIME=auto|docker|podman|nerdctl; DESIGN.md D-60).
+RUNTIME  := scripts/runtime
+COMPOSE  := $(RUNTIME) compose
 
 # `make init-prod ENV_FILE=path` targets a specific file; the verify harness
 # uses it to render into a temporary directory rather than the repository.
@@ -22,7 +35,7 @@ ENV_FILE_ARG := $(if $(filter-out .env,$(ENV_FILE)),$(ENV_FILE),)
 # Profile selection, in precedence order: PROFILES= on the command line for a
 # single run, then MDB_PROFILES in .env permanently, then the documented
 # default (SPEC section 7).
-env_profiles := $(shell grep -E '^MDB_PROFILES=' $(ENV_FILE) 2>/dev/null | tail -1 | cut -d= -f2-)
+env_profiles := $(call env_get,MDB_PROFILES)
 COMPOSE_PROFILES := $(shell scripts/profiles "$(or $(PROFILES),$(env_profiles),pg,ui)")
 export COMPOSE_PROFILES
 
@@ -48,6 +61,10 @@ help: ## Show this help
 # -----------------------------------------------------------------------------
 # Setup
 # -----------------------------------------------------------------------------
+
+.PHONY: runtime
+runtime: ## Show the detected container runtime and Compose (CONTAINER_RUNTIME= to force)
+	@$(RUNTIME) info
 
 .PHONY: init
 init: ## Create .env, generate secrets and certs, run check-env
@@ -91,7 +108,9 @@ up: ## Boot the stack (never touches data)
 	@scripts/check-env --quiet
 	@scripts/render-config
 	@scripts/gen-compose >/dev/null
-	@$(COMPOSE) up -d --wait
+	@# up -d --wait on Compose v2; podman-compose and nerdctl compose have no
+	@# --wait, so scripts/runtime polls container health the same way.
+	@$(RUNTIME) up
 	@scripts/exposure-notice
 
 .PHONY: down
@@ -121,7 +140,7 @@ test-profile: ## Boot the tmpfs speed profile and run its checks
 	@# COMPOSE_FILE that normally supplies it, so omitting it leaves every
 	@# engine service undefined and the overlay's `pg:` has neither an image
 	@# nor a build context.
-	@$(COMPOSE) -f docker-compose.yml -f compose.engines.yml -f compose.test.yml up -d --wait
+	@$(RUNTIME) up -f docker-compose.yml -f compose.engines.yml -f compose.test.yml
 
 # -----------------------------------------------------------------------------
 # Clients and provisioning
@@ -159,7 +178,7 @@ scan: ## Scan built images for vulnerabilities (honours .trivyignore.yaml)
 
 .PHONY: shell
 shell: ## Open the cli image (tools with no server required)
-	@docker run --rm -it \
+	@$(RUNTIME) ctr run --rm -it \
 		--network $(COMPOSE_PROJECT_NAME)_net \
 		-v "$(CURDIR)/certs:/certs:ro" \
 		-v "$(CURDIR)/backups:/work/backups" \

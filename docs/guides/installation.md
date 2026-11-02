@@ -6,8 +6,8 @@ What you need before `make up`, and what to do when the usual things go wrong.
 
 | | Minimum | Notes |
 |---|---|---|
-| Docker Engine | 24.0 | Compose v2 must be the `docker compose` subcommand, not `docker-compose` |
-| RAM allocated to Docker | 4 GB | 8 GB if you run Cassandra, which alone wants ~2 GB |
+| A container runtime | Docker 24 / Podman 4.7 / nerdctl 1.x | Plus a Compose v2-compatible implementation. See [Container runtimes](runtimes.md) |
+| RAM for the runtime's VM | 4 GB | 8 GB if you run Cassandra, which alone wants ~2 GB |
 | Disk | 20 GB | Images are large; PostgreSQL alone with extensions is ~1 GB per major |
 | `make` | any | Preinstalled on macOS and Linux; on Windows see [WINDOWS.md](../runbooks/WINDOWS.md) |
 | `bash` | 3.2 | macOS ships 3.2 from 2007 and every script here supports it |
@@ -15,11 +15,14 @@ What you need before `make up`, and what to do when the usual things go wrong.
 Check the first one:
 
 ```bash
-docker info && docker compose version
+scripts/runtime info
 ```
 
-If `docker info` fails, stop here — nothing in this toolkit works without a
-running daemon, and it will tell you so rather than pretending otherwise.
+This shows which runtime and Compose dbpantry will use. Docker, OrbStack,
+Colima, Rancher Desktop, Podman and nerdctl all work, and `CONTAINER_RUNTIME`
+chooses between them ([Container runtimes](runtimes.md)). If it reports that
+the engine is unreachable, stop here. Nothing in this toolkit works without a
+running engine, and it will tell you so rather than pretending otherwise.
 
 ## Platforms
 
@@ -115,17 +118,17 @@ Find what holds a port with `lsof -nP -iTCP:8080 -sTCP:LISTEN` on macOS, or
 else; every engine here logs why.
 
 ```bash
-docker compose logs pg --tail 50
+scripts/runtime compose logs pg --tail 50
 ```
 
 **MongoDB 8.0 or 9.0 crash-loops on start.** That is a known upstream
 incompatibility with Linux kernels 6.19 to 7.0.13 (SERVER-121912). MongoDB
 exempts 7.0.14 and later, but by the version `uname -r` reports, and Ubuntu's
 7.0 kernels all report 7.0.0 (SERVER-136848). Check with
-`docker run --rm alpine uname -r`. On an affected kernel, use the default, 7.0.
+`scripts/runtime ctr run --rm docker.io/library/alpine uname -r`. On an affected kernel, use the default, 7.0.
 
 **Cassandra never becomes healthy.** It is almost always memory. Cassandra needs
-about 2 GB to itself; give Docker 8 GB or raise `MDB_CASSANDRA_HEAP`.
+about 2 GB to itself; give the runtime 8 GB or raise `MDB_CASSANDRA_HEAP`.
 
 **`make build` fails on a PostgreSQL extension.** Check whether it is one of the
 amd64-only extensions listed in `DESIGN.md`. If it is not, that is a bug worth

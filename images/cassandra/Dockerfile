@@ -6,10 +6,10 @@
 # SPEC section 22.3 requires every engine here to correct that at build time.
 #
 # Build context is images/, like every other image.
-ARG BASE_IMAGE=cassandra:5.0.9@sha256:1d18946ead0b0d22ed0371bd7384d86f540465c489f2935e88df35e755073f6b
+ARG BASE_IMAGE=docker.io/library/cassandra:5.0.9@sha256:1d18946ead0b0d22ed0371bd7384d86f540465c489f2935e88df35e755073f6b
 # The Go toolchain the gotools stage builds with; pinned in images/bases.tsv
 # (row `toolchain go`) and passed by scripts/build, like BASE_IMAGE.
-ARG GO_IMAGE=golang:1.27.3-bookworm@sha256:d9b6a1beb9474adc2a1ce842573639b44b2a0dd49b6669f51d3821baf9ec37c9
+ARG GO_IMAGE=docker.io/library/golang:1.27.3-bookworm@sha256:d9b6a1beb9474adc2a1ce842573639b44b2a0dd49b6669f51d3821baf9ec37c9
 
 # =============================================================================
 # Go tools, rebuilt from their upstream release tags on a patched toolchain

@@ -62,7 +62,7 @@ pinned by digest:
 
 ```
 MDB_MARIADB_VERSION=11.4
-MDB_MARIADB_BASE_IMAGE=mariadb:11.4.13@sha256:1292844148b311e4ed4300022a996d39083f415a963e970cf47cad1b3b18e3a6
+MDB_MARIADB_BASE_IMAGE=docker.io/library/mariadb:11.4.13@sha256:1292844148b311e4ed4300022a996d39083f415a963e970cf47cad1b3b18e3a6
 ```
 
 That version is **unsupported, with no scan guarantee**: dbpantry does not build,
@@ -80,11 +80,11 @@ scan or verify it. It is your choice, and the toolkit says so every time:
 
 | Engine | Override | Example image |
 |---|---|---|
-| PostgreSQL | `MDB_PG_BASE_IMAGE` | `pgvector/pgvector:0.8.6-pg16@sha256:…` |
-| MySQL | `MDB_MYSQL_BASE_IMAGE` | `mysql:8.0.46@sha256:…` |
-| MariaDB | `MDB_MARIADB_BASE_IMAGE` | `mariadb:11.4.13@sha256:…` |
-| MongoDB | `MDB_MONGODB_BASE_IMAGE` | `mongo:8.3.11@sha256:…` — run directly, MongoDB is referenced, not rebuilt |
-| Cassandra | `MDB_CASSANDRA_BASE_IMAGE` | `cassandra:4.1.12@sha256:…` |
+| PostgreSQL | `MDB_PG_BASE_IMAGE` | `docker.io/pgvector/pgvector:0.8.6-pg16@sha256:…` |
+| MySQL | `MDB_MYSQL_BASE_IMAGE` | `docker.io/library/mysql:8.0.46@sha256:…` |
+| MariaDB | `MDB_MARIADB_BASE_IMAGE` | `docker.io/library/mariadb:11.4.13@sha256:…` |
+| MongoDB | `MDB_MONGODB_BASE_IMAGE` | `docker.io/library/mongo:8.3.11@sha256:…` — run directly, MongoDB is referenced, not rebuilt |
+| Cassandra | `MDB_CASSANDRA_BASE_IMAGE` | `docker.io/library/cassandra:4.1.12@sha256:…` |
 | FerretDB | `MDB_FERRETDB_BASE_IMAGE` | `ghcr.io/ferretdb/ferretdb:2.1.0@sha256:…` |
 
 Resolve a digest with `docker buildx imagetools inspect <image>:<tag>`.

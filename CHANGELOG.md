@@ -45,6 +45,21 @@ image, replacing Cassandra's vulnerable vendored JARs rather than waiving them.
   D-52 to D-57, which sat after the end of the document, are back in the decision log.
 
 ### Added
+- **dbpantry runs on any OCI runtime with Compose** (DESIGN.md D-60,
+  [Container runtimes](docs/guides/runtimes.md)): Docker, OrbStack, Colima, Rancher Desktop,
+  Podman (rootless included) and nerdctl.
+  - `CONTAINER_RUNTIME=auto|docker|podman|nerdctl` chooses the runtime and `MDB_COMPOSE`
+    overrides the Compose command.
+  - `make runtime` / `scripts/runtime info` shows what was detected.
+  - There are guides for [Docker and the Docker-API products](docs/guides/runtime-docker.md),
+    [Podman](docs/guides/runtime-podman.md) and [nerdctl](docs/guides/runtime-nerdctl.md).
+  - Runtimes are pluggable adapters in `scripts/runtimes/` (interface in `scripts/runtimes/readme.md`); a new backend is a new file. Kubernetes, LXC/Incus and Apple's `container` tool are planned as follow-up adapters.
+  - The Podman adapter refuses a rootless connection on a rootful podman machine, because `podman compose` would use the other container store.
+- Checks 48 (runtime detection, make's project name, no direct `docker` calls), 49
+  (fully-qualified image references) and 50 (quoted env values, and readers that unquote them).
+- `scripts/env-lib.sh`: one dotenv reader and writer. A value with whitespace or a special
+  character is written double-quoted (`TENANTS="landlord panel api socket queue"`), and every
+  script, and make, reads it back without the quotes.
 
 - **`MDB_<ENGINE>_BASE_IMAGE` runs a version that is not maintained**, from its upstream image
   pinned by digest. `check-env` refuses an off-menu version without it and a tag without a
@@ -72,6 +87,16 @@ image, replacing Cassandra's vulnerable vendored JARs rather than waiving them.
   exist and is not a known generated file.
 
 ### Fixed
+- **`make` ignored `COMPOSE_PROJECT_NAME` in `.env`.** The Makefile exported a bare `mdb`
+  default, which beats `.env` in Compose, so a second checkout drove the first checkout's
+  containers and data volumes. The name is now read from the env file. `scripts/destroy`,
+  `upgrade` and `check-env` resolve it the same way when run directly.
+- Image references are fully qualified (`docker.io/library/mysql:…`), so Podman resolves them
+  without a search registry.
+- Images built with Podman keep their HEALTHCHECK (`--format docker`).
+- `make scan` no longer mounts the Docker socket into Trivy. It scans a saved image tarball.
+- `check-env` refuses Caddy's ports 80/443 on a rootless runtime and names the fix.
+- Check 41's scan for unguarded `rm -f` could never match. It now does.
 
 - `make upgrade` mounted PostgreSQL 18 at `/var/lib/postgresql/data`, which 18 no longer
   uses, so an upgrade to 18 restored into an anonymous volume. Each side now mounts at its own

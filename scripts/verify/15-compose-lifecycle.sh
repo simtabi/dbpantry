@@ -5,7 +5,7 @@
 
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
-need_docker
+need_runtime
 
 # SPEC section 18: "clone, make init, make up -> PG + Adminer running in two
 # commands". SPEC section 15: "make down never touches data" -- the check that
@@ -21,9 +21,9 @@ cd "$MDB_ROOT" || exit 1
 # message named compose.engines.yml, a GENERATED file that `make init` did not
 # write -- so a freshly initialised checkout failed here and said nothing about
 # which file or which step was missing.
-if ! compose_err="$(docker compose config 2>&1 >/dev/null)"; then
+if ! compose_err="$(mdb_compose config 2>&1 >/dev/null)"; then
     printf '%s\n' "$compose_err" | sed 's/^/      /' >&2
-    vfail "compose configuration is not valid (docker's own error is above)"
+    vfail "compose configuration is not valid (the Compose implementation's own error is above)"
 fi
 vinfo "compose file is valid"
 
@@ -32,10 +32,10 @@ mdb_up || vfail "make up failed"
 
 # shellcheck disable=SC2016  # evaluated by the subshell, not here
 wait_for 90 "pg service to report healthy" bash -c \
-    'docker compose ps --format "{{.Service}} {{.Health}}" | grep -q "^pg healthy$"'
+    'mdb_service_healthy pg'
 vinfo "pg reports healthy"
 
-docker compose ps --format '{{.Service}}' | grep -q '^adminer$' \
+mdb_service_running adminer \
     || vfail "adminer is not running under the default pg,ui profile"
 vinfo "adminer is up"
 
@@ -44,7 +44,7 @@ vinfo "adminer is up"
 # rather than appended: otherwise a second run finds two rows, a third finds
 # three, and the assertion below fails for a reason that has nothing to do with
 # whether data survived.
-docker compose exec -T pg psql -U postgres -q \
+mdb_compose exec -T pg psql -U postgres -q \
     -c "CREATE TABLE IF NOT EXISTS lifecycle_marker(v text);
         DELETE FROM lifecycle_marker;
         INSERT INTO lifecycle_marker VALUES ('survived');" \
@@ -52,7 +52,7 @@ docker compose exec -T pg psql -U postgres -q \
 
 make down >/dev/null 2>&1 || vfail "make down failed"
 
-vols="$(docker volume ls --format '{{.Name}}' | grep -c '^mdb_' || true)"
+vols="$(mdb_ctr volume ls --format '{{.Name}}' | grep -c '^mdb_' || true)"
 (( vols > 0 )) || vfail "make down removed data volumes; SPEC section 15 forbids it"
 vinfo "$vols data volume(s) survived make down"
 
@@ -60,9 +60,9 @@ vinfo "$vols data volume(s) survived make down"
 mdb_up || vfail "make up failed on the second boot"
 # shellcheck disable=SC2016  # evaluated by the subshell, not here
 wait_for 90 "pg to report healthy again" bash -c \
-    'docker compose ps --format "{{.Service}} {{.Health}}" | grep -q "^pg healthy$"'
+    'mdb_service_healthy pg'
 
-val="$(docker compose exec -T pg psql -U postgres -tAc "SELECT v FROM lifecycle_marker" 2>/dev/null | tr -d ' \r')"
+val="$(mdb_compose exec -T pg psql -U postgres -tAc "SELECT v FROM lifecycle_marker" 2>/dev/null | tr -d ' \r')"
 [[ "$val" == "survived" ]] || vfail "data did not survive down/up (got '$val')"
 vinfo "data survived a full down/up cycle"
 

@@ -21,7 +21,7 @@ Test as the application role. `make psql` connects as `postgres` by design, so
 for RLS work connect explicitly:
 
 ```bash
-docker compose exec -T -e PGPASSWORD="$(cat secrets/pg_myapp_user_password.txt)" \
+scripts/runtime compose exec -T -e PGPASSWORD="$(cat secrets/pg_myapp_user_password.txt)" \
     pg psql -U myapp_user -d myapp
 ```
 

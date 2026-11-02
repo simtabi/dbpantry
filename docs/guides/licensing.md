@@ -52,7 +52,7 @@ discover that.
   upstream image does not
 - the same commands
 
-The only difference is that `docker compose up` pulls `mongo:7.0.x` from
+The only difference is that `scripts/runtime compose up` pulls `mongo:7.0.x` from
 MongoDB's own registry rather than `dbpantry-mongodb` from ours.
 
 **What the SSPL asks of you**, in practice: its service clause binds anyone

@@ -10,7 +10,7 @@ diagnosis is cheaper than restoring the wrong dump onto data that was fine.
 
 ```bash
 make status
-docker compose logs <engine> --tail 100
+scripts/runtime compose logs <engine> --tail 100
 ```
 
 Establish which of these you have, because the answer changes everything:
@@ -67,8 +67,8 @@ all** came from an empty source and proves nothing but is not broken.
 Restore is not the first move. In order:
 
 ```bash
-docker compose logs <engine> --tail 100     # it will say why
-docker compose ps -a                        # exit code
+scripts/runtime compose logs <engine> --tail 100     # it will say why
+scripts/runtime compose ps -a                        # exit code
 df -h                                       # disk full is a common cause
 ```
 

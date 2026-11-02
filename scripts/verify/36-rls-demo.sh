@@ -5,7 +5,7 @@
 
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
-need_docker
+need_runtime
 
 # SPEC section 18: "PG RLS demo passes".
 #
@@ -30,15 +30,15 @@ need_file "$MDB_ROOT/rls/rls-template.sql"
 name="mdb-verify-rls-$$"
 track_container "$name"
 
-docker run -d --name "$name" -e POSTGRES_PASSWORD=mdb-throwaway-rls "$img" >/dev/null \
+mdb_ctr run -d --name "$name" -e POSTGRES_PASSWORD=mdb-throwaway-rls "$img" >/dev/null \
     || vfail "container failed to start"
 wait_ready 120 "postgres to accept connections" \
-    docker exec -u postgres "$name" pg_isready -U postgres
+    mdb_ctr exec -u postgres "$name" pg_isready -U postgres
 
 # Applied as a NON-superuser. A superuser bypasses RLS entirely, so running the
 # demo as postgres would prove nothing at all -- every query would succeed and
 # the check would pass on a policy that does not work.
-docker exec -i -u postgres "$name" psql -qtAX -v ON_ERROR_STOP=1 -d postgres >/dev/null 2>&1 <<'SQL' \
+mdb_ctr exec -i -u postgres "$name" psql -qtAX -v ON_ERROR_STOP=1 -d postgres >/dev/null 2>&1 <<'SQL' \
     || vfail "could not create the tenant-app role"
 CREATE ROLE rlsapp LOGIN PASSWORD 'mdb-throwaway-rlsapp';
 CREATE DATABASE rlsdemo OWNER rlsapp;
@@ -50,13 +50,13 @@ SQL
 app_pw=mdb-throwaway-rlsapp
 
 # As the OWNER of the table, which is the case FORCE exists for.
-docker exec -i -u postgres -e PGPASSWORD="$app_pw" "$name" psql -qtAX -v ON_ERROR_STOP=1 \
+mdb_ctr exec -i -u postgres -e PGPASSWORD="$app_pw" "$name" psql -qtAX -v ON_ERROR_STOP=1 \
     -d rlsdemo -U rlsapp -h /var/run/postgresql < "$MDB_ROOT/rls/rls-template.sql" >/dev/null 2>&1 \
     || vfail "rls/rls-template.sql failed to apply"
 vinfo "rls-template.sql applied as the table owner"
 
 app_sql() {
-    docker exec -i -u postgres -e PGPASSWORD="$app_pw" "$name" psql -qtAX -d rlsdemo -U rlsapp \
+    mdb_ctr exec -i -u postgres -e PGPASSWORD="$app_pw" "$name" psql -qtAX -d rlsdemo -U rlsapp \
         -h /var/run/postgresql 2>/dev/null | tr -d ' \r'
 }
 
@@ -89,7 +89,7 @@ vinfo "unset tenant sees no rows: the policy fails closed"
 # 3. A tenant cannot write rows labelled with another tenant's id. WITH CHECK.
 cross="$(printf "BEGIN; SET LOCAL app.tenant_id = '%s';
     INSERT INTO documents (tenant_id, title) VALUES ('%s', 'smuggled'); COMMIT;" "$t1" "$t2" \
-    | docker exec -i -u postgres -e PGPASSWORD="$app_pw" "$name" psql -qtAX -d rlsdemo \
+    | mdb_ctr exec -i -u postgres -e PGPASSWORD="$app_pw" "$name" psql -qtAX -d rlsdemo \
         -U rlsapp -h /var/run/postgresql 2>&1)"
 case "$cross" in
     *"row-level security"*|*"violates"*) ;;

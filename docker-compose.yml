@@ -30,7 +30,7 @@ x-hardening: &hardening
 services:
   phpmyadmin:
     profiles: [ui]
-    image: phpmyadmin:5.2.3@sha256:5e2289bcd500868ed4ac9261ddd7cbcc6e20036f83031ade72667b15dca31c60
+    image: docker.io/library/phpmyadmin:5.2.3@sha256:5e2289bcd500868ed4ac9261ddd7cbcc6e20036f83031ade72667b15dca31c60
     restart: unless-stopped
     <<: *hardening
     environment:
@@ -49,7 +49,7 @@ services:
   # ---------------------------------------------------------------------------
   adminer:
     profiles: [ui]
-    image: adminer:5.4.1@sha256:a3167350c4eb9ae4473b8ea0f49c8e5ae74c87b240ee2f6086521dba2a6bf243
+    image: docker.io/library/adminer:5.4.1@sha256:a3167350c4eb9ae4473b8ea0f49c8e5ae74c87b240ee2f6086521dba2a6bf243
     restart: unless-stopped
     <<: *hardening
     environment:
@@ -66,7 +66,7 @@ services:
   # ---------------------------------------------------------------------------
   pgadmin:
     profiles: [ui]
-    image: dpage/pgadmin4:9.9@sha256:5d9624a93634d1c5e595619cc57b1d330758120d1baf445fa97300c0c1fc3c0a
+    image: docker.io/dpage/pgadmin4:9.9@sha256:5d9624a93634d1c5e595619cc57b1d330758120d1baf445fa97300c0c1fc3c0a
     restart: unless-stopped
     environment:
       PGADMIN_DEFAULT_EMAIL: ${MDB_PGADMIN_EMAIL:-admin@db.localhost}
@@ -338,7 +338,7 @@ services:
 
   mysqld-exporter:
     profiles: [metrics]
-    image: prom/mysqld-exporter:v0.19.0@sha256:eacb4b18e2ec1e0abdf2d64851b68526c964f6d9cb3e9458fb5d5f5062ea94c1
+    image: docker.io/prom/mysqld-exporter:v0.19.0@sha256:eacb4b18e2ec1e0abdf2d64851b68526c964f6d9cb3e9458fb5d5f5062ea94c1
     restart: unless-stopped
     <<: *hardening
     command:

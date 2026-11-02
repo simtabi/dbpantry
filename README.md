@@ -7,6 +7,9 @@
 > One local database toolkit for SQL and NoSQL: PostgreSQL, MySQL, MariaDB, MongoDB, Cassandra and FerretDB, each version-switchable, secure by default, with browser UIs — installed once and shared by many projects.
 
 Runs on macOS, Windows and Linux across amd64 and arm64; dev-first, prod-capable.
+Works with any OCI runtime that has Compose: Docker, OrbStack, Colima, Rancher
+Desktop, Podman (rootless included) and nerdctl. It detects which one you have,
+and `CONTAINER_RUNTIME=podman` forces a choice. See [Container runtimes](docs/guides/runtimes.md).
 
 ## Install
 
@@ -90,6 +93,7 @@ then `make build` builds them locally (see [Release](docs/guides/release.md)).
 Read once, to learn how the toolkit works and how to set it up.
 
 - [Installation](docs/guides/installation.md) — prerequisites and first run
+- [Container runtimes](docs/guides/runtimes.md) — Docker, OrbStack, Colima, Rancher Desktop, Podman, nerdctl ([Docker](docs/guides/runtime-docker.md) · [Podman](docs/guides/runtime-podman.md) · [nerdctl](docs/guides/runtime-nerdctl.md))
 - [Getting started](docs/guides/getting-started.md) — a new project connected in under a minute
 - [Configuration](docs/guides/configuration.md) — every `MDB_` variable
 - [Supported versions](docs/guides/versions.md) — which versions are maintained, and running any other

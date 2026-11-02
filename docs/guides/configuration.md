@@ -52,7 +52,7 @@ menu is refused, unless you also name its upstream image, pinned by digest:
 
 ```
 MDB_MARIADB_VERSION=11.4
-MDB_MARIADB_BASE_IMAGE=mariadb:11.4.13@sha256:<digest>
+MDB_MARIADB_BASE_IMAGE=docker.io/library/mariadb:11.4.13@sha256:<digest>
 ```
 
 That version then runs **unsupported**: dbpantry does not build, scan or verify
