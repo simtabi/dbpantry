@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+#
+# Print one version's section of CHANGELOG.md, the body of its GitHub release.
+#
+# docs/release.md: every release carries that version's CHANGELOG section as its
+# description, never auto-generated notes alone and never "see CHANGELOG". The
+# release workflow calls this first, so a tag with no section, or an empty one,
+# fails before anything is built or published.
+#
+# Usage:
+#   scripts/release-notes 0.1.1         the "## [0.1.1] - <date>" section
+#   scripts/release-notes Unreleased    preview what the next release will say
+#
+# The heading line itself is left out: the release already has a title. Blank
+# lines at either end are trimmed. Written for bash 3.2 (macOS).
+
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+CHANGELOG="${MDB_CHANGELOG:-$ROOT/CHANGELOG.md}"
+
+label="${1:-}"
+label="${label#v}"
+[[ -n "$label" ]] || { printf 'usage: scripts/release-notes <X.Y.Z|Unreleased>\n' >&2; exit 2; }
+[[ -f "$CHANGELOG" ]] || { printf 'release-notes: %s not found\n' "$CHANGELOG" >&2; exit 1; }
+
+# A version is matched as a fixed string inside the brackets, so 0.1.1 cannot
+# match 0.1.10 and the dots are not regex wildcards.
+notes="$(awk -v want="[$label]" '
+    /^## \[/ {
+        if (inside) exit
+        if (index($0, "## " want) == 1) { inside = 1; next }
+    }
+    /^\[[^]]+\]: / { if (inside) exit }
+    inside { print }
+' "$CHANGELOG" | sed -e '/./,$!d' | sed -e ':a' -e '/^\n*$/{$d;N;ba' -e '}')"
+
+if [[ -z "$notes" ]]; then
+    printf 'release-notes: CHANGELOG.md has no section, or an empty one, for [%s]\n' "$label" >&2
+    exit 1
+fi
+
+printf '%s\n' "$notes"

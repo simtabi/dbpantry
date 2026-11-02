@@ -77,7 +77,8 @@ Adding another is a descriptor file — see [Adding an engine](docs/adding-an-en
 ## <a name="documentation"></a>Documentation
 
 The documentation lives in [`docs/`](docs/), indexed below. Engine images are not
-published yet; `make build` builds them locally (see [Release](docs/release.md)).
+published yet: the release workflow publishes them from the next tag, and until
+then `make build` builds them locally (see [Release](docs/release.md)).
 
 ### Guides
 
