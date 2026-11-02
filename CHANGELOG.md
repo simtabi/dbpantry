@@ -109,6 +109,14 @@ image, replacing Cassandra's vulnerable vendored JARs rather than waiving them.
   exist and is not a known generated file.
 
 ### Fixed
+- **`make rotate-secrets` never rotated a MySQL or MariaDB project user.** Root logged in with
+  the user's freshly generated password instead of its own, so every user failed with a warning,
+  kept its old password, and the run still exited 0. Only `'root'@'localhost'` was changed, so
+  `'root'@'%'` kept accepting the old password over TCP, and read-only companions were never
+  rotated. Root now authenticates with its current password, every host row of a user is altered,
+  the new passwords go in on stdin rather than the command line, read-only users are included,
+  and any user left on its old password makes the run exit non-zero (check 57, in a scratch
+  checkout).
 - **`scripts/restore` reported success when the restore failed.** Its pipe ended in `|| true`
   and it logged "complete" either way, so a corrupt or truncated dump left an empty or partial
   database behind a success message. It now prints the client's last lines and exits non-zero,
