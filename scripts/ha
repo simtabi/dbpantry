@@ -16,8 +16,8 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-# shellcheck source=runtime-lib.sh
-. "$ROOT/scripts/runtime-lib.sh"
+# shellcheck source=backend-lib.sh
+. "$ROOT/scripts/backend-lib.sh"
 cd "$ROOT" || exit 1
 
 log() { printf '[ha] %s\n' "$*"; }
@@ -41,7 +41,7 @@ done
 node_container() {
     local svc
     for svc in patroni1 patroni2 patroni3; do
-        if mdb_service_running "$svc"; then
+        if mdb_be_running | grep -qx "$svc"; then
             printf '%s' "$svc"
             return 0
         fi
@@ -53,7 +53,7 @@ svc="$(node_container || true)"
 [[ -n "$svc" ]] || die "no Patroni node is running (try: make up PROFILES=pg,ha)"
 
 patronictl() {
-    mdb_compose exec -T "$svc" patronictl -c /etc/patroni/patroni.yml "$@"
+    mdb_svc_exec "$svc" patronictl -c /etc/patroni/patroni.yml "$@"
 }
 
 case "$verb" in

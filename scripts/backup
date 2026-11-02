@@ -26,8 +26,8 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-# shellcheck source=runtime-lib.sh
-. "$ROOT/scripts/runtime-lib.sh"
+# shellcheck source=backend-lib.sh
+. "$ROOT/scripts/backend-lib.sh"
 ENV_FILE="${MDB_ENV_FILE:-$ROOT/.env}"
 [[ -f "$ENV_FILE" ]] || ENV_FILE="$ROOT/.env.example"
 
@@ -67,7 +67,7 @@ engine_exec() {
     if [[ "$IN_CONTAINER" == "1" ]]; then
         "$@"
     else
-        ( cd "$ROOT" && mdb_compose exec -T "$engine" "$@" )
+        ( cd "$ROOT" && mdb_svc_exec "$engine" "$@" )
     fi
 }
 
@@ -329,7 +329,7 @@ if (( ALL )); then
     # `make backup-all` would consult a different list than the one that
     # started the engines and silently skip half of them. Asking docker what is
     # actually up cannot disagree with reality.
-    running="$( ( cd "$ROOT" && mdb_running_services ) || true )"
+    running="$( ( cd "$ROOT" && mdb_be_running ) || true )"
 
     if [ -z "$running" ]; then
         log "no engines are running; nothing to back up"

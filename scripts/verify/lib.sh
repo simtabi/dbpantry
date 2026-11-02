@@ -22,8 +22,8 @@ export MDB_ROOT
 . "$MDB_ROOT/scripts/engine-lib.sh"
 
 # Every container call goes through the runtime layer (design.md D-60).
-# shellcheck source=../runtime-lib.sh
-. "$MDB_ROOT/scripts/runtime-lib.sh"
+# shellcheck source=../backend-lib.sh
+. "$MDB_ROOT/scripts/backend-lib.sh"
 
 readonly VERIFY_EXIT_SKIP=3
 

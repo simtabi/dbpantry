@@ -12,8 +12,8 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-# shellcheck source=runtime-lib.sh
-. "$ROOT/scripts/runtime-lib.sh"
+# shellcheck source=backend-lib.sh
+. "$ROOT/scripts/backend-lib.sh"
 ENV_FILE="${MDB_ENV_FILE:-$ROOT/.env}"
 QUIET=0
 [[ "${1:-}" == "--quiet" ]] && QUIET=1
@@ -264,7 +264,9 @@ if [[ -z "${MDB_CHECK_RENDERING:-}" ]]; then
 fi
 
 ours=""
-if mdb_runtime_ready; then
+# Host port collisions only exist where the stack publishes host ports, which
+# is the compose backend; Kubernetes and Incus publish through the backend.
+if mdb_backend_init 2>/dev/null && [[ "$MDB_BACKEND" == compose ]] && mdb_runtime_ready; then
     # Space separated, not newline: the membership test below compares
     # " $ours " against *" $value "*, and newlines make every match fail.
     ours="$(mdb_ctr ps --filter "label=com.docker.compose.project=$(mdb_project_name)" \

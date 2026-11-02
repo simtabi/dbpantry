@@ -117,15 +117,15 @@ up: ## Boot the stack (never touches data)
 down: ## Stop the stack (never touches data)
 	@# No -v, ever. Removing volumes is `make destroy`, which demands a typed
 	@# confirmation naming the volume (SPEC section 15).
-	@$(COMPOSE) $(all_profiles) down --remove-orphans
+	@$(RUNTIME) down
 
 .PHONY: status
 status: ## Show service status
-	@$(COMPOSE) $(all_profiles) ps
+	@$(RUNTIME) status
 
 .PHONY: logs
 logs: ## Tail service logs
-	@$(COMPOSE) $(all_profiles) logs -f --tail=100
+	@$(RUNTIME) logs -f --tail=100
 
 .PHONY: destroy
 destroy: ## Delete data volumes, KEEPING recovery repos (typed confirmation)
@@ -150,26 +150,26 @@ test-profile: ## Boot the tmpfs speed profile and run its checks
 psql: ## PostgreSQL shell (socket-first)
 	@# Socket-first: faster than TCP and it removes a network surface entirely
 	@# (SPEC section 10.1).
-	@$(COMPOSE) exec pg psql -h /var/run/postgresql -U $(or $(USER_NAME),postgres)
+	@$(RUNTIME) exec pg psql -h /var/run/postgresql -U $(or $(USER_NAME),postgres)
 
 .PHONY: mysql
 mysql: ## MySQL shell (socket-first)
-	@$(COMPOSE) exec mysql mysql --protocol=socket -uroot \
+	@$(RUNTIME) exec mysql mysql --protocol=socket -uroot \
 		-p"$$(cat secrets/mysql_root_password.txt)"
 
 .PHONY: mariadb
 mariadb: ## MariaDB shell (socket-first)
-	@$(COMPOSE) exec mariadb mariadb --protocol=socket -uroot \
+	@$(RUNTIME) exec mariadb mariadb --protocol=socket -uroot \
 		-p"$$(cat secrets/mariadb_root_password.txt)"
 
 .PHONY: mongo
 mongo: ## MongoDB shell (mongosh, authenticated)
-	@$(COMPOSE) exec mongodb mongosh \
+	@$(RUNTIME) exec mongodb mongosh \
 		"mongodb://$(or $(USER_NAME),root):$$(cat secrets/mongodb_root_password.txt)@127.0.0.1:27017/?authSource=admin"
 
 .PHONY: cassandra
 cassandra: ## Cassandra shell (cqlsh, authenticated)
-	@$(COMPOSE) exec cassandra cqlsh -u $(or $(USER_NAME),cassandra) \
+	@$(RUNTIME) exec cassandra cqlsh -u $(or $(USER_NAME),cassandra) \
 		-p "$$(cat secrets/cassandra_root_password.txt)"
 
 .PHONY: scan
