@@ -110,10 +110,17 @@ got="$(kube ctx 'mdb_svc_health pg')"
 
 kube ctx 'mdb_svc_exec -u postgres pg id' STUB_PODS='pg proj-pg-0 Running True\n' >/dev/null
 # The switch script spans lines in the log; its call starts and ends like this.
-if ! grep -q -- ' exec -i proj-pg-0 -c pg -- sh -c ' "$log" || ! grep -q -- ' sh postgres id$' "$log"; then
+if ! grep -q -- ' exec -i proj-pg-0 -- sh -c ' "$log" || ! grep -q -- ' sh postgres id$' "$log"; then
     vfail "exec -u did not drop to the user in the pod: $(cat "$log")"
 fi
-vinfo "every kubectl call is pinned to MDB_K8S_CONTEXT; terminating pods are not running; exec -u switches user"
+# HA (D-65): commands reach the primary, wherever it is in the list, and a
+# backup job's pod is not a service of the stack.
+pods='pg proj-pg-0 Running True replica\npg proj-pg-1 Running True primary\nbackup-pg proj-backup-pg-1 Running True -\n'
+kube ctx 'mdb_svc_exec pg true' STUB_PODS="$pods" >/dev/null
+grep -q -- ' exec -i proj-pg-1 -- true$' "$log" || vfail "exec did not pick the primary: $(grep ' exec ' "$log")"
+got="$(kube ctx 'mdb_be_running' STUB_PODS="$pods")"
+[[ "$got" == pg ]] || vfail "a backup job's pod is listed as running: [$got]"
+vinfo "every kubectl call is pinned to MDB_K8S_CONTEXT; terminating pods are not running; exec -u switches user; exec reaches the HA primary"
 
 kube ctx 'mdb_be_secrets_sync' >/dev/null
 grep -q 'create secret generic dbpantry-secrets .*pg_superuser_password.txt' "$log" || vfail "secrets/ was not synced"
@@ -125,10 +132,11 @@ kube orbstack 'mdb_be_image_load img:1' >/dev/null
 grep -q '^kind' "$log" && vfail "OrbStack (shared image store) ran kind"
 vinfo "secrets and certs sync without the CA key; images load into kind only"
 
-# Check 05 scans config files, not scripts, so the settings the backend reads
-# from .env are checked here: every one must be documented in .env.example.
-for key in MDB_BACKEND $(grep -oE '(^|[^_A-Z])MDB_K8S_[A-Z_]+' scripts/backends/kubernetes.sh | grep -oE 'MDB_K8S_[A-Z_]+' | sort -u); do
-    grep -qE "^#? *$key=" .env.example || vfail "$key is read by the Kubernetes backend but not documented in .env.example"
+# Check 05 scans config files, not scripts, so the settings the backend and
+# scripts/helm-values read from .env are checked here: every one must be
+# documented in .env.example.
+for key in MDB_BACKEND $(grep -ohE '(^|[^_A-Z])MDB_K8S_[A-Z_]+' scripts/backends/kubernetes.sh scripts/helm-values | grep -oE 'MDB_K8S_[A-Z_]+' | sort -u); do
+    grep -qE "^#? *$key=" .env.example || vfail "$key is read by the Kubernetes backend or helm-values but not documented in .env.example"
 done
 vinfo "MDB_BACKEND and every MDB_K8S_ setting are documented in .env.example"
 

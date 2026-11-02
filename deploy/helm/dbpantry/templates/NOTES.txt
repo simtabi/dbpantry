@@ -6,6 +6,13 @@ Engines and the host names apps use inside the cluster:
   {{ $name }}: {{ include "dbpantry.svcname" (dict "root" $ "name" $name) }}.{{ $.Release.Namespace }}.svc:{{ $e.port }}
 {{- end }}
 {{- end }}
+{{- if and .Values.engines.pg.enabled .Values.engines.pg.ha.enabled }}
+  pg-ro (replicas): {{ include "dbpantry.svcname" (dict "root" $ "name" "pg") }}-ro.{{ .Release.Namespace }}.svc:5432
+  HA: {{ .Values.engines.pg.ha.provider }}, {{ .Values.engines.pg.ha.replicas }} members; "pg" follows the primary.
+{{- end }}
+{{- if .Values.backup.enabled }}
+Backups: CronJobs "{{ .Release.Name }}-backup-<engine>" at "{{ .Values.backup.schedule }}", into the PVCs {{ .Release.Name }}-backups-<engine>.
+{{- end }}
 
 Passwords are the files of the Secret {{ .Values.global.secretName }}, as in secrets/.
 From a workstation: scripts/runtime forward  (kubectl port-forward to the MDB_*_HOST_PORT ports).

@@ -67,17 +67,20 @@ _mdb_k8s_sel() {
 # "<component> <pod> <phase> <True|False|Terminating>" for every pod of the
 # release. A pod being deleted still reports Running and Ready, so it is
 # marked Terminating: nothing may treat it as up (make destroy checks this).
-_MDB_K8S_PODS_TPL='{{range .items}}{{index .metadata.labels "app.kubernetes.io/component"}} {{.metadata.name}} {{.status.phase}} {{if .metadata.deletionTimestamp}}Terminating{{else}}{{range .status.conditions}}{{if eq .type "Ready"}}{{.status}}{{end}}{{end}}{{end}}{{"\n"}}{{end}}'
+_MDB_K8S_PODS_TPL='{{range .items}}{{index .metadata.labels "app.kubernetes.io/component"}} {{.metadata.name}} {{.status.phase}} {{if .metadata.deletionTimestamp}}Terminating{{else}}{{range .status.conditions}}{{if eq .type "Ready"}}{{.status}}{{end}}{{end}}{{end}} {{or (index .metadata.labels "role") (index .metadata.labels "cnpg.io/instanceRole") "-"}}{{"\n"}}{{end}}'
 _mdb_k8s_pods() {
     _mdb_k8s_ctx >/dev/null || return
     _mdb_k8s_kubectl get pods -l "$(_mdb_k8s_sel "${1:-}")" -o go-template="$_MDB_K8S_PODS_TPL" 2>/dev/null
 }
 
-# The pod serving SVC: the first Ready one, else the first one.
+# The pod serving SVC: the Ready primary of an HA cluster (Patroni and
+# CloudNativePG both label it role=primary), else the first Ready pod, else
+# the first one. Backups and restores must reach the primary.
 _mdb_k8s_pod() {
     local svc="$1" pods pod
     pods="$(_mdb_k8s_pods "$svc")" || return
-    pod="$(printf '%s\n' "$pods" | awk '$4=="True" {print $2; exit}')"
+    pod="$(printf '%s\n' "$pods" | awk '$4=="True" && $5=="primary" {print $2; exit}')"
+    [[ -n "$pod" ]] || pod="$(printf '%s\n' "$pods" | awk '$4=="True" {print $2; exit}')"
     [[ -n "$pod" ]] || pod="$(printf '%s\n' "$pods" | awk 'NF {print $2; exit}')"
     [[ -n "$pod" ]] || { _mdb_rt_err "service $svc is not running in $(_mdb_k8s_ns)/$(_mdb_k8s_release)"; return 1; }
     printf '%s' "$pod"
@@ -85,10 +88,12 @@ _mdb_k8s_pod() {
 
 # Run "$@" as USER inside the pod: kubectl exec has no -u, so drop privileges
 # with whatever the image has (s6-setuidgid in the dbpantry images, gosu in
-# the upstream ones, setpriv from util-linux otherwise).
+# the upstream ones, setpriv from util-linux otherwise), or run as is when the
+# container already runs as USER (CloudNativePG's runs as postgres).
 # shellcheck disable=SC2016  # expanded by the pod's sh, not here
 _MDB_K8S_ASUSER='u="$1"; shift
-if command -v s6-setuidgid >/dev/null 2>&1; then exec s6-setuidgid "$u" "$@"
+if [ "$(id -un 2>/dev/null)" = "$u" ]; then exec "$@"
+elif command -v s6-setuidgid >/dev/null 2>&1; then exec s6-setuidgid "$u" "$@"
 elif command -v gosu >/dev/null 2>&1; then exec gosu "$u" "$@"
 elif command -v setpriv >/dev/null 2>&1; then exec setpriv --reuid="$u" --regid="$u" --init-groups "$@"
 else echo "no way to switch to user $u in this image" >&2; exit 126; fi'
@@ -100,9 +105,9 @@ _mdb_k8s_exec() {
     pod="$(_mdb_k8s_pod "$_MDB_SVC")" || return
     [[ "$tty" == 1 ]] && [[ -t 0 && -t 1 ]] && flags=(-it)
     if [[ -n "$_MDB_SVC_USER" ]]; then
-        _mdb_k8s_kubectl exec "${flags[@]}" "$pod" -c "$_MDB_SVC" -- sh -c "$_MDB_K8S_ASUSER" sh "$_MDB_SVC_USER" "$@"
+        _mdb_k8s_kubectl exec "${flags[@]}" "$pod" -- sh -c "$_MDB_K8S_ASUSER" sh "$_MDB_SVC_USER" "$@"
     else
-        _mdb_k8s_kubectl exec "${flags[@]}" "$pod" -c "$_MDB_SVC" -- "$@"
+        _mdb_k8s_kubectl exec "${flags[@]}" "$pod" -- "$@"
     fi
 }
 
@@ -112,7 +117,9 @@ _mdb_be_kubernetes_exec_tty() { _mdb_k8s_exec 1 "$@"; }
 _mdb_be_kubernetes_running() {
     local pods
     pods="$(_mdb_k8s_pods)" || return
-    printf '%s\n' "$pods" | awk '$3=="Running" && $4=="True" {print $1}' | sort -u
+    # Engines only: a scheduled backup's pod (component backup-<engine>) is
+    # not a service of the stack.
+    printf '%s\n' "$pods" | awk '$3=="Running" && $4=="True" && $1 !~ /^backup-/ {print $1}' | sort -u
 }
 
 _mdb_be_kubernetes_health() {
@@ -133,7 +140,7 @@ _mdb_be_kubernetes_cp() {
     local src="$1" dest="$2" pod
     pod="$(_mdb_k8s_pod "${src%%:*}")" || return
     [[ -d "$dest" ]] && dest="$dest/$(basename "${src#*:}")"
-    _mdb_k8s_kubectl exec -i "$pod" -c "${src%%:*}" -- cat "${src#*:}" >"$dest"
+    _mdb_k8s_kubectl exec -i "$pod" -- cat "${src#*:}" >"$dest"
 }
 
 _mdb_be_kubernetes_volumes() {
@@ -142,7 +149,24 @@ _mdb_be_kubernetes_volumes() {
 }
 
 _mdb_be_kubernetes_volume_rm() {
-    _mdb_k8s_kubectl delete pvc "$1" --wait=true
+    local pvc="$1" scope
+    case "$pvc" in
+        data-"$(_mdb_k8s_release)"-pg-*)
+            # Patroni keeps the cluster's identity in ConfigMaps it creates
+            # itself (<scope>-config holds the system id). Left behind, a new
+            # cluster on fresh volumes waits forever for a leader that already
+            # "initialised", so they go with the data.
+            scope="$(_mdb_k8s_var MDB_HA_CLUSTER_NAME)"
+            _mdb_k8s_kubectl delete configmap -l "app.kubernetes.io/instance=$(_mdb_k8s_release),cluster-name=${scope:-mdb-pg}" \
+                --ignore-not-found >/dev/null 2>&1 || true ;;
+        "$(_mdb_k8s_release)"-pg-[0-9]*)
+            # A CloudNativePG instance volume belongs to its Cluster, which
+            # `make down` hibernates rather than deletes; destroying the data
+            # deletes the Cluster first, or the operator recreates the volume.
+            _mdb_k8s_kubectl delete clusters.postgresql.cnpg.io "$(_mdb_k8s_release)-pg" \
+                --ignore-not-found --wait=true >/dev/null 2>&1 || true ;;
+    esac
+    _mdb_k8s_kubectl delete pvc "$pvc" --ignore-not-found --wait=true
 }
 
 # Publish secrets/*.txt as the chart's Secret, certs/ as one TLS Secret per
@@ -161,6 +185,14 @@ _mdb_be_kubernetes_secrets_sync() {
     (( ${#args[@]} )) || { _mdb_rt_err "secrets/ has no *.txt files; run make init"; return 1; }
     _mdb_k8s_kubectl create secret generic dbpantry-secrets "${args[@]}" --dry-run=client -o yaml \
         | _mdb_k8s_kubectl apply -f - >/dev/null || return
+    # CloudNativePG takes the superuser password as a basic-auth Secret.
+    if [[ -f "$root/secrets/pg_superuser_password.txt" ]]; then
+        _mdb_k8s_kubectl create secret generic "$(_mdb_k8s_release)-pg-superuser" --type=kubernetes.io/basic-auth \
+            --from-literal=username=postgres \
+            --from-file=password="$root/secrets/pg_superuser_password.txt" \
+            --dry-run=client -o yaml | _mdb_k8s_kubectl apply -f - >/dev/null || return
+    fi
+    _mdb_k8s_backup_bundle || return
     for eng in pg mysql mariadb mongodb cassandra; do
         d="$root/certs/$eng"
         if [[ -f "$d/server.crt" && -f "$d/server.key" && -f "$root/certs/ca.crt" ]]; then
@@ -179,6 +211,29 @@ _mdb_be_kubernetes_secrets_sync() {
                 | _mdb_k8s_kubectl apply -f - >/dev/null || return
         fi
     done
+}
+
+# What the scheduled backup jobs run: scripts/backup with the libraries it
+# sources, engines/, and .env, as the Compose sidecars bind-mount them. A tar
+# in a Secret (it carries .env), because a ConfigMap volume cannot hold
+# directories.
+_mdb_k8s_backup_bundle() {
+    local root="$MDB_RT_ROOT" tmp f files=() rc
+    [[ -f "$root/scripts/backup" ]] || return 0
+    for f in scripts/backup scripts/backend-lib.sh scripts/runtime-lib.sh scripts/env-lib.sh \
+             scripts/engine-lib.sh scripts/backends scripts/runtimes engines .env; do
+        [[ -e "$root/$f" ]] && files+=("$f")
+    done
+    tmp="$(mktemp "${TMPDIR:-/tmp}/dbpantry-bundle.XXXXXX")" || return
+    ( cd "$root" && COPYFILE_DISABLE=1 tar -cf "$tmp" --exclude '*.md' "${files[@]}" ) || { rm -f "$tmp"; return 1; }
+    # Server-side apply: a client-side apply copies the whole object into the
+    # last-applied annotation, and the bundle is past that 256 KiB limit.
+    _mdb_k8s_kubectl create secret generic dbpantry-backup-bundle --from-file=bundle.tar="$tmp" \
+        --dry-run=client -o yaml \
+        | _mdb_k8s_kubectl apply --server-side --force-conflicts --field-manager=dbpantry -f - >/dev/null
+    rc=$?
+    rm -f "$tmp"
+    return "$rc"
 }
 
 # Make a locally built image visible to the cluster. kind has its own image
@@ -202,10 +257,12 @@ _mdb_be_kubernetes_image_load() {
 _mdb_k8s_local_images() {
     local values="$1"
     awk '
-        /^  [a-z]+:$/ { eng = $1; sub(/:/, "", eng); en = 0; tag = "" }
+        /^  [a-z]+:$/ { eng = $1; sub(/:/, "", eng); en = 0; ha = 0; tag = "" }
         /^    enabled: true$/ { en = 1 }
+        /^      enabled: true$/ { ha = 1 }
         /^    tag: / { tag = $2; gsub(/"/, "", tag) }
         /^    env:$/ && en && tag != "" { print "ghcr.io/simtabi/dbpantry-" eng ":" tag }
+        /^      provider: "?patroni"?$/ && en && ha && tag != "" { print "ghcr.io/simtabi/dbpantry-patroni:" tag }
     ' "$values"
 }
 
@@ -243,6 +300,13 @@ _mdb_be_kubernetes_down() {
     local release
     release="$(_mdb_k8s_release)"
     if _mdb_k8s_helm status "$release" >/dev/null 2>&1; then
+        # A CloudNativePG Cluster owns its volumes, so deleting it would
+        # delete the data. The chart keeps it on uninstall, and down
+        # hibernates it instead: the pods stop, the volumes stay, and the next
+        # `make up` (hibernation "off" in the chart) starts it again.
+        if _mdb_k8s_kubectl get clusters.postgresql.cnpg.io "$release-pg" >/dev/null 2>&1; then
+            _mdb_k8s_kubectl annotate clusters.postgresql.cnpg.io "$release-pg" cnpg.io/hibernation=on --overwrite >/dev/null || return
+        fi
         _mdb_k8s_helm uninstall "$release" --wait "$@" || return
         # helm returns once the objects are deleted, not once the pods have
         # stopped; a database is down only when its pod is gone.

@@ -1,0 +1,94 @@
+{{- $root := . }}
+{{- $e := .Values.engines.pg }}
+{{- if and $e.enabled $e.ha.enabled (eq $e.ha.provider "cnpg") }}
+{{- if not (.Capabilities.APIVersions.Has "postgresql.cnpg.io/v1/Cluster") }}
+{{- fail "engines.pg.ha.provider=cnpg needs the CloudNativePG operator installed in the cluster first (docs/guides/kubernetes.md#cloudnativepg)" }}
+{{- end }}
+{{- $ctx := dict "root" $root "name" "pg" "engine" $e }}
+{{- $full := include "dbpantry.fullname" $ctx }}
+# PostgreSQL as a CloudNativePG Cluster (opt-in, design.md D-65). The
+# operator owns the pods, failover and the <cluster>-rw/-ro/-r Services; the
+# chart adds "pg" and "pg-ro" so applications use the same names as with
+# Patroni and Compose.
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: {{ $full }}
+  labels:
+    {{- include "dbpantry.labels" $ctx | nindent 4 }}
+  annotations:
+    # The Cluster owns its volumes: uninstalling it would delete the data.
+    # `make down` hibernates it and helm leaves it in place; `make up` wakes
+    # it (this annotation), and only `make destroy` deletes it.
+    helm.sh/resource-policy: keep
+    cnpg.io/hibernation: "off"
+spec:
+  instances: {{ $e.ha.replicas }}
+  imageName: {{ $e.ha.cnpg.imageName }}
+  # Every pod and volume carries the dbpantry labels, so scripts/runtime,
+  # make backup and make destroy find them as they find the other engines.
+  inheritedMetadata:
+    labels:
+      {{- include "dbpantry.selector" $ctx | nindent 6 }}
+  enableSuperuserAccess: true
+  # Created by `make up` from secrets/pg_superuser_password.txt.
+  superuserSecret:
+    name: {{ printf "%s-pg-superuser" $root.Release.Name }}
+  {{- if eq (toString $e.ha.syncMode) "true" }}
+  minSyncReplicas: 1
+  maxSyncReplicas: 1
+  {{- end }}
+  postgresql:
+    {{- with $e.ha.cnpg.parameters }}
+    parameters:
+      {{- toYaml . | nindent 6 }}
+    {{- end }}
+  resources:
+    {{- if $e.resources }}
+    {{- toYaml $e.resources | nindent 4 }}
+    {{- else }}
+    requests:
+      cpu: {{ toString $e.cpu | quote }}
+      memory: {{ include "dbpantry.qty" $e.memory }}
+    limits:
+      memory: {{ include "dbpantry.qty" $e.memory }}
+    {{- end }}
+  storage:
+    size: {{ $e.storage }}
+    {{- with $root.Values.global.storageClass }}
+    storageClass: {{ . }}
+    {{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "dbpantry.svcname" $ctx }}
+  labels:
+    {{- include "dbpantry.labels" $ctx | nindent 4 }}
+spec:
+  type: {{ $root.Values.service.type }}
+  selector:
+    cnpg.io/cluster: {{ $full }}
+    cnpg.io/instanceRole: primary
+  ports:
+    - name: db
+      port: 5432
+      targetPort: 5432
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "dbpantry.svcname" $ctx }}-ro
+  labels:
+    {{- include "dbpantry.labels" $ctx | nindent 4 }}
+spec:
+  type: {{ $root.Values.service.type }}
+  selector:
+    cnpg.io/cluster: {{ $full }}
+    cnpg.io/instanceRole: replica
+  ports:
+    - name: db
+      port: 5432
+      targetPort: 5432
+{{- end }}

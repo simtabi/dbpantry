@@ -38,8 +38,19 @@ done
 # in etcd, not on a particular node -- so this deliberately does not care which
 # one it finds. Requiring a specific node would make `make ha-status` fail
 # exactly when that node is the one that died.
+#
+# On Kubernetes the members are the pods of the "pg" service (design.md
+# D-65), and the backend picks a Ready one.
 node_container() {
     local svc
+    mdb_backend_init || return 1
+    if [[ "$MDB_BACKEND" == kubernetes ]]; then
+        mdb_be_running | grep -qx pg || return 1
+        mdb_svc_exec pg sh -c 'command -v patronictl' >/dev/null 2>&1 \
+            || die "pg is not running under Patroni here (CloudNativePG? use: kubectl cnpg status)"
+        printf 'pg'
+        return 0
+    fi
     for svc in patroni1 patroni2 patroni3; do
         if mdb_be_running | grep -qx "$svc"; then
             printf '%s' "$svc"
