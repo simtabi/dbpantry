@@ -85,11 +85,25 @@ STUB
     chmod +x "$stubs/$name"
 }
 
-# Resolve in a clean environment: only the stubs, bash and coreutils on PATH,
-# and no inherited MDB_* resolution.
+# The system tools, minus every real container runtime. With /usr/bin itself on
+# PATH, a host that has docker or podman there (every GitHub Ubuntu runner)
+# answered for a runtime the case had not stubbed: "podman only" resolved to
+# the runner's real, running docker.
+tools="$(mktemp -d "${TMPDIR:-/tmp}/mdb-rt-tools.XXXXXX")"
+add_cleanup "rm -rf '$tools'"
+for d in /usr/bin /bin; do
+    for f in "$d"/*; do
+        n="${f##*/}"
+        case "$n" in docker*|podman*|nerdctl*|container|socktainer|incus*|kubectl|lima*|colima) continue ;; esac
+        [[ -e "$tools/$n" ]] || ln -s "$f" "$tools/$n"
+    done
+done
+
+# Resolve in a clean environment: only the stubs and the runtime-free system
+# tools on PATH, and no inherited MDB_* resolution.
 resolve() {
     # shellcheck disable=SC2016  # expanded by the inner bash
-    env -i PATH="$stubs:/usr/bin:/bin" HOME="$HOME" "$@" \
+    env -i PATH="$stubs:$tools" HOME="$HOME" "$@" \
         bash -c '. "$1"; mdb_runtime_init 2>&1 && printf "%s|%s|%s\n" "$MDB_RUNTIME" "$MDB_COMPOSE_CMD" "$MDB_COMPOSE_FLAVOR"' \
         _ "$MDB_ROOT/scripts/runtime-lib.sh" | tail -1 || true
 }
@@ -179,7 +193,7 @@ expect "auto keeps built-in priority over a later adapter" "docker|docker compos
 expect "CONTAINER_RUNTIME selects a plugged-in adapter" "fakert|fakert-compose|compose-v2" \
     "$(resolve MDB_RUNTIME_ADAPTER_DIRS="$extra" CONTAINER_RUNTIME=fakert)"
 # shellcheck disable=SC2016  # expanded by the inner bash
-got="$(env -i PATH="$stubs:/usr/bin:/bin" HOME="$HOME" MDB_RUNTIME_ADAPTER_DIRS="$extra" CONTAINER_RUNTIME=fakert \
+got="$(env -i PATH="$stubs:$tools" HOME="$HOME" MDB_RUNTIME_ADAPTER_DIRS="$extra" CONTAINER_RUNTIME=fakert \
         bash -c '. "$1"; bash -c "mdb_build -t x ."' _ "$MDB_ROOT/scripts/runtime-lib.sh" 2>&1 || true)"
 [[ "$got" == "fakert build -t x ." ]] || vfail "mdb_build did not reach the adapter's build hook in a child shell ($got)"
 vinfo "adapter hooks are exported to child shells"
