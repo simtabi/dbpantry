@@ -18,6 +18,9 @@ make new-project NAME=myapp
 make import ENGINE=pg DB=myapp FROM=/path/to/dump.sql
 ```
 
+A dump from outside dbpantry has no `.sha256`, so `import` restores it as given
+(`make restore` would refuse it); if a `.sha256` sits beside it, it is checked.
+
 `import` accepts what the engine's own tools accept: for PostgreSQL a `pg_dump`
 custom archive or plain SQL, for the MySQL family a `mysqldump` file, for
 MongoDB a `mongodump` directory or archive. Compression is detected from the

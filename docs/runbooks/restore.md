@@ -32,6 +32,12 @@ requires a typed confirmation. The confirmation is not friction for its own
 sake: `restore` drops and recreates the target database, and that is not
 recoverable.
 
+Before anything is touched it checks the dump against the `.sha256` that
+`make backup` writes beside it. A mismatch is always refused. A dump with no
+`.sha256` is refused too, because nothing proves it is whole; for a dump you
+made by hand and trust, restore it anyway with
+`MDB_RESTORE_ALLOW_UNVERIFIED=yes make restore ...`.
+
 Without `FILE=`, it lists what is available and asks.
 
 ## Restore into a copy instead

@@ -3,7 +3,10 @@
 # Guided, confirmed restore (SPEC section 15.1).
 #
 # A restore overwrites a live database, so it asks before it does. CONFIRM=yes
-# skips the prompt for automation; there is no flag that skips the checksum.
+# skips the prompt for automation. A dump whose checksum does not match is
+# always refused. A dump with no .sha256 alongside is refused too, because
+# nothing proves it is whole; MDB_RESTORE_ALLOW_UNVERIFIED=yes restores it
+# anyway, for a dump you made by hand and trust.
 #
 # The exit status is the restore's. It used to end in `|| true` and log
 # "complete" whatever happened, so a corrupt or truncated dump left an empty
@@ -73,7 +76,8 @@ engine_load_hooks || die "no hooks for engine family ${MDB_ENGINE_FAMILY:-?}"
 # -----------------------------------------------------------------------------
 # Integrity first. Restoring a corrupted dump over a live database is strictly
 # worse than not restoring at all, so the checksum is verified before anything
-# is touched and there is no way to skip it.
+# is touched. A mismatch can never be skipped; a missing checksum only with
+# MDB_RESTORE_ALLOW_UNVERIFIED=yes.
 # -----------------------------------------------------------------------------
 if [[ -f "$FILE.sha256" ]]; then
     log "verifying checksum"
@@ -85,8 +89,11 @@ if [[ -f "$FILE.sha256" ]]; then
             || die "checksum mismatch: $FILE is corrupt or truncated"
     fi
     log "checksum ok"
+elif [[ "${MDB_RESTORE_ALLOW_UNVERIFIED:-}" == "yes" ]]; then
+    log "WARNING: no checksum file alongside $FILE; restoring it unverified (MDB_RESTORE_ALLOW_UNVERIFIED=yes)"
 else
-    log "WARNING: no checksum file alongside $FILE"
+    die "no checksum file alongside $FILE ($FILE.sha256), so nothing proves the dump is whole.
+       Nothing was changed. To restore it anyway: MDB_RESTORE_ALLOW_UNVERIFIED=yes"
 fi
 
 # -----------------------------------------------------------------------------

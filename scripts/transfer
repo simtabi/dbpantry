@@ -94,10 +94,24 @@ if [[ -n "$FROM_HOST" ]]; then
             ;;
     esac
     log "dumped to $FILE"
+    # restore refuses a dump with no checksum beside it. This one was written
+    # a moment ago by a dump that exited 0, so record its checksum now.
+    if command -v sha256sum >/dev/null 2>&1; then
+        ( cd "$(dirname "$FILE")" && sha256sum "$(basename "$FILE")" > "$(basename "$FILE").sha256" )
+    else
+        ( cd "$(dirname "$FILE")" && shasum -a 256 "$(basename "$FILE")" > "$(basename "$FILE").sha256" )
+    fi
 fi
 
 [[ -n "$FILE" ]] || die "specify --from <file> or --from-host <host>"
 [[ -f "$FILE" ]] || die "no such file: $FILE"
 
 log "importing into $ENGINE database '$DB'"
+# An import is a dump from outside dbpantry, named explicitly, so it usually has
+# no .sha256; naming it is the operator's say-so. restore still checks one if
+# it is there.
+if [[ ! -f "$FILE.sha256" ]]; then
+    log "no checksum beside $FILE: importing it as given"
+    export MDB_RESTORE_ALLOW_UNVERIFIED=yes
+fi
 scripts/restore --engine "$ENGINE" --db "$DB" --file "$FILE"
