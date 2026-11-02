@@ -89,4 +89,4 @@ That third one is frequently the whole problem.
 
 ---
 
-[← Docs index](../../readme.md#documentation)
+[← Docs index](../../README.md#documentation)

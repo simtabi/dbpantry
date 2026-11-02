@@ -1,5 +1,5 @@
 # shellcheck shell=bash
-# Runtime adapter: Docker Engine and every Docker-API product (see readme.md).
+# Runtime adapter: Docker Engine and every Docker-API product (see README.md).
 # Docker Desktop, OrbStack, Colima and Rancher Desktop (moby) differ in how the
 # daemon is provided, not in the CLI, so they share this adapter.
 

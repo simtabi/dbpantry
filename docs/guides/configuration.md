@@ -196,4 +196,4 @@ overrides/mysql/99-local.cnf
 
 ---
 
-[← Docs index](../../readme.md#documentation)
+[← Docs index](../../README.md#documentation)

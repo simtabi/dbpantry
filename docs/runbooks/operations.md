@@ -348,4 +348,4 @@ restoring until you know which problem you have.
 
 ---
 
-[← Docs index](../../readme.md#documentation)
+[← Docs index](../../README.md#documentation)

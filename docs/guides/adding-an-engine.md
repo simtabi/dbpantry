@@ -171,4 +171,4 @@ has a genuine gap and that is worth an issue.
 
 ---
 
-[← Docs index](../../readme.md#documentation)
+[← Docs index](../../README.md#documentation)

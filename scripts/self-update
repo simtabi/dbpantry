@@ -50,8 +50,8 @@ else
     # ---------------------------------------------------------------------
     # Migration notes, surfaced before anything is pulled or rebuilt.
     # ---------------------------------------------------------------------
-    if [[ -f changelog.md ]]; then
-        notes="$(git diff "$before..HEAD" -- changelog.md | grep -E '^\+' | grep -vE '^\+\+\+' | sed 's/^+//' || true)"
+    if [[ -f CHANGELOG.md ]]; then
+        notes="$(git diff "$before..HEAD" -- CHANGELOG.md | grep -E '^\+' | grep -vE '^\+\+\+' | sed 's/^+//' || true)"
         if [[ -n "$notes" ]]; then
             printf '\n────────────────── CHANGELOG since your version ──────────────────\n'
             printf '%s\n' "$notes"

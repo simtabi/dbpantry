@@ -90,4 +90,4 @@ is missing.
 
 ---
 
-[← Docs index](../readme.md#documentation)
+[← Docs index](../README.md#documentation)

@@ -48,8 +48,8 @@ for f in "${docs[@]}"; do
             broken=$(( broken + 1 ))
             continue
         fi
-        # macOS filesystems ignore case, so README.md "exists" when only
-        # readme.md does, and the link breaks only on Linux and on GitHub.
+        # macOS filesystems ignore case, so design.md "exists" when only
+        # DESIGN.md does, and the link breaks only on Linux and on GitHub.
         # Compare the last component against the real directory listing.
         base="$(basename "${path%/}")"
         case "$base" in .|..|'') continue ;; esac

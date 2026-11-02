@@ -85,4 +85,4 @@ judge: this project does not build, scan or verify it.
 
 ---
 
-[← Docs index](../../readme.md#documentation)
+[← Docs index](../../README.md#documentation)

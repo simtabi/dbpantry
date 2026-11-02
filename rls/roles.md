@@ -56,4 +56,4 @@ an empty result — which is at least an honest failure.
 
 ---
 
-[← Docs index](../readme.md#documentation)
+[← Docs index](../README.md#documentation)

@@ -19,8 +19,9 @@ You are building dbpantry per docs/reference/spec.md. That file is the contract.
 - Pinned versions and digests everywhere; no `latest`.
 - No secret in any file, layer, or log; `make check-env` must stay enforcing.
 - shellcheck-clean bash; docs updated in the same commit as behavior changes.
-- A container runtime is required: if `scripts/runtime info` reports no reachable engine, stop and say so rather than mocking. Never call `docker` directly in a script; use `mdb_ctr` / `mdb_compose` from `scripts/runtime-lib.sh` (check 48, design.md D-60). Runtime-specific behaviour belongs in an adapter hook in `scripts/runtimes/` (see `scripts/runtimes/readme.md`), never in a `case "$MDB_RUNTIME"` in the core or a caller. Image references are fully qualified (`docker.io/library/...`, check 49).
+- A container runtime is required: if `scripts/runtime info` reports no reachable engine, stop and say so rather than mocking. Never call `docker` directly in a script; use `mdb_ctr` / `mdb_compose` from `scripts/runtime-lib.sh` (check 48, design.md D-60). Runtime-specific behaviour belongs in an adapter hook in `scripts/runtimes/` (see `scripts/runtimes/README.md`), never in a `case "$MDB_RUNTIME"` in the core or a caller. Image references are fully qualified (`docker.io/library/...`, check 49).
 - Env files: a value containing whitespace or a special character is double-quoted (`TENANTS="landlord panel api socket queue"`). Read values with `mdb_env_get`, write generated ones with `mdb_env_quote` (`scripts/env-lib.sh`, check 50); never `grep | cut -d= -f2-`.
+- Markdown file names are lowercase slugs (`deploy-guide.md`), except the conventional ones that stay upper case: `README.md` (at any level), `CHANGELOG.md`, `CONTRIBUTING.md`, `SECURITY.md`, `CODE_OF_CONDUCT.md`, `LICENSE`, `CLAUDE.md`, `.github/PULL_REQUEST_TEMPLATE.md` (design.md D-61, check 51).
 
 ## Commands
 - `make init` / `make init-prod` - create .env (or .env.prod) from the template, generate secrets, run check-env

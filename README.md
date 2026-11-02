@@ -121,7 +121,7 @@ Looked up to check the contract, the evidence, or a fact.
 - [Acceptance](docs/reference/acceptance.md) — every criterion mapped to the check that proves it
 - [Image provenance](docs/reference/image-provenance.md) — every image, its publisher, and why
 - [Design](design.md) — pinned versions, capacity table, decision log
-- [Row-level security kit](rls/readme.md) — database-enforced multi-tenancy
+- [Row-level security kit](rls/README.md) — database-enforced multi-tenancy
 - [Repository layout](docs/reorganization-plan.md) — where each file lives, and why
 
 ## Name

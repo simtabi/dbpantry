@@ -1,5 +1,5 @@
 # shellcheck shell=bash
-# Runtime adapter: containerd through nerdctl, best effort (see readme.md).
+# Runtime adapter: containerd through nerdctl, best effort (see README.md).
 
 mdb_runtime_register nerdctl
 
