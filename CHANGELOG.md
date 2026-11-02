@@ -59,6 +59,9 @@ image, replacing Cassandra's vulnerable vendored JARs rather than waiving them.
   CloudNativePG Cluster with `MDB_K8S_HA_PROVIDER=cnpg`. Either way `pg` follows the primary and `pg-ro`
   the replicas. The `backup` profile adds one CronJob per engine (pg, mysql, mariadb) that writes to
   its own claim and prunes only there. Tested on OrbStack and kind, CloudNativePG 1.30.1 included.
+- **Incus through incus-compose, untested** (design.md D-66, [Incus](docs/guides/incus.md)): `MDB_BACKEND=incus`
+  runs the same Compose files on Incus system containers with incus-compose. Built from the incus-compose
+  documentation and checked against stub binaries only (check 58); it has not been run on a live Incus host.
 - **Apple container (macOS 26) through socktainer** (design.md D-63,
   [Apple container](docs/guides/runtime-apple-container.md)): detected as a Docker provider;
   `compose.apple.yml` sizes each engine's VM and is required there; builds pass `--load`.
