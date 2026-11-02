@@ -31,7 +31,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ENV_FILE="${MDB_ENV_FILE:-$ROOT/.env}"
 [[ -f "$ENV_FILE" ]] || ENV_FILE="$ROOT/.env.example"
 
-BACKUP_DIR="${MDB_BACKUP_DIR:-$ROOT/backups}"
+BACKUP_DIR="$(mdb_backup_dir "$ROOT" "$ENV_FILE")"
 
 get() { mdb_env_get "$1" "$ENV_FILE"; }
 log() { printf '[backup] %s\n' "$*"; }

@@ -46,6 +46,19 @@ mdb_env_get() {
     mdb_env_unquote "${raw#*=}"
 }
 
+# Where dumps live: MDB_BACKUP_DIR from the environment first (the backup
+# sidecar sets /backups), then from the env file, then ./backups. A relative
+# value is relative to the checkout, so a command run from a subdirectory
+# writes, verifies and prunes the same directory the operator configured.
+mdb_backup_dir() {
+    local root="$1" file="$2" dir
+    dir="${MDB_BACKUP_DIR:-}"
+    [[ -n "$dir" ]] || dir="$(mdb_env_get MDB_BACKUP_DIR "$file")"
+    [[ -n "$dir" ]] || dir="backups"
+    [[ "$dir" == /* ]] || dir="$root/${dir#./}"
+    printf '%s' "$dir"
+}
+
 # Bare values may use only the characters a dotenv parser can never misread:
 # letters, digits and _ . / : @ % + = -. Anything else (whitespace, a comma
 # list such as pg,ui, quotes, $, #, ;) is quoted. The same allow-list as the
