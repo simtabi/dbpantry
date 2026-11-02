@@ -48,8 +48,14 @@ mode="$(psql_pg -c 'SHOW archive_mode' | tr -d ' \r')"
 [[ "$mode" == "on" ]] || vfail "archive_mode is '$mode'; PITR needs it on, set before start"
 vinfo "archive_mode is on"
 
-wait_ready 180 "pgBackRest to finish its initial full backup" \
-    mdb_ctr exec -u postgres "$name" sh -c \
+# 180s is ample on an idle machine; under a full suite the backup has run past
+# it while still visibly working. Keep waiting, up to 15 minutes, for as long as
+# a pgbackrest process (or the converge script that starts it) is alive.
+# shellcheck disable=SC2016  # expanded inside the container
+wait_ready_while 180 900 "pgBackRest to finish its initial full backup" \
+    mdb_ctr exec "$name" sh -c \
+        'for c in /proc/[0-9]*/cmdline; do tr "\0" " " < "$c" 2>/dev/null; echo; done | grep -q "[p]gbackrest\|[5]0-converge"' \
+    -- mdb_ctr exec -u postgres "$name" sh -c \
     'pgbackrest --stanza=mdb info 2>/dev/null | grep -q "full backup"'
 vinfo "initial full backup present: recovery has a base to replay from"
 

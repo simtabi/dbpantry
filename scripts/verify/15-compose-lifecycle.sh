@@ -52,7 +52,9 @@ mdb_compose exec -T pg psql -U postgres -q \
 
 make down >/dev/null 2>&1 || vfail "make down failed"
 
-vols="$(mdb_ctr volume ls --format '{{.Name}}' | grep -c '^mdb_' || true)"
+# Only this project's volumes: counting every mdb_* volume would let the
+# operator's real ones stand in for a test project's missing data.
+vols="$(mdb_project_volumes | grep -c . || true)"
 (( vols > 0 )) || vfail "make down removed data volumes; SPEC section 15 forbids it"
 vinfo "$vols data volume(s) survived make down"
 

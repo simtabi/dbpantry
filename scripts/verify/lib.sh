@@ -445,6 +445,34 @@ wait_ready() {
     vfail "timed out after ${budget}s waiting for: $what"
 }
 
+# wait_ready_while BUDGET CEILING WHAT BUSY... -- CMD...
+# wait_ready, except that past BUDGET seconds it keeps waiting, up to CEILING,
+# for as long as the BUSY command succeeds (work visibly still in progress). A
+# loaded machine then gets the time it needs, and a genuinely stuck one still
+# fails at BUDGET instead of the ceiling.
+wait_ready_while() {
+    local budget="$1" ceiling="$2" what="$3"; shift 3
+    local -a busy=()
+    while (( $# )) && [[ "$1" != -- ]]; do busy+=("$1"); shift; done
+    shift
+    local start=$SECONDS streak=0 needed=3 elapsed
+    while :; do
+        if "$@" >/dev/null 2>&1; then
+            streak=$(( streak + 1 ))
+            (( streak >= needed )) && return 0
+        else
+            streak=0
+        fi
+        elapsed=$(( SECONDS - start ))
+        if (( elapsed >= budget )); then
+            if (( elapsed >= ceiling )) || ! "${busy[@]}" >/dev/null 2>&1; then
+                vfail "timed out after ${elapsed}s waiting for: $what"
+            fi
+        fi
+        sleep 1
+    done
+}
+
 # Require a file to exist, else fail with a useful message.
 need_file() {
     [[ -f "$1" ]] || vfail "expected file does not exist yet: ${1#"$MDB_ROOT"/}"

@@ -22,6 +22,10 @@ check_family() {
     sockvol="mdb-verify-tlsenf-sock-$engine-$$"
     track_container "$name"
     mdb_ctr volume create "$sockvol" >/dev/null
+    # Removed by the EXIT trap after the container. An inline rm here ran
+    # while the container still held the volume, failed silently, and leaked
+    # one volume per engine per run.
+    track_volume "$sockvol"
 
     mdb_ctr run -d --name "$name" \
         -e "$pw_env=mdb-throwaway-verify" \
@@ -54,7 +58,6 @@ check_family() {
         || vfail "$engine broke socket connections under TLS enforcement; sockets are a secure transport"
     vinfo "$engine socket connections still work"
 
-    mdb_ctr volume rm -f "$sockvol" >/dev/null 2>&1 || true
 }
 
 check_family mysql MYSQL_ROOT_PASSWORD mysql
