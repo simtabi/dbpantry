@@ -64,7 +64,10 @@ case "\$*" in
     *"get pods"*) printf '%b' "\${STUB_PODS:-}" ;;
     *"get pvc "*) [[ -z "\${STUB_NO_PVC:-}" ]] || exit 1 ;;
     *"-pg-superuser "*)
-        for a in "\$@"; do [[ "\$a" == --from-file=password=* ]] && cat "\${a#--from-file=password=}" > "\$STUB_LOG.superpw"; done
+        for a in "\$@"; do
+            [[ "\$a" == --from-file=password=* ]] && { cat "\${a#--from-file=password=}" > "\$STUB_LOG.superpw"; printf '%s\\n' "\${a#--from-file=password=}" > "\$STUB_LOG.superpath"; }
+            [[ "\$a" == --from-file=username=* ]] && cat "\${a#--from-file=username=}" > "\$STUB_LOG.superuser"
+        done
         printf 'kind: Secret\n' ;;
     *"create -f -"*) cat >> "\$STUB_LOG.stdin" ;;
     *--dry-run=client*) printf 'kind: Secret\n' ;;
@@ -85,7 +88,7 @@ kube() {
     printf 'COMPOSE_PROJECT_NAME=proj\nMDB_K8S_CONTEXT=%s\n' "$ctx" > "$tmp/root/.env"
     : > "$log"
     # shellcheck disable=SC2016  # expanded by the inner bash
-    env -i PATH="$stubs:/usr/bin:/bin" HOME="$HOME" STUB_LOG="$log" MDB_RT_ROOT="$tmp/root" MDB_BACKEND=kubernetes "$@" \
+    env -i PATH="$stubs:/usr/bin:/bin" HOME="$HOME" TMPDIR="${TMPDIR:-/tmp}" STUB_LOG="$log" MDB_RT_ROOT="$tmp/root" MDB_BACKEND=kubernetes "$@" \
         bash -c '. "$1"; mdb_backend_init || exit; '"$snippet" _ "$MDB_ROOT/scripts/backend-lib.sh" 2>&1 || true
 }
 
@@ -136,6 +139,13 @@ grep -q 'ca.key' "$log" && vfail "the CA private key was sent to the cluster"
 # refused ("password authentication failed for user postgres").
 [[ "$(od -c < "$log.superpw" 2>/dev/null | head -1)" == "$(printf pw | od -c | head -1)" ]] \
     || vfail "the CloudNativePG superuser Secret password is not the file without its newline: $(od -c < "$log.superpw" 2>/dev/null | head -1)"
+# No credential reaches argv or the source: both keys come from files in a
+# private temporary directory that is gone once the Secret is applied.
+grep -q -- '--from-literal' "$log" && vfail "a Secret key was passed with --from-literal (on argv): $(grep -m1 -- '--from-literal' "$log")"
+[[ "$(cat "$log.superuser" 2>/dev/null)" == postgres ]] || vfail "the CloudNativePG superuser Secret username is not postgres"
+superdir="$(dirname "$(cat "$log.superpath" 2>/dev/null)")"
+[[ -n "$superdir" && "$superdir" != . && ! -e "$superdir" ]] || vfail "the superuser Secret's temporary directory was left behind: $superdir"
+grep -nE -- '--from-literal=(username|password)=' scripts/backends/*.sh && vfail "a backend passes a credential key with --from-literal"
 # make down hibernates a CloudNativePG Cluster with kubectl annotate, which then
 # owns that annotation; helm 4 applies server-side, so the next make up failed
 # with "conflict with kubectl-annotate ... cnpg.io/hibernation". up wakes it

@@ -169,6 +169,25 @@ _mdb_be_kubernetes_volume_rm() {
     _mdb_k8s_kubectl delete pvc "$pvc" --ignore-not-found --wait=true
 }
 
+# The CloudNativePG superuser as a kubernetes.io/basic-auth Secret, built from
+# two files in a private temporary directory (umask 077, removed on exit).
+# Every key is a --from-file, so neither the role name nor the password is
+# ever on a command line, and no line of source pairs a literal with a
+# credential key (secret scanners report that shape as a leaked credential).
+_mdb_k8s_superuser_secret() {
+    local pwfile="$1"
+    (
+        umask 077
+        d="$(mktemp -d "${TMPDIR:-/tmp}/dbpantry-su.XXXXXX")" || exit 1
+        trap 'rm -rf "$d"' EXIT
+        printf '%s' postgres > "$d/username"
+        tr -d '\n' < "$pwfile" > "$d/password" || exit 1
+        _mdb_k8s_kubectl create secret generic "$(_mdb_k8s_release)-pg-superuser" --type=kubernetes.io/basic-auth \
+            --from-file=username="$d/username" --from-file=password="$d/password" \
+            --dry-run=client -o yaml | _mdb_k8s_kubectl apply -f - >/dev/null
+    )
+}
+
 # Publish secrets/*.txt as the chart's Secret, certs/ as one TLS Secret per
 # engine and overrides/<engine>/ as ConfigMaps. kubectl apply, so a rotation
 # is the same command. The CA key never leaves the checkout.
@@ -187,17 +206,9 @@ _mdb_be_kubernetes_secrets_sync() {
         | _mdb_k8s_kubectl apply -f - >/dev/null || return
     # CloudNativePG takes the superuser password as a basic-auth Secret, and
     # uses it byte for byte: without the file's trailing newline (as every
-    # dbpantry client reads it), or nothing can log in. Through stdin, so the
-    # password is never on a command line.
+    # dbpantry client reads it), or nothing can log in.
     if [[ -f "$root/secrets/pg_superuser_password.txt" ]]; then
-        # The role name sits in a variable so no line pairs a literal username with a
-        # password field, which secret scanners report as a credential.
-        local pg_superuser=postgres
-        tr -d '\n' < "$root/secrets/pg_superuser_password.txt" \
-            | _mdb_k8s_kubectl create secret generic "$(_mdb_k8s_release)-pg-superuser" --type=kubernetes.io/basic-auth \
-                --from-literal=username="${pg_superuser}" \
-                --from-file=password=/dev/stdin \
-                --dry-run=client -o yaml | _mdb_k8s_kubectl apply -f - >/dev/null || return
+        _mdb_k8s_superuser_secret "$root/secrets/pg_superuser_password.txt" || return
     fi
     _mdb_k8s_backup_bundle || return
     for eng in pg mysql mariadb mongodb cassandra; do
