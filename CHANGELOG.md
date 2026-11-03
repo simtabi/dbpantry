@@ -115,6 +115,19 @@ image, replacing Cassandra's vulnerable vendored JARs rather than waiving them.
   exist and is not a known generated file.
 
 ### Fixed
+- **CloudNativePG: `make up` returned before the cluster was ready.** `helm --wait` cannot see a
+  custom resource, so `make up` now waits for `.status.readyInstances` to reach `.spec.instances`,
+  bounded by `MDB_K8S_CNPG_READY_TIMEOUT` (default `MDB_WAIT_TIMEOUT`, else 600 seconds), and fails
+  with the Cluster's phase. `make rotate-secrets` republishes `secrets/` to the backend after the
+  superuser changes, so the operator, which keeps the password equal to its Secret, no longer has
+  the old one to put back (check 61; its live half needs a kind cluster).
+- **Verify checks could reach the operator's data.** Check 27 removed the operator project's
+  Patroni and etcd volumes, check 29 cleaned the checkout's `backups/upgrade`, and checks 21 and 22
+  seeded and dropped databases in the operator's project and wrote, planted and pruned files in
+  `backups/`. The harness now refuses any volume or project without a test prefix, gives every check
+  a private `MDB_BACKUP_DIR`, runs checks 21 and 22 in a scratch stack and check 27 in its own
+  project, and check 60 fails a check that goes around this. `scripts/upgrade` honours
+  `MDB_UPGRADE_DIR` from the environment (default unchanged).
 - **The metrics exporters crash-looped on Linux hosts.** `pg-exporter` and `mysqld-exporter` run
   as `nobody`, which cannot open a 0600 password file inside the 0700 `secrets/` directory, so
   both exited at start and `restart: unless-stopped` hid it. Docker Desktop and OrbStack ignore
@@ -221,6 +234,9 @@ image, replacing Cassandra's vulnerable vendored JARs rather than waiving them.
 
 ### Security
 
+- **The CloudNativePG superuser Secret is built from files, not `--from-literal`.** Both keys come
+  from a umask 077 temporary directory removed on exit, so no credential reaches argv or the
+  source, and the pattern secret scanners reported is gone (check 54).
 - **The last Trivy waiver for Cassandra is gone**: CVE-2022-1471 in snakeyaml 1.33 left with
   Cassandra 4.1, rather than being extended past 2026-11-09. `.trivyignore.yaml` has no
   Cassandra entries.

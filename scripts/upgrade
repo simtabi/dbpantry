@@ -36,7 +36,10 @@ mdb_backend_require compose || exit 64
 
 PROJECT="$(mdb_project_name)"
 PREFIX="${MDB_IMAGE_PREFIX:-ghcr.io/simtabi}"
-WORK="$ROOT/backups/upgrade"
+# The working dumps. backups/upgrade in the checkout unless MDB_UPGRADE_DIR names
+# another directory (the verify harness points it at a private temporary one, so
+# a check never writes or cleans the operator's backups/).
+WORK="${MDB_UPGRADE_DIR:-$ROOT/backups/upgrade}"
 
 log() { printf '[upgrade] %s\n' "$*"; }
 die() { printf '[upgrade] ERROR: %s\n' "$*" >&2; exit 1; }

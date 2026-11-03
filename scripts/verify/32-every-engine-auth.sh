@@ -100,7 +100,7 @@ for engine in $(engine_list); do
     # initialisation -- so the root user keeps its OLD password and every probe
     # fails with a storedKey mismatch that looks like a broken engine.
     vol="mdb-verify-auth-${engine}-vol-$$"
-    mdb_ctr volume rm -f "$vol" >/dev/null 2>&1 || true
+    remove_test_volumes "$vol"
     mdb_ctr volume create "$vol" >/dev/null
     track_volume "$vol"
 

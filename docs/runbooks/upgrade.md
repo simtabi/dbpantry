@@ -29,7 +29,9 @@ wrong.
 `make upgrade` does the dump-and-restore path:
 
 1. starts the old major against its existing volume, read-only work only
-2. dumps every database and, for PostgreSQL, the globals
+2. dumps every database and, for PostgreSQL, the globals, into
+   `backups/upgrade/` (or the directory `MDB_UPGRADE_DIR` names in the
+   environment); the dump is kept afterwards
 3. starts the new major against a fresh volume
 4. restores
 5. compares object and row counts, and **fails loudly if they disagree**

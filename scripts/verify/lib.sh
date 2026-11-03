@@ -267,27 +267,30 @@ build_image() {
 CLEANUP_CONTAINERS=()
 CLEANUP_VOLUMES=()
 CLEANUP_NETWORKS=()
+CLEANUP_PROJECTS=()
 CLEANUP_COMMANDS=()
 
 track_container() { CLEANUP_CONTAINERS+=("$1"); }
-track_volume()    { CLEANUP_VOLUMES+=("$1"); }
+track_volume()    { require_test_name "$1" volume; CLEANUP_VOLUMES+=("$1"); }
 add_cleanup()     { CLEANUP_COMMANDS+=("$1"); }
 # For a check's own network: removed after the tracked containers, because a
 # network with a container still attached refuses `network rm`. Run with the
 # other commands, it failed silently and leaked one network per run.
 track_network()   { CLEANUP_NETWORKS+=("$1"); }
 
-# Remove, at exit, every file the check adds under backups/ and nothing else.
+# Remove, at exit, every file the check adds under MDB_BACKUP_DIR and nothing else.
 #
-# Checks that take real dumps write into the operator's backups/ directory. Left
-# behind, they piled up by the hundred across runs and were indistinguishable
-# from the operator's own dumps. The snapshot is taken when this is called, so
-# call it before the first dump; anything already there is never touched.
+# Checks once wrote their dumps into the operator's backups/ directory, where
+# they piled up by the hundred and were indistinguishable from real ones, and a
+# retention run there deleted about 175 real dumps (August 2026). MDB_BACKUP_DIR
+# is now always a private temporary directory for checks (below), so this only
+# tidies that directory early; it never looks at the checkout's backups/. The
+# snapshot is taken when this is called, so call it before the first dump.
 cleanup_new_backups() {
     local list
     list="$(mktemp "${TMPDIR:-/tmp}/mdb-backups.XXXXXX")" || return 0
-    find "$MDB_ROOT/backups" -type f > "$list" 2>/dev/null || true
-    add_cleanup "find '$MDB_ROOT/backups' -type f ! -name .gitkeep | grep -vxF -f '$list' | while IFS= read -r f; do rm -f \"\$f\"; done; rm -f '$list'"
+    find "$MDB_BACKUP_DIR" -type f > "$list" 2>/dev/null || true
+    add_cleanup "find '$MDB_BACKUP_DIR' -type f ! -name .gitkeep | grep -vxF -f '$list' | while IFS= read -r f; do rm -f \"\$f\"; done; rm -f '$list'"
 }
 
 mdb_cleanup() {
@@ -308,13 +311,92 @@ mdb_cleanup() {
         if [[ -n "$item" ]]; then mdb_ctr rm -f -v "$item" >/dev/null 2>&1 || true; fi
     done
     for item in ${CLEANUP_VOLUMES[@]+"${CLEANUP_VOLUMES[@]}"}; do
-        if [[ -n "$item" ]]; then mdb_ctr volume rm -f "$item" >/dev/null 2>&1 || true; fi
+        # track_volume already refused anything else; checked again here so no
+        # path into this array can ever remove an operator volume.
+        is_test_name "$item" || continue
+        mdb_ctr volume rm -f "$item" >/dev/null 2>&1 || true
     done
     for item in ${CLEANUP_NETWORKS[@]+"${CLEANUP_NETWORKS[@]}"}; do
         if [[ -n "$item" ]]; then mdb_ctr network rm "$item" >/dev/null 2>&1 || true; fi
     done
+    # Last: every volume Compose labelled with a test project the check ran
+    # (use_test_project), after the commands above have brought it down.
+    local v
+    for item in ${CLEANUP_PROJECTS[@]+"${CLEANUP_PROJECTS[@]}"}; do
+        is_test_name "$item" || continue
+        for v in $(mdb_ctr volume ls -q --filter "label=com.docker.compose.project=$item" 2>/dev/null); do
+            mdb_ctr volume rm -f "$v" >/dev/null 2>&1 || true
+        done
+    done
 }
 trap mdb_cleanup EXIT
+
+# --- what a check may touch --------------------------------------------------
+#
+# A check may create or remove only volumes and Compose projects whose names
+# carry a test prefix. Check 29 once worked on <project>_pg17_data with the
+# operator's project name, and check 27 removed <project>_patroni*_data and
+# <project>_etcd*_data for whatever project .env named: an operator's real HA
+# data on any machine that ran the harness. The guard sits in every path that
+# removes a volume here (track_volume, remove_test_volumes, mdb_cleanup), so a
+# check cannot opt out of it, and check 60 fails any check that removes a
+# volume another way or names an operator volume.
+#
+#   mdbverify<N>   a check's own Compose project (use_test_project)
+#   mdbscratch<N>  scratch_stack's project
+#   mdb-verify-    a check's own containers, volumes and networks
+readonly MDB_TEST_PREFIXES='mdbverify mdbscratch mdb-verify-'
+
+is_test_name() {
+    local name="$1" p
+    [[ -n "$name" ]] || return 1
+    for p in $MDB_TEST_PREFIXES; do
+        [[ "$name" == "$p"* ]] && return 0
+    done
+    return 1
+}
+
+# require_test_name NAME [WHAT]: fail the check rather than touch NAME.
+require_test_name() {
+    is_test_name "$1" \
+        || vfail "refusing to touch ${2:-name} '$1': a check may only create or remove names starting with one of: $MDB_TEST_PREFIXES"
+}
+
+# Remove volumes now, for a check that starts from nothing. Test names only.
+remove_test_volumes() {
+    local v
+    for v in "$@"; do
+        require_test_name "$v" volume
+        mdb_ctr volume rm -f "$v" >/dev/null 2>&1 || true
+    done
+}
+
+# A Compose project of the check's own, for a check that runs the stack with
+# the checkout's .env and secrets but must not share its volumes. Exported, so
+# make, the scripts and Compose all resolve it before .env.
+use_test_project() {
+    local p="${1:-mdbverify$$}"
+    require_test_name "$p" project
+    COMPOSE_PROJECT_NAME="$p"
+    export COMPOSE_PROJECT_NAME
+    CLEANUP_PROJECTS+=("$p")
+}
+
+# Backups never go to the checkout's backups/ from a check. MDB_BACKUP_DIR (the
+# environment wins over .env in scripts/backup, restore and verify-backups;
+# check 59) is a private directory removed at exit, and MDB_UPGRADE_DIR, where
+# scripts/upgrade keeps its working dumps, sits inside it. scratch_run unsets
+# both, so a scratch stack still uses its own tree's backups/.
+# The checkout's own dump directory, named once here so no check spells the
+# path (check 60 fails a check that does). Compare against it; never write it.
+# shellcheck disable=SC2034  # read by the verify checks that source this file
+readonly MDB_CHECKOUT_BACKUPS="$MDB_ROOT/backups"
+MDB_VERIFY_BACKUP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/mdb-verify-backups.XXXXXX")" \
+    || vfail "could not create a private backup directory for the check"
+MDB_BACKUP_DIR="$MDB_VERIFY_BACKUP_DIR"
+MDB_UPGRADE_DIR="$MDB_VERIFY_BACKUP_DIR/upgrade"
+export MDB_VERIFY_BACKUP_DIR MDB_BACKUP_DIR MDB_UPGRADE_DIR
+add_cleanup "rm -rf '$MDB_VERIFY_BACKUP_DIR'"
 
 # A throwaway checkout with its own stack, for checks that change state the
 # operator owns: secrets, databases, volumes.
@@ -395,7 +477,7 @@ scratch_stack() {
 scratch_run() {
     [[ -n "${SCRATCH_DIR:-}" && "$SCRATCH_DIR" != "$MDB_ROOT" ]] || vfail "scratch_run before scratch_stack"
     ( cd "$SCRATCH_DIR" && env -u COMPOSE_PROJECT_NAME -u COMPOSE_FILE -u COMPOSE_PROFILES \
-        -u MDB_ENV_FILE -u ENV_FILE -u MDB_BACKUP_DIR -u MDB_BACKEND -u MDB_BACKEND_READY \
+        -u MDB_ENV_FILE -u ENV_FILE -u MDB_BACKUP_DIR -u MDB_UPGRADE_DIR -u MDB_BACKEND -u MDB_BACKEND_READY \
         MDB_RT_ROOT="$SCRATCH_DIR" "$@" )
 }
 

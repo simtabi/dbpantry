@@ -1,4 +1,8 @@
-# multidb-server execution kit
+# dbpantry execution kit (historical)
+
+> Historical. Written before the rename, when dbpantry was multidb-server (design.md
+> [D-54](../../design.md#7-decision-log)), and kept as the record of how the build was run.
+> The names below are the old ones on purpose; check 44 allows them in this file only.
 
 How to take multidb-server-design.md from spec to running, tested software with a self-healing build loop. The principle behind everything here: an agent can only self-heal what a check can catch, so every task ends in an executable check and nothing is "done" until its check passes.
 

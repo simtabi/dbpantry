@@ -29,7 +29,7 @@ c18="mdb-verify-sw18-$$"
 
 cleanup() {
     mdb_ctr rm -f -v "$c17" "$c18" >/dev/null 2>&1 || true
-    mdb_ctr volume rm -f "$vol17" "$vol18" >/dev/null 2>&1 || true
+    remove_test_volumes "$vol17" "$vol18"
 }
 add_cleanup cleanup
 

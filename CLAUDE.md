@@ -4,7 +4,7 @@ You are building dbpantry per docs/reference/spec.md. That file is the contract.
 
 ## The loop (applies to every task, no exceptions)
 1. PLAN: restate the task and name its executable check before writing code.
-2. RESEARCH: before implementing any component, search the web for the current docs of the exact pinned versions involved (s6-overlay v3, the official postgres/mysql/mariadb image entrypoints, pgvector, tiredofit/db-backup, phpmyadmin envs, Caddy). Record what you relied on as links in design.md.
+2. RESEARCH: before implementing any component, search the web for the current docs of the exact pinned versions involved (s6-overlay v3, the official postgres/mysql/mariadb image entrypoints, pgvector, phpmyadmin envs, Caddy). Record what you relied on as links in design.md.
 3. IMPLEMENT: smallest change that can pass the check.
 4. VERIFY: run the check, then `make verify`. A task is done only when both pass.
 5. SELF-HEAL: on any failure, read the complete error output first, research the error before patching, and fix the root cause, never the symptom. Re-run. After 3 failed attempts on the same issue, stop and present the situation with options instead of thrashing.

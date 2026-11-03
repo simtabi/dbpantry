@@ -62,9 +62,14 @@ for t in kubectl helm kind; do
 printf '$t %s\n' "\$*" >> "\$STUB_LOG"
 case "\$*" in
     *"get pods"*) printf '%b' "\${STUB_PODS:-}" ;;
+    *"get clusters.postgresql.cnpg.io "*jsonpath*) printf '%s' "\${STUB_CNPG:-}" ;;
+    *"get clusters.postgresql.cnpg.io "*) [[ -z "\${STUB_NO_CNPG:-}" ]] || exit 1 ;;
     *"get pvc "*) [[ -z "\${STUB_NO_PVC:-}" ]] || exit 1 ;;
     *"-pg-superuser "*)
-        for a in "\$@"; do [[ "\$a" == --from-file=password=* ]] && cat "\${a#--from-file=password=}" > "\$STUB_LOG.superpw"; done
+        for a in "\$@"; do
+            [[ "\$a" == --from-file=password=* ]] && { cat "\${a#--from-file=password=}" > "\$STUB_LOG.superpw"; printf '%s\\n' "\${a#--from-file=password=}" > "\$STUB_LOG.superpath"; }
+            [[ "\$a" == --from-file=username=* ]] && cat "\${a#--from-file=username=}" > "\$STUB_LOG.superuser"
+        done
         printf 'kind: Secret\n' ;;
     *"create -f -"*) cat >> "\$STUB_LOG.stdin" ;;
     *--dry-run=client*) printf 'kind: Secret\n' ;;
@@ -85,7 +90,7 @@ kube() {
     printf 'COMPOSE_PROJECT_NAME=proj\nMDB_K8S_CONTEXT=%s\n' "$ctx" > "$tmp/root/.env"
     : > "$log"
     # shellcheck disable=SC2016  # expanded by the inner bash
-    env -i PATH="$stubs:/usr/bin:/bin" HOME="$HOME" STUB_LOG="$log" MDB_RT_ROOT="$tmp/root" MDB_BACKEND=kubernetes "$@" \
+    env -i PATH="$stubs:/usr/bin:/bin" HOME="$HOME" TMPDIR="${TMPDIR:-/tmp}" STUB_LOG="$log" MDB_RT_ROOT="$tmp/root" MDB_BACKEND=kubernetes "$@" \
         bash -c '. "$1"; mdb_backend_init || exit; '"$snippet" _ "$MDB_ROOT/scripts/backend-lib.sh" 2>&1 || true
 }
 
@@ -136,6 +141,13 @@ grep -q 'ca.key' "$log" && vfail "the CA private key was sent to the cluster"
 # refused ("password authentication failed for user postgres").
 [[ "$(od -c < "$log.superpw" 2>/dev/null | head -1)" == "$(printf pw | od -c | head -1)" ]] \
     || vfail "the CloudNativePG superuser Secret password is not the file without its newline: $(od -c < "$log.superpw" 2>/dev/null | head -1)"
+# No credential reaches argv or the source: both keys come from files in a
+# private temporary directory that is gone once the Secret is applied.
+grep -q -- '--from-literal' "$log" && vfail "a Secret key was passed with --from-literal (on argv): $(grep -m1 -- '--from-literal' "$log")"
+[[ "$(cat "$log.superuser" 2>/dev/null)" == postgres ]] || vfail "the CloudNativePG superuser Secret username is not postgres"
+superdir="$(dirname "$(cat "$log.superpath" 2>/dev/null)")"
+[[ -n "$superdir" && "$superdir" != . && ! -e "$superdir" ]] || vfail "the superuser Secret's temporary directory was left behind: $superdir"
+grep -nE -- '--from-literal=(username|password)=' scripts/backends/*.sh && vfail "a backend passes a credential key with --from-literal"
 # make down hibernates a CloudNativePG Cluster with kubectl annotate, which then
 # owns that annotation; helm 4 applies server-side, so the next make up failed
 # with "conflict with kubectl-annotate ... cnpg.io/hibernation". up wakes it
@@ -143,6 +155,24 @@ grep -q 'ca.key' "$log" && vfail "the CA private key was sent to the cluster"
 kube ctx '_mdb_k8s_cnpg_wake' >/dev/null
 grep -q -- ' annotate clusters.postgresql.cnpg.io proj-pg cnpg.io/hibernation-' "$log" \
     || vfail "make up does not wake a hibernated CloudNativePG Cluster before helm: $(cat "$log")"
+# helm --wait cannot see a CloudNativePG Cluster (a custom resource), so make up
+# returned while the operator was still creating instances. up now waits for
+# readyInstances to reach spec.instances, bounded, and fails with the phase.
+grep -qE '^ *_mdb_k8s_cnpg_wait_ready$' scripts/backends/kubernetes.sh \
+    || vfail "make up on Kubernetes does not wait for a CloudNativePG Cluster after helm"
+got="$(kube ctx '_mdb_k8s_cnpg_wait_ready; echo rc=$?' STUB_NO_CNPG=1)"
+[[ "$got" == "rc=0" ]] || vfail "with no CloudNativePG Cluster, up should not wait: [$got]"
+got="$(kube ctx '_mdb_k8s_cnpg_wait_ready; echo rc=$?' STUB_CNPG='2 2 Cluster in healthy state')"
+[[ "$got" == *"ready (2/2 instances)"*"rc=0" ]] || vfail "a ready CloudNativePG Cluster was not accepted: [$got]"
+start=$SECONDS
+got="$(kube ctx '_mdb_k8s_cnpg_wait_ready; echo rc=$?' STUB_CNPG='1 2 Creating a new replica' \
+    MDB_K8S_CNPG_READY_TIMEOUT=2 _MDB_K8S_POLL_SECONDS=1)"
+[[ "$got" == *"not ready after 2s: 1/2 instances ready, phase 'Creating a new replica'"* && "$got" == *"rc=1" ]] \
+    || vfail "an unready CloudNativePG Cluster did not fail clearly at the timeout: [$got]"
+(( SECONDS - start < 15 )) || vfail "the CloudNativePG wait overran MDB_K8S_CNPG_READY_TIMEOUT=2"
+got="$(kube ctx '_mdb_k8s_cnpg_wait_ready; echo rc=$?' STUB_CNPG='0 2 Setting up primary' MDB_K8S_CNPG_READY_TIMEOUT=soon)"
+[[ "$got" == *"must be a number of seconds"*"rc=2" ]] || vfail "a non-numeric MDB_K8S_CNPG_READY_TIMEOUT was accepted: [$got]"
+vinfo "make up waits for a CloudNativePG Cluster's instances, bounded by MDB_K8S_CNPG_READY_TIMEOUT, and fails with its phase"
 kube kind-dev 'mdb_be_image_load img:1' >/dev/null
 grep -qx 'kind load docker-image img:1 --name dev' "$log" || vfail "a kind context did not kind-load the image"
 kube orbstack 'mdb_be_image_load img:1' >/dev/null
