@@ -67,14 +67,20 @@ make down >/dev/null 2>&1 || true
 # recovery, sit at "waiting for WAL to become available", and report tens of
 # megabytes of lag that never closes -- which reads as a replication bug rather
 # than as leftovers from the previous run.
+#
+# Those volumes are the CHECK's, never the operator's: this used to remove
+# <project>_patroni*_data and <project>_etcd*_data for whatever project .env
+# named, which on a machine running a real HA stack is its data. The `make down`
+# above still stops the operator's stack (it holds the ports HAProxy needs);
+# from here on the check runs in a project of its own, and lib.sh refuses to
+# remove any volume without the test prefix.
+use_test_project
 _pgv="$(env_get MDB_PG_VERSION 17)"
-mdb_ctr volume rm -f \
-    "$(mdb_project_name)_etcd1_data" \
-    "$(mdb_project_name)_etcd2_data" \
-    "$(mdb_project_name)_etcd3_data" \
-    "$(mdb_project_name)_patroni1_pg${_pgv}_data" \
-    "$(mdb_project_name)_patroni2_pg${_pgv}_data" \
-    "$(mdb_project_name)_patroni3_pg${_pgv}_data" >/dev/null 2>&1 || true
+for _v in etcd1_data etcd2_data etcd3_data \
+          "patroni1_pg${_pgv}_data" "patroni2_pg${_pgv}_data" "patroni3_pg${_pgv}_data"; do
+    remove_test_volumes "$(mdb_project_name)_${_v}"
+    track_volume "$(mdb_project_name)_${_v}"
+done
 
 # Registered BEFORE the boot, not after. A cleanup registered on the line
 # following `mdb_up` never runs when the boot itself fails -- and a FAILED

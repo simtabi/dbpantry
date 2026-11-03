@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# verify: make backup-all then make verify-backups completes the round trip
+# verify: make backup-all then make verify-backups completes the round trip (scratch stack)
 # tags: backup
 # phase: 4
 
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
 need_runtime
-cd "$MDB_ROOT" || exit 1
+cd "$MDB_ROOT" || exit 1   # for the static docker-compose.yml assertion below
 
 # SPEC section 18: "make backup-all produces per-database dumps plus PG
 # globals, and make verify-backups restores the latest set green."
@@ -22,28 +22,32 @@ need_file "$MDB_ROOT/scripts/backup"
 # databases left behind by check 21; once that check cleaned up after itself,
 # MySQL and MariaDB had nothing but system schemas, backup-all correctly dumped
 # nothing, and only stale dumps from earlier runs had kept this check green.
-# Cleanups run in the order registered: drop the seeded databases, then down.
-cleanup_new_backups
-add_cleanup "mdb_compose exec -T pg psql -U postgres -q -c 'DROP DATABASE IF EXISTS backupall;'"
-for e in mysql mariadb; do
-    add_cleanup "mdb_compose exec -T $e $e -uroot -p\"\$(cat secrets/${e}_root_password.txt)\" -e 'DROP DATABASE IF EXISTS backupall;'"
-done
-add_cleanup 'make down'
-mdb_up PROFILES=pg,mysql,mariadb,backup || vfail "make up failed"
+#
+# It runs in scratch_stack: its own checkout copy, project, secrets, volumes and
+# backups directory. It used to run on the operator's project with the backup
+# profile, so the sidecars dumped into, and pruned, the checkout's real backups/
+# while this check planted files there to test retention, and it brought the
+# operator's stack down at exit. Retention in exactly that directory once
+# deleted about 175 real dumps. Scratch cleanup removes everything it made.
+scratch_stack "pg,mysql,mariadb,backup"
+scratch_up || vfail "make up failed in the scratch stack"
+wait_for 180 "scratch pg, mysql and mariadb healthy" scratch_healthy pg mysql mariadb
+dumps="$SCRATCH_DIR/backups"
+[[ "$dumps" != "$MDB_ROOT/"* ]] || vfail "refusing: the scratch dumps directory is inside the checkout"
+my_root() { local e="$1"; shift; scratch_exec "$e" env MYSQL_PWD="$(cat "$SCRATCH_DIR/secrets/${e}_root_password.txt")" "$e" -uroot --protocol=socket "$@"; }
+pg_ok() { scratch_exec pg psql -U postgres -tAc 'SELECT 1' >/dev/null 2>&1; }
+my_ok() { my_root "$1" -N -B -e 'SELECT 1' >/dev/null 2>&1; }
+wait_ready 120 "scratch pg ready" pg_ok
+wait_ready 120 "scratch mysql ready" my_ok mysql
+wait_ready 120 "scratch mariadb ready" my_ok mariadb
 
-for e in pg mysql mariadb; do
-    # shellcheck disable=SC2016  # evaluated by the subshell, not here
-    wait_for 120 "$e healthy" bash -c \
-        "mdb_service_healthy $e"
-done
-
-if ! mdb_compose exec -T pg psql -U postgres -q -c "CREATE DATABASE backupall;" >/dev/null 2>&1 \
-    || ! mdb_compose exec -T pg psql -U postgres -d backupall -q -c "
+if ! scratch_exec pg psql -U postgres -q -c "CREATE DATABASE backupall;" >/dev/null 2>&1 \
+    || ! scratch_exec pg psql -U postgres -d backupall -q -c "
         CREATE TABLE items(id int primary key); INSERT INTO items VALUES (1);" >/dev/null 2>&1; then
     vfail "could not seed the PG backupall database"
 fi
 for e in mysql mariadb; do
-    mdb_compose exec -T "$e" "$e" -uroot -p"$(cat "secrets/${e}_root_password.txt")" -e "
+    my_root "$e" -e "
         CREATE DATABASE IF NOT EXISTS backupall;
         CREATE TABLE IF NOT EXISTS backupall.items(id INT PRIMARY KEY);
         INSERT IGNORE INTO backupall.items VALUES (1);" >/dev/null 2>&1 \
@@ -54,14 +58,14 @@ vinfo "seeded a backupall database on pg, mysql and mariadb"
 # Retention prunes old dumps, and only dumps. It once removed EVERY file in
 # backups/ older than the retention window -- the operator's notes, an .env
 # copy kept there, Finder's .DS_Store -- because it matched on age alone.
-keep="backups/operator-notes-$$.txt"
-expired="backups/pg_verifyprune$$_20200101T000000Z.dump.zst"
-add_cleanup "rm -f '$MDB_ROOT/$keep' '$MDB_ROOT/$expired' '$MDB_ROOT/$expired.sha256'"
+# Planted in the scratch tree's dumps directory, never the checkout's.
+keep="$dumps/operator-notes-$$.txt"
+expired="$dumps/pg_verifyprune$$_20200101T000000Z.dump.zst"
 printf 'not a dump\n' > "$keep"
 : > "$expired"; : > "$expired.sha256"
 touch -t 202001010000 "$keep" "$expired" "$expired.sha256"
 
-make backup-all >/dev/null 2>&1 || vfail "make backup-all failed"
+scratch_run make backup-all >/dev/null 2>&1 || vfail "make backup-all failed"
 
 [[ -f "$keep" ]] || vfail "retention deleted $keep, which is not a backup artefact"
 [[ ! -f "$expired" ]] || vfail "retention left an expired dump behind ($expired)"
@@ -71,17 +75,17 @@ vinfo "retention pruned an expired dump and left a non-dump file alone"
 # `docker compose exec`, which reads stdin, and once swallowed the rest of the
 # database list -- PG dumped `postgres` and silently skipped everything after it.
 for engine in pg mysql mariadb; do
-    find backups -name "${engine}_backupall_*" -type f -newermt '-10 minutes' | grep -q . \
+    find "$dumps" -name "${engine}_backupall_*" -type f -newermt '-10 minutes' | grep -q . \
         || vfail "make backup-all produced no fresh dump of backupall for $engine"
 done
 vinfo "fresh dumps of every seeded database on all three engines"
 
-find backups -name '*globals*' -type f -newermt '-10 minutes' | grep -q . \
+find "$dumps" -name '*globals*' -type f -newermt '-10 minutes' | grep -q . \
     || vfail "make backup-all did not produce PG globals"
 vinfo "pg globals dumped"
 
 # Checksums, per SPEC section 11.
-find backups \( -name '*.sha256' -o -name '*.md5' \) -type f -newermt '-10 minutes' | grep -q . \
+find "$dumps" \( -name '*.sha256' -o -name '*.md5' \) -type f -newermt '-10 minutes' | grep -q . \
     || vfail "no checksum files alongside the dumps"
 vinfo "checksums written"
 
@@ -91,7 +95,7 @@ grep -q 'scripts/backup' docker-compose.yml \
     || vfail "the backup sidecar does not invoke scripts/backup; flags will drift from the make path"
 vinfo "sidecar and make target share scripts/backup"
 
-make verify-backups >/dev/null 2>&1 || vfail "make verify-backups failed"
+scratch_run make verify-backups >/dev/null 2>&1 || vfail "make verify-backups failed"
 vinfo "verify-backups restored the latest set and asserted row counts"
 
 # A FAILED dump must leave nothing behind.
@@ -102,11 +106,11 @@ vinfo "verify-backups restored the latest set and asserted row counts"
 # result looked exactly like a backup, which is worse than having none, because
 # it would be trusted right up until a restore was needed. The harness did not
 # catch it -- so it is a permanent check now.
-before="$(find backups -maxdepth 1 -type f | wc -l | tr -d ' ')"
-if scripts/backup --engine pg --db mdb_no_such_database_exists >/dev/null 2>&1; then
+before="$(find "$dumps" -maxdepth 1 -type f | wc -l | tr -d ' ')"
+if scratch_run scripts/backup --engine pg --db mdb_no_such_database_exists >/dev/null 2>&1; then
     vfail "backup reported success for a database that does not exist"
 fi
-after="$(find backups -maxdepth 1 -type f | wc -l | tr -d ' ')"
+after="$(find "$dumps" -maxdepth 1 -type f | wc -l | tr -d ' ')"
 
 [[ "$before" == "$after" ]] \
     || vfail "a failed dump left $(( after - before )) file(s) behind; a broken backup must never look like a good one"

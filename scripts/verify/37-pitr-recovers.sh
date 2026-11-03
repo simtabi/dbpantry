@@ -26,7 +26,7 @@ name="mdb-verify-pitr-$$"
 vol="mdb-verify-pitr-repo-$$"
 track_container "$name"
 
-mdb_ctr volume rm -f "$vol" >/dev/null 2>&1 || true
+remove_test_volumes "$vol"
 mdb_ctr volume create "$vol" >/dev/null
 track_volume "$vol"
 

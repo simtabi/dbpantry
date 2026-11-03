@@ -24,17 +24,25 @@ need_image "$old_img"
 need_image "$new_img"
 
 # A project name of its own, so the volumes this check creates and removes can
-# never be the operator's real mdb_pg17_data.
+# never be the operator's real <project>_pg17_data. require_test_name and the
+# guarded helpers in lib.sh refuse any volume without the test prefix, so a
+# mistake here fails the check instead of reaching real data.
 project="mdbverify$$"
+require_test_name "$project" project
 vol17="${project}_pg17_data"
 vol18="${project}_pg18_data"
 
 # This check owns these volumes for its duration, so it starts from nothing and
 # cleans up after itself rather than inheriting whatever a previous run left.
-mdb_ctr volume rm -f "$vol17" "$vol18" >/dev/null 2>&1 || true
+remove_test_volumes "$vol17" "$vol18"
 track_volume "$vol17"
 track_volume "$vol18"
-add_cleanup "rm -rf '$MDB_ROOT/backups/upgrade'"
+# make upgrade writes its dumps to MDB_UPGRADE_DIR, which lib.sh points inside
+# the check's private backup directory (removed at exit). This check used to
+# rm -rf the checkout's backups/upgrade, where an operator's own upgrade dumps
+# live.
+[[ "$MDB_UPGRADE_DIR" != "$MDB_CHECKOUT_BACKUPS"* ]] || vfail "MDB_UPGRADE_DIR is inside the checkout's dump directory"
+upglog="$MDB_VERIFY_BACKUP_DIR/upgrade.log"
 
 seed="mdb-verify-upg-seed-$$"
 track_container "$seed"
@@ -54,8 +62,10 @@ mdb_ctr exec "$seed" psql -U postgres -d legacy -q -c "
 vinfo "seeded PG 17 with 250 rows"
 mdb_ctr rm -f -v "$seed" >/dev/null 2>&1 || true
 
-COMPOSE_PROJECT_NAME="$project" CONFIRM=yes make upgrade ENGINE=pg FROM=17 TO=18 >/tmp/mdb-upgrade.log 2>&1 \
-    || { tail -15 /tmp/mdb-upgrade.log >&2; vfail "make upgrade failed"; }
+COMPOSE_PROJECT_NAME="$project" CONFIRM=yes make upgrade ENGINE=pg FROM=17 TO=18 >"$upglog" 2>&1 \
+    || { tail -15 "$upglog" >&2; vfail "make upgrade failed"; }
+[[ -n "$(find "$MDB_UPGRADE_DIR" -type f 2>/dev/null)" ]] \
+    || vfail "make upgrade wrote no dump to MDB_UPGRADE_DIR ($MDB_UPGRADE_DIR); it may be writing to the checkout's dump directory"
 vinfo "upgrade completed"
 
 # --- the data arrived on the new major --------------------------------------

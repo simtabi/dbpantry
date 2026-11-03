@@ -34,7 +34,7 @@ for engine in ${MDB_PITR_ENGINE:-mysql mariadb}; do
     vol="mdb-verify-mypitr-binlog-${engine}-$$"
     track_container "$name"
 
-    mdb_ctr volume rm -f "$vol" >/dev/null 2>&1 || true
+    remove_test_volumes "$vol"
     mdb_ctr volume create "$vol" >/dev/null
     track_volume "$vol"
 
@@ -158,5 +158,5 @@ vinfo "$engine PITR is active and recovers to a point in time"
     # Each engine gets a clean slate; the next iteration must not inherit this
     # one's container, volume or cleanup entries.
     mdb_ctr rm -f -v "$name" >/dev/null 2>&1 || true
-    mdb_ctr volume rm -f "$vol" >/dev/null 2>&1 || true
+    remove_test_volumes "$vol"
 done

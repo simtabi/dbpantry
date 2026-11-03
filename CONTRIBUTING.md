@@ -32,6 +32,14 @@ containers in `config/`, and documentation in `docs/guides/`,
 `docs/runbooks/` and `docs/reference/`. The reasoning is in
 [docs/reorganization-plan.md](docs/reorganization-plan.md).
 
+Checks never touch your data. A check may create or remove only volumes and
+Compose projects whose names start with `mdbverify`, `mdbscratch` or
+`mdb-verify-` (`scripts/verify/lib.sh` refuses anything else), every check gets
+a private `MDB_BACKUP_DIR` that is removed when it exits, and a check that
+needs a whole stack with its own secrets runs in `scratch_stack`. Check 60 fails
+a check that removes a volume around those guards, names an operator volume
+such as `mdb_pg17_data`, or spells the checkout's `backups/` path.
+
 A container runtime is required: Docker (Desktop, OrbStack, Colima, Rancher
 Desktop) or Podman; nerdctl is best effort. CI runs on Docker. Check yours with
 `scripts/runtime info`, and if no engine is reachable, stop; nothing here is
