@@ -13,6 +13,9 @@
 #   MDB_K8S_VALUES         extra values files, colon-separated, applied last
 #   MDB_K8S_LOAD_IMAGES    auto | true | false: copy the locally built images
 #                          into the cluster (auto: on kind-* contexts only)
+#   MDB_K8S_CNPG_READY_TIMEOUT  seconds `make up` waits for a CloudNativePG
+#                          Cluster's instances to be ready (default
+#                          MDB_WAIT_TIMEOUT, else 600)
 #
 # Services are the chart's StatefulSets, found by the label
 # app.kubernetes.io/component=<service>; volumes are the release's
@@ -363,7 +366,41 @@ _mdb_be_kubernetes_up() {
         --wait --timeout "${MDB_WAIT_TIMEOUT:-300}s" "$@"
     rc=$?
     rm -f "$values"
-    return "$rc"
+    (( rc == 0 )) || return "$rc"
+    _mdb_k8s_cnpg_wait_ready
+}
+
+# helm --wait waits for the workloads it knows (StatefulSets, Deployments), not
+# for a custom resource, so with engines.pg.ha.provider=cnpg `make up` used to
+# return while the operator was still creating the instances. Wait until every
+# instance the Cluster asks for is ready, bounded by MDB_K8S_CNPG_READY_TIMEOUT
+# seconds (default MDB_WAIT_TIMEOUT, else 600), and fail with the Cluster's own
+# phase when it does not get there. .status.readyInstances against
+# .spec.instances works on every CloudNativePG release, unlike the Ready
+# condition, which older ones do not set. No Cluster: nothing to wait for.
+_mdb_k8s_cnpg_wait_ready() {
+    local cluster timeout poll="${_MDB_K8S_POLL_SECONDS:-5}" start state ready want phase
+    cluster="$(_mdb_k8s_release)-pg"
+    _mdb_k8s_kubectl get clusters.postgresql.cnpg.io "$cluster" >/dev/null 2>&1 || return 0
+    timeout="$(_mdb_k8s_var MDB_K8S_CNPG_READY_TIMEOUT)"
+    timeout="${timeout:-${MDB_WAIT_TIMEOUT:-600}}"
+    [[ "$timeout" =~ ^[0-9]+$ ]] || { _mdb_rt_err "MDB_K8S_CNPG_READY_TIMEOUT must be a number of seconds, not '$timeout'"; return 2; }
+    printf 'dbpantry: waiting up to %ss for CloudNativePG cluster %s\n' "$timeout" "$cluster"
+    start=$SECONDS
+    while :; do
+        state="$(_mdb_k8s_kubectl get clusters.postgresql.cnpg.io "$cluster" \
+            -o jsonpath='{.status.readyInstances} {.spec.instances} {.status.phase}' 2>/dev/null || true)"
+        read -r ready want phase <<<"$state"
+        if [[ "$ready" =~ ^[0-9]+$ && "$want" =~ ^[0-9]+$ ]] && (( want > 0 && ready >= want )); then
+            printf 'dbpantry: CloudNativePG cluster %s ready (%s/%s instances)\n' "$cluster" "$ready" "$want"
+            return 0
+        fi
+        if (( SECONDS - start >= timeout )); then
+            _mdb_rt_err "CloudNativePG cluster $cluster is not ready after ${timeout}s: ${ready:-0}/${want:-?} instances ready, phase '${phase:-unknown}'. Inspect it with: kubectl --context $(_mdb_k8s_ctx) -n $(_mdb_k8s_ns) describe clusters.postgresql.cnpg.io $cluster (raise MDB_K8S_CNPG_READY_TIMEOUT for a slow cluster)"
+            return 1
+        fi
+        sleep "$poll"
+    done
 }
 
 # PersistentVolumeClaims survive `helm uninstall`; only make destroy deletes them.

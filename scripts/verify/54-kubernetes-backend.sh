@@ -62,6 +62,8 @@ for t in kubectl helm kind; do
 printf '$t %s\n' "\$*" >> "\$STUB_LOG"
 case "\$*" in
     *"get pods"*) printf '%b' "\${STUB_PODS:-}" ;;
+    *"get clusters.postgresql.cnpg.io "*jsonpath*) printf '%s' "\${STUB_CNPG:-}" ;;
+    *"get clusters.postgresql.cnpg.io "*) [[ -z "\${STUB_NO_CNPG:-}" ]] || exit 1 ;;
     *"get pvc "*) [[ -z "\${STUB_NO_PVC:-}" ]] || exit 1 ;;
     *"-pg-superuser "*)
         for a in "\$@"; do
@@ -153,6 +155,24 @@ grep -nE -- '--from-literal=(username|password)=' scripts/backends/*.sh && vfail
 kube ctx '_mdb_k8s_cnpg_wake' >/dev/null
 grep -q -- ' annotate clusters.postgresql.cnpg.io proj-pg cnpg.io/hibernation-' "$log" \
     || vfail "make up does not wake a hibernated CloudNativePG Cluster before helm: $(cat "$log")"
+# helm --wait cannot see a CloudNativePG Cluster (a custom resource), so make up
+# returned while the operator was still creating instances. up now waits for
+# readyInstances to reach spec.instances, bounded, and fails with the phase.
+grep -qE '^ *_mdb_k8s_cnpg_wait_ready$' scripts/backends/kubernetes.sh \
+    || vfail "make up on Kubernetes does not wait for a CloudNativePG Cluster after helm"
+got="$(kube ctx '_mdb_k8s_cnpg_wait_ready; echo rc=$?' STUB_NO_CNPG=1)"
+[[ "$got" == "rc=0" ]] || vfail "with no CloudNativePG Cluster, up should not wait: [$got]"
+got="$(kube ctx '_mdb_k8s_cnpg_wait_ready; echo rc=$?' STUB_CNPG='2 2 Cluster in healthy state')"
+[[ "$got" == *"ready (2/2 instances)"*"rc=0" ]] || vfail "a ready CloudNativePG Cluster was not accepted: [$got]"
+start=$SECONDS
+got="$(kube ctx '_mdb_k8s_cnpg_wait_ready; echo rc=$?' STUB_CNPG='1 2 Creating a new replica' \
+    MDB_K8S_CNPG_READY_TIMEOUT=2 _MDB_K8S_POLL_SECONDS=1)"
+[[ "$got" == *"not ready after 2s: 1/2 instances ready, phase 'Creating a new replica'"* && "$got" == *"rc=1" ]] \
+    || vfail "an unready CloudNativePG Cluster did not fail clearly at the timeout: [$got]"
+(( SECONDS - start < 15 )) || vfail "the CloudNativePG wait overran MDB_K8S_CNPG_READY_TIMEOUT=2"
+got="$(kube ctx '_mdb_k8s_cnpg_wait_ready; echo rc=$?' STUB_CNPG='0 2 Setting up primary' MDB_K8S_CNPG_READY_TIMEOUT=soon)"
+[[ "$got" == *"must be a number of seconds"*"rc=2" ]] || vfail "a non-numeric MDB_K8S_CNPG_READY_TIMEOUT was accepted: [$got]"
+vinfo "make up waits for a CloudNativePG Cluster's instances, bounded by MDB_K8S_CNPG_READY_TIMEOUT, and fails with its phase"
 kube kind-dev 'mdb_be_image_load img:1' >/dev/null
 grep -qx 'kind load docker-image img:1 --name dev' "$log" || vfail "a kind context did not kind-load the image"
 kube orbstack 'mdb_be_image_load img:1' >/dev/null

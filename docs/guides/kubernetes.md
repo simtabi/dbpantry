@@ -46,6 +46,7 @@ development database to production.
 | `MDB_K8S_STORAGE_CLASS` | the cluster's default | StorageClass of every volume |
 | `MDB_K8S_VALUES` | none | extra values files, colon-separated, applied last |
 | `MDB_K8S_LOAD_IMAGES` | `auto` | copy local images into the cluster: `auto` on `kind-*` contexts only |
+| `MDB_K8S_CNPG_READY_TIMEOUT` | `MDB_WAIT_TIMEOUT`, else `600` | seconds `make up` waits for a CloudNativePG Cluster's instances to be ready |
 
 ## What `make up` does
 
@@ -67,6 +68,10 @@ development database to production.
    published ones on GHCR.
 4. `helm upgrade --install --wait` with that values file and any
    `MDB_K8S_VALUES`.
+5. With a CloudNativePG Cluster, waits until `.status.readyInstances` reaches
+   `.spec.instances` (`helm --wait` cannot see a custom resource), for at most
+   `MDB_K8S_CNPG_READY_TIMEOUT` seconds, and fails with the Cluster's phase if
+   it does not get there.
 
 `make down` uninstalls the release and waits for the pods to stop. The
 PersistentVolumeClaims stay (`persistentVolumeClaimRetentionPolicy: Retain`),
@@ -132,7 +137,12 @@ Services. The chart adds `pg` and `pg-ro`. Differences from Patroni:
 - It runs CloudNativePG's PostgreSQL image (`engines.pg.ha.cnpg.imageName`),
   not dbpantry-pg, so the dbpantry extensions are not in it.
 - The superuser password is `secrets/pg_superuser_password.txt`, published as
-  the basic-auth Secret `<release>-pg-superuser`.
+  the basic-auth Secret `<release>-pg-superuser` from files in a private
+  temporary directory, never on a command line. The operator keeps the
+  password equal to that Secret, so `make rotate-secrets` republishes it as
+  soon as the password changes (check 61; its live half runs only with
+  `MDB_VERIFY_KIND_CONTEXT=kind-<name>`, a kind cluster with the operator).
+- `make up` returns once every instance is ready, not when Helm is done.
 - `make down` hibernates the Cluster (`cnpg.io/hibernation=on`): the pods
   stop and the volumes stay. `make up` wakes it, and `make destroy` deletes
   the Cluster, then its volumes.
