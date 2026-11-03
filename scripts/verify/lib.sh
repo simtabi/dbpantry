@@ -267,6 +267,7 @@ build_image() {
 CLEANUP_CONTAINERS=()
 CLEANUP_VOLUMES=()
 CLEANUP_NETWORKS=()
+CLEANUP_PROJECTS=()
 CLEANUP_COMMANDS=()
 
 track_container() { CLEANUP_CONTAINERS+=("$1"); }
@@ -317,6 +318,15 @@ mdb_cleanup() {
     done
     for item in ${CLEANUP_NETWORKS[@]+"${CLEANUP_NETWORKS[@]}"}; do
         if [[ -n "$item" ]]; then mdb_ctr network rm "$item" >/dev/null 2>&1 || true; fi
+    done
+    # Last: every volume Compose labelled with a test project the check ran
+    # (use_test_project), after the commands above have brought it down.
+    local v
+    for item in ${CLEANUP_PROJECTS[@]+"${CLEANUP_PROJECTS[@]}"}; do
+        is_test_name "$item" || continue
+        for v in $(mdb_ctr volume ls -q --filter "label=com.docker.compose.project=$item" 2>/dev/null); do
+            mdb_ctr volume rm -f "$v" >/dev/null 2>&1 || true
+        done
     done
 }
 trap mdb_cleanup EXIT
@@ -369,6 +379,7 @@ use_test_project() {
     require_test_name "$p" project
     COMPOSE_PROJECT_NAME="$p"
     export COMPOSE_PROJECT_NAME
+    CLEANUP_PROJECTS+=("$p")
 }
 
 # Backups never go to the checkout's backups/ from a check. MDB_BACKUP_DIR (the
