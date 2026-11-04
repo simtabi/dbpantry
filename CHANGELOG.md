@@ -115,6 +115,24 @@ image, replacing Cassandra's vulnerable vendored JARs rather than waiving them.
   exist and is not a known generated file.
 
 ### Fixed
+- **`MDB_BACKEND=incus` failed on its first live host.** Run on 2026-11-04 on Ubuntu 26.04
+  (arm64) with Incus 7.0.2 and incus-compose 1.3.5, the `pg` and `ui` profiles now come up with
+  every service healthy, and `status`, `logs`, exec, `backup ENGINE=pg` and data across `down` and
+  `up` work. Six defects the stub-only check 58 could not see, each now pinned by it:
+  - `up` refused the network ("ipam gateway cannot be empty"). A new `compose.incus.yml`, which
+    only the Incus backend loads, names the gateway: `MDB_NETWORK_GATEWAY`, else the subnet's
+    first host. Compose is unchanged.
+  - `exec -u postgres` failed: incus-compose takes a numeric uid only. The backend resolves a
+    name inside the instance and refuses an unknown one before running anything.
+  - pgAdmin exited at boot: incus-compose wrote its secret at `/pgadmin_password.txt`. The
+    secret's target is now the absolute `/run/secrets/pgadmin_password.txt`, the same file on
+    Compose.
+  - `make destroy` on Incus would have deleted the PITR repository with the data: its volume is
+    `vol-pg-pitr`, which the recovery rule did not match. `*-pitr` is now a recovery volume.
+  - check-env refused ports below 1024 because the build runtime (rootless Podman) was rootless,
+    although Incus, not Podman, publishes them. The rule now applies on Compose only.
+  - `docs/guides/incus.md` asked for Incus 7.0.1 or 7.2+; incus-compose needs 7.0.2 or 7.5+. The
+    guide now lists the measured requirements and setup, and the differences above.
 - **CloudNativePG: `make up` returned before the cluster was ready.** `helm --wait` cannot see a
   custom resource, so `make up` now waits for `.status.readyInstances` to reach `.spec.instances`,
   bounded by `MDB_K8S_CNPG_READY_TIMEOUT` (default `MDB_WAIT_TIMEOUT`, else 600 seconds), and fails
