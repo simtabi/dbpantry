@@ -2,9 +2,10 @@
 # shellcheck shell=bash
 # Backend: Incus system containers through incus-compose (design.md D-66).
 #
-# UNTESTED against a live Incus daemon: built from the incus-compose docs
-# (https://incus-compose.org) and checked against stub incus/incus-compose
-# binaries only (scripts/verify/58-incus-backend.sh). See docs/guides/incus.md.
+# Built from the incus-compose docs (https://incus-compose.org), pinned against
+# stub incus/incus-compose binaries (scripts/verify/58-incus-backend.sh), and run
+# on one live host on 2026-11-04 (Incus 7.0.2, incus-compose 1.3.5, the pg and ui
+# profiles). See docs/guides/incus.md for what that run found.
 #
 # incus-compose is a drop-in for `docker compose`: it reads the same files,
 # .env and profiles. What it does differently, and what this file maps:
@@ -35,18 +36,40 @@ _mdb_incus_compose() {
         for f in $(_mdb_rt_compose_var COMPOSE_FILE | tr ':' ' '); do
             [[ -f "$MDB_RT_ROOT/$f" ]] && pre+=(-f "$MDB_RT_ROOT/$f")
         done
+        # Incus-only overrides, last so they win. incus-compose loads its own
+        # override only beside a file named compose.yaml, which the stack has not.
+        [[ -f "$MDB_RT_ROOT/compose.incus.yml" ]] && pre+=(-f "$MDB_RT_ROOT/compose.incus.yml")
     fi
     if (( ! has_p )); then
         for p in $(_mdb_rt_compose_var COMPOSE_PROFILES | tr ',' ' '); do pre+=(--profile "$p"); done
     fi
-    (cd "$MDB_RT_ROOT" && COMPOSE_PROJECT_NAME="$(_mdb_incus_project)" "${ic[@]}" ${pre[@]+"${pre[@]}"} "$@")
+    (cd "$MDB_RT_ROOT" && COMPOSE_PROJECT_NAME="$(_mdb_incus_project)" \
+        MDB_NETWORK_GATEWAY="$(_mdb_incus_gateway)" "${ic[@]}" ${pre[@]+"${pre[@]}"} "$@")
 }
 
-# incus, pinned to the project.
+# incus-compose refuses a network whose ipam names a subnet and no gateway
+# ("ipam gateway cannot be empty", measured on 1.3.5); Compose picks the first
+# host itself. compose.incus.yml names it: MDB_NETWORK_GATEWAY when set, else the
+# first host of MDB_NETWORK_SUBNET.
+_mdb_incus_gateway() {
+    local gw subnet net a b c d
+    gw="$(_mdb_rt_compose_var MDB_NETWORK_GATEWAY)"
+    [[ -n "$gw" ]] && { printf '%s' "$gw"; return; }
+    subnet="$(_mdb_rt_compose_var MDB_NETWORK_SUBNET)"
+    net="${subnet:-172.28.0.0/16}"; net="${net%/*}"
+    IFS=. read -r a b c d <<< "$net"
+    printf '%s.%s.%s.%s' "$a" "$b" "$c" "$(( d + 1 ))"
+}
+
+# incus, pinned to the project. --project goes before a `--`, which ends incus's
+# own flags: after it the flag reaches the command run in the instance instead
+# (`exec pg-1 -- id -u postgres --project mdb` asked id for three users).
 _mdb_incus() {
     command -v incus >/dev/null 2>&1 \
         || { _mdb_rt_err "MDB_BACKEND=incus needs the incus client on PATH (docs/guides/incus.md)"; return 127; }
-    incus "$@" --project "$(_mdb_incus_project)"
+    local -a own=()
+    while [[ $# -gt 0 && "$1" != -- ]]; do own+=("$1"); shift; done
+    incus "${own[@]}" --project "$(_mdb_incus_project)" "$@"
 }
 
 _mdb_incus_instance() { printf '%s-1\n' "$1"; }
@@ -112,8 +135,23 @@ _mdb_incus_exec() {
     _mdb_svc_args "$@" || return; shift "$_MDB_SVC_SHIFT"
     local -a flags=()
     [[ "$tty" == 1 && -t 0 && -t 1 ]] || flags=(-T)
-    [[ -n "$_MDB_SVC_USER" ]] && flags+=(-u "$_MDB_SVC_USER")
+    if [[ -n "$_MDB_SVC_USER" ]]; then
+        local uid
+        uid="$(_mdb_incus_uid "$_MDB_SVC" "$_MDB_SVC_USER")" || return
+        flags+=(-u "$uid")
+    fi
     _mdb_incus_compose exec ${flags[@]+"${flags[@]}"} "$_MDB_SVC" "$@"
+}
+
+# incus-compose exec -u takes a numeric uid only ("invalid argument "postgres"
+# for "--user" flag", measured on 1.3.5), where Compose takes a name. A name is
+# resolved inside the service's instance, so it is the image's own uid.
+_mdb_incus_uid() {
+    local svc="$1" user="$2" uid
+    [[ "$user" =~ ^[0-9]+$ ]] && { printf '%s' "$user"; return; }
+    uid="$(_mdb_incus exec "$(_mdb_incus_instance "$svc")" -- id -u "$user" 2>/dev/null)"
+    [[ "$uid" =~ ^[0-9]+$ ]] || { _mdb_rt_err "no user '$user' in service $svc"; return 1; }
+    printf '%s' "$uid"
 }
 _mdb_be_incus_exec()     { _mdb_incus_exec 0 "$@"; }
 _mdb_be_incus_exec_tty() { _mdb_incus_exec 1 "$@"; }
