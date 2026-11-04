@@ -96,9 +96,13 @@ services:
     # compose accepted the syntax, and changed nothing on Linux. What makes the
     # file readable is scripts/init generating it 0644, with the 0700 directory
     # as the guard on the host.
+    #
+    # The target is absolute: Compose reads a bare name as /run/secrets/<name>,
+    # but incus-compose (1.3.5) writes it at /<name>, where pgAdmin never looks
+    # and exits. The absolute path is the same file on both.
     secrets:
       - source: pgadmin_password
-        target: pgadmin_password.txt
+        target: /run/secrets/pgadmin_password.txt
     ports:
       - "${MDB_BIND_ADDR:-127.0.0.1}:${MDB_PGADMIN_HOST_PORT:-8082}:80"
     networks: [mdb]

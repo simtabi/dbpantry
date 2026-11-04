@@ -397,7 +397,11 @@ done <<< "$resolved"
 # unprivileged and is refused a privileged port on a specific address such as
 # 127.0.0.1. The failure surfaces from `compose up` as "bind: permission
 # denied" naming neither the setting nor the cause, so say it here (D-60).
-if [[ -n "$resolved" && "${MDB_CHECK_RENDERING:-0}" != "1" ]] && mdb_runtime_rootless; then
+# Only where the runtime publishes the ports, the compose backend: on Incus a
+# proxy device publishes them and the runtime only builds images, so a rootless
+# Podman refused ports Incus would bind (measured 2026-11-04).
+if [[ -n "$resolved" && "${MDB_CHECK_RENDERING:-0}" != "1" ]] \
+   && [[ "${MDB_BACKEND:-compose}" == compose ]] && mdb_runtime_rootless; then
     low=""
     while IFS= read -r value; do
         [[ "$value" =~ ^[0-9]+$ ]] && (( value < 1024 )) && low="${low} ${value}"

@@ -1,0 +1,13 @@
+# Incus-only overrides, added by the incus backend (scripts/backends/incus.sh)
+# after the stack's own files. Nothing else reads this file, so the Compose
+# backend is unchanged by it.
+#
+# incus-compose refuses a network that names a subnet and no gateway; Compose
+# picks the first host itself. The backend sets MDB_NETWORK_GATEWAY to that
+# first host unless .env names one (docs/guides/incus.md).
+networks:
+  mdb:
+    ipam:
+      config:
+        - subnet: ${MDB_NETWORK_SUBNET:-172.28.0.0/16}
+          gateway: ${MDB_NETWORK_GATEWAY:-172.28.0.1}
