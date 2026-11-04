@@ -32,6 +32,9 @@ MDB_ENGINE_NAME=redis
 MDB_ENGINE_TITLE="Redis"
 MDB_ENGINE_FAMILY=redis
 MDB_ENGINE_PARADIGM=key-value
+# One of: relational, document, wide-column, key-value, graph, search, vector,
+# time-series. An engine serving more than one names the rest here.
+#MDB_ENGINE_PARADIGM_ALSO="search"
 
 MDB_ENGINE_VERSIONS="7.2 7.4"
 MDB_ENGINE_DEFAULT_VERSION=7.4
