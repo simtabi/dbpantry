@@ -61,11 +61,15 @@ _mdb_incus_gateway() {
     printf '%s.%s.%s.%s' "$a" "$b" "$c" "$(( d + 1 ))"
 }
 
-# incus, pinned to the project.
+# incus, pinned to the project. --project goes before a `--`, which ends incus's
+# own flags: after it the flag reaches the command run in the instance instead
+# (`exec pg-1 -- id -u postgres --project mdb` asked id for three users).
 _mdb_incus() {
     command -v incus >/dev/null 2>&1 \
         || { _mdb_rt_err "MDB_BACKEND=incus needs the incus client on PATH (docs/guides/incus.md)"; return 127; }
-    incus "$@" --project "$(_mdb_incus_project)"
+    local -a own=()
+    while [[ $# -gt 0 && "$1" != -- ]]; do own+=("$1"); shift; done
+    incus "${own[@]}" --project "$(_mdb_incus_project)" "$@"
 }
 
 _mdb_incus_instance() { printf '%s-1\n' "$1"; }

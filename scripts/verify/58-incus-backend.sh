@@ -23,8 +23,8 @@ for t in incus incus-compose; do
 printf '$t %s\n' "\$*" >> "\$STUB_LOG"
 [[ "$t" == incus-compose ]] && printf 'gateway %s\n' "\${MDB_NETWORK_GATEWAY:-}" >> "\$STUB_LOG"
 case "\$*" in
-    "exec pg-1 -- id -u postgres "*) echo 999 ;;
-    "exec pg-1 -- id -u nobody-here "*) exit 1 ;;
+    "exec pg-1 --project proj -- id -u postgres") echo 999 ;;
+    "exec pg-1 --project proj -- id -u nobody-here") exit 1 ;;
     "list -f csv -c ns "*) printf 'pg-1,RUNNING\nmysql-1,STOPPED\nic-healthd-1,RUNNING\n' ;;
     "list -f csv -c s ^pg-1\$ "*) echo RUNNING ;;
     "list -f csv -c s ^mysql-1\$ "*) echo STOPPED ;;
@@ -72,8 +72,10 @@ grep '^incus ' "$log" | grep -qv -- '--project proj$' && vfail "an incus call is
 # incus-compose exec -u takes a numeric uid only (measured on 1.3.5, 2026-11-04),
 # so a name is resolved inside the service's instance first.
 inc "$P" 'mdb_svc_exec -u postgres pg psql -c "select 1"' >/dev/null
-grep -qx "incus exec pg-1 -- id -u postgres --project proj" "$log" \
+grep -qx "incus exec pg-1 --project proj -- id -u postgres" "$log" \
     || vfail "exec -u NAME does not resolve the name inside the instance: $(cat "$log")"
+grep '^incus ' "$log" | grep -q -- ' -- .*--project' \
+    && vfail "--project follows --, so it reaches the command in the instance: $(grep '^incus ' "$log")"
 grep -qx "incus-compose -f $tmp/root/compose.yml --profile pg exec -T -u 999 pg psql -c select 1" "$log" \
     || vfail "exec -u is not incus-compose exec -T -u UID, with the stack's files and profiles: $(cat "$log")"
 inc "$P" 'mdb_svc_exec -u 70 pg true' >/dev/null
