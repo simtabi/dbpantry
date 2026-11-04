@@ -274,3 +274,59 @@ lint: ## shellcheck every script in the repository
 .PHONY: self-update
 self-update: ## Update the toolkit itself, never project data
 	@scripts/self-update
+
+# -----------------------------------------------------------------------------
+# The dbpantry binary (design.md D-68). The Go module lives in src/, so every
+# target runs go with -C src: a bare `go test ./...` at the root finds no
+# packages and passes. The binary is built from source only; nothing here
+# releases it (docs/reference/manifest.md).
+# -----------------------------------------------------------------------------
+
+GO ?= go
+GOLANGCI_LINT_VERSION ?= v2.15.0
+DBPANTRY := build/dbpantry
+GO_VERSION_STAMP := $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
+GO_COMMIT_STAMP := $(shell git rev-parse --short HEAD 2>/dev/null || echo none)
+
+.PHONY: dbpantry
+dbpantry: ## Build the dbpantry binary into build/dbpantry
+	@mkdir -p build
+	@CGO_ENABLED=0 $(GO) -C src build -trimpath \
+		-ldflags "-s -w -X github.com/simtabi/dbpantry/src/internal/cli.version=$(GO_VERSION_STAMP) -X github.com/simtabi/dbpantry/src/internal/cli.commit=$(GO_COMMIT_STAMP)" \
+		-o ../$(DBPANTRY) ./cmd/dbpantry
+	@printf 'built %s\n' "$(DBPANTRY)" >&2
+
+.PHONY: go-ci
+go-ci: go-fmt-check go-vet go-test ## What CI runs for the Go module: format check, vet, tests
+
+.PHONY: go-fmt-check
+go-fmt-check: ## Fail if any Go file is not gofmt-clean
+	@out="$$(gofmt -l src)"; if [[ -n "$$out" ]]; then printf 'not gofmt-clean:\n%s\n' "$$out" >&2; exit 1; fi
+
+.PHONY: go-vet
+go-vet: ## go vet the module
+	@$(GO) -C src vet ./...
+
+.PHONY: go-test
+go-test: ## Go tests with the race detector
+	@$(GO) -C src test -race -count=1 ./...
+
+.PHONY: go-lint
+go-lint: ## golangci-lint, built with this Go so it understands the stdlib it reads
+	@cd src && $(GO) run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION) run ./...
+
+.PHONY: manifest
+manifest: dbpantry ## Print the engine manifest as JSON (OUTPUT=tsv|helm, MATRIX=versions|engines)
+	@$(DBPANTRY) manifest $(if $(MATRIX),--matrix "$(MATRIX)",-o "$(or $(OUTPUT),json)")
+
+.PHONY: endpoints
+endpoints: dbpantry ## Where to connect to each engine (OUTPUT=json, PROFILES=, PROJECT=)
+	@$(DBPANTRY) endpoints -o "$(or $(OUTPUT),table)" $(if $(PROFILES),--profiles "$(PROFILES)",) $(if $(PROJECT),--project "$(PROJECT)",)
+
+.PHONY: fixture-up
+fixture-up: dbpantry ## Boot disposable tmpfs engines for a test suite (PROFILES=pg,mysql)
+	@$(DBPANTRY) fixture up $(if $(PROFILES),--profiles "$(PROFILES)",)
+
+.PHONY: fixture-down
+fixture-down: dbpantry ## Stop the fixture engines (they hold no volume)
+	@$(DBPANTRY) fixture down
