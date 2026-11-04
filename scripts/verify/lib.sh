@@ -82,6 +82,27 @@ need_runtime() {
 # The historical name, kept so a check written before D-60 still reads.
 need_docker() { need_runtime; }
 
+# The dbpantry binary (design.md D-68), built from src/ into a private
+# directory removed at exit, so a check never runs a stale build/dbpantry.
+# DBPANTRY_BIN names a prebuilt one instead. Go is a prerequisite like the
+# container runtime: without it the check FAILS, it never skips.
+# Not in $(...): the cleanup it registers would be lost with the subshell.
+need_dbpantry() {
+    if [[ -n "${DBPANTRY_BIN:-}" ]]; then
+        [[ -x "$DBPANTRY_BIN" ]] || vfail "DBPANTRY_BIN=$DBPANTRY_BIN is not an executable"
+        return 0
+    fi
+    command -v go >/dev/null 2>&1 \
+        || vfail "go is not installed; the dbpantry binary is built from src/ (docs/reference/manifest.md)"
+    local dir
+    dir="$(mktemp -d "${TMPDIR:-/tmp}/mdb-verify-bin.XXXXXX")" || vfail "mktemp failed"
+    add_cleanup "rm -rf '$dir'"
+    CGO_ENABLED=0 go -C "$MDB_ROOT/src" build -o "$dir/dbpantry" ./cmd/dbpantry >&2 \
+        || vfail "could not build the dbpantry binary (go -C src build ./cmd/dbpantry)"
+    DBPANTRY_BIN="$dir/dbpantry"
+    export DBPANTRY_BIN
+}
+
 # Read a variable from .env, falling back to .env.example, then to a default.
 env_get() {
     local key="$1" default="${2:-}" file val
