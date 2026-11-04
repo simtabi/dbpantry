@@ -7,6 +7,12 @@ on:
 permissions:
   contents: read
 
+# Our own Go module is fetched from git, never through proxy.golang.org or
+# sum.golang.org, so a CI build never feeds a version into the public cache.
+env:
+  GOPRIVATE: github.com/simtabi/*
+  GONOSUMDB: github.com/simtabi/*
+
 jobs:
   shellcheck:
     name: shellcheck
@@ -65,3 +71,41 @@ jobs:
       # not exist yet. This is the gate that stays green through every phase.
       - name: Validate the verify harness
         run: make verify-structure
+
+  # ---------------------------------------------------------------------------
+  # The Go module in src/ (design.md D-68): format, vet, race tests (the
+  # policy test forbids InsecureSkipVerify, http.DefaultClient, pprof and
+  # expvar), golangci-lint with gosec, govulncheck, then the structure checks
+  # that read the manifest. Linux only; nothing here builds a release.
+  # ---------------------------------------------------------------------------
+  go:
+    name: go
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      # The module is src/; its go.mod names the toolchain.
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: src/go.mod
+          cache-dependency-path: src/go.sum
+
+      - name: Format, vet, test
+        run: make go-ci
+
+      # Built with the runner's Go 1.27, so the linter understands the stdlib
+      # it analyses; a release binary built with an older Go can panic on it.
+      - name: Lint
+        run: make go-lint
+
+      - name: Known vulnerabilities
+        run: go -C src run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...
+
+      # The checks that compare the manifest with engine-lib.sh, ci-matrix,
+      # the chart and the test overlay. 66 renders Compose config, which needs
+      # the Compose CLI the runner ships, and no daemon.
+      - name: Manifest checks
+        run: make verify CHECKS=31,62,63,65,66

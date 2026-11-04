@@ -18,6 +18,19 @@ updates:
       github-actions-minor-and-patch:
         patterns: ["*"]
         update-types: [minor, patch]
+  # The Go module (design.md D-68). go.sum is committed; no lock file is.
+  - package-ecosystem: gomod
+    directory: /src
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: America/New_York
+    open-pull-requests-limit: 5
+    groups:
+      gomod-minor-and-patch:
+        patterns: ["*"]
+        update-types: [minor, patch]
   - package-ecosystem: docker
     directory: /images/caddy
     schedule:
