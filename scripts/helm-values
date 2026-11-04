@@ -7,9 +7,10 @@
 #   scripts/helm-values -o FILE    write it to FILE (mode 0600)
 #
 # What it maps:
-#   MDB_PROFILES                 which engines are enabled (pg, mysql, mariadb,
-#                                mongodb, cassandra; other profiles are not on
-#                                Kubernetes yet and are reported on stderr)
+#   MDB_PROFILES                 which engines are enabled: every implemented
+#                                engine in engines/ (pg, mysql, mariadb, mongodb
+#                                and cassandra today); other profiles are not on
+#                                Kubernetes yet and are reported on stderr
 #   MDB_<ENGINE>_VERSION         the image tag
 #   MDB_MONGODB_IMAGE / _BASE_IMAGE  MongoDB's image reference
 #   MDB_<ENGINE>_MEM_LIMIT / _CPU_LIMIT  memory and cpu (requests and limits)
@@ -36,7 +37,21 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # shellcheck source=env-lib.sh
 . "$ROOT/scripts/env-lib.sh"
 
-ENGINES="pg mysql mariadb mongodb cassandra"
+# shellcheck source=engine-lib.sh
+. "$ROOT/scripts/engine-lib.sh"
+
+# The engines the chart deploys: every implemented one, from the descriptors
+# rather than a list kept here (refactor plan F1, design.md D-68). Check 65
+# fails when the chart has no block for one of them, so a new engine cannot
+# reach this list without reaching the chart too.
+ENGINES=""
+for _e in $(engine_list); do
+    if ( engine_load "$_e" >/dev/null 2>&1 && engine_implemented ); then
+        ENGINES="${ENGINES:+$ENGINES }$_e"
+    fi
+done
+unset _e
+[[ -n "$ENGINES" ]] || { printf 'helm-values: no implemented engine in %s\n' "$MDB_ENGINES_DIR" >&2; exit 1; }
 COMPOSE_ENGINES="${MDB_HELM_COMPOSE_FILE:-$ROOT/compose.engines.yml}"
 ENV_FILE="${MDB_HELM_ENV_FILE:-$ROOT/.env}"
 out=""

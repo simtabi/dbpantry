@@ -39,6 +39,21 @@ _mdb_k8s_release() {
     printf '%s' "${r:-$(mdb_project_name)}"
 }
 
+# The engines the chart deploys: every implemented one in the descriptors
+# (refactor plan F1, design.md D-68), the same list scripts/helm-values renders.
+# The descriptors ship with this code, so they are found beside this file, not
+# under MDB_RT_ROOT (the operator's checkout, which holds .env and secrets/).
+# A subshell, so loading descriptors never leaks MDB_ENGINE_* into the caller.
+_mdb_k8s_engines() {
+    (
+        # shellcheck source=../engine-lib.sh
+        . "$(dirname "${BASH_SOURCE[0]}")/../engine-lib.sh" || exit 1
+        for e in $(engine_list); do
+            ( engine_load "$e" >/dev/null 2>&1 && engine_implemented ) && printf '%s\n' "$e"
+        done
+    )
+}
+
 _mdb_k8s_tools() {
     local t
     for t in kubectl helm; do
@@ -214,7 +229,7 @@ _mdb_be_kubernetes_secrets_sync() {
         _mdb_k8s_superuser_secret "$root/secrets/pg_superuser_password.txt" || return
     fi
     _mdb_k8s_backup_bundle || return
-    for eng in pg mysql mariadb mongodb cassandra; do
+    for eng in $(_mdb_k8s_engines); do
         d="$root/certs/$eng"
         if [[ -f "$d/server.crt" && -f "$d/server.key" && -f "$root/certs/ca.crt" ]]; then
             _mdb_k8s_kubectl create secret generic "dbpantry-certs-$eng" \
