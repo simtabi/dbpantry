@@ -82,6 +82,11 @@ image in `MDB_<ENGINE>_BASE_IMAGE` — see [Supported versions](docs/guides/vers
 
 Adding another is a descriptor file — see [Adding an engine](docs/guides/adding-an-engine.md).
 
+The descriptors are also published as a versioned JSON manifest by the `dbpantry` binary
+(`make dbpantry`, built from source), with each engine's endpoints and disposable test fixtures:
+`make manifest`, `make endpoints`, `make fixture-up PROFILES=pg,mysql`. See
+[Engine manifest](docs/reference/manifest.md).
+
 ## <a name="documentation"></a>Documentation
 
 The documentation lives in [`docs/`](docs/), indexed below. Engine images are not
@@ -120,6 +125,7 @@ Looked up to check the contract, the evidence, or a fact.
 
 - [Specification](docs/reference/spec.md) — the build contract
 - [Acceptance](docs/reference/acceptance.md) — every criterion mapped to the check that proves it
+- [Engine manifest](docs/reference/manifest.md) — the `dbpantry` binary: manifest, endpoints, fixtures
 - [Image provenance](docs/reference/image-provenance.md) — every image, its publisher, and why
 - [Design](design.md) — pinned versions, capacity table, decision log
 - [Row-level security kit](rls/README.md) — database-enforced multi-tenancy

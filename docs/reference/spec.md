@@ -223,6 +223,11 @@ multidb-server/
 | make test-profile | Boot the tmpfs speed profile and run its checks |
 | make verify / verify-fast | Full acceptance harness / inner-loop subset |
 | make self-update | Update the toolkit itself, never project data |
+| make dbpantry | Build the `dbpantry` binary from `src/` into `build/dbpantry` (design.md D-68) |
+| make manifest [OUTPUT=tsv\|engines\|helm] [MATRIX=versions\|engines] | The engine manifest generated from `engines/*/engine.conf` ([manifest.md](manifest.md)) |
+| make endpoints [OUTPUT=json] [PROFILES=] [PROJECT=] | Network, published and pooled endpoints per engine, boot budget, principals as `_FILE` paths |
+| make fixture-up PROFILES= / fixture-down | Disposable engines on tmpfs for a test suite; leaves no volume |
+| make go-ci / go-lint | Format check, vet and race tests of the Go module / golangci-lint |
 - Laranail hygiene: ten-line README quickstart, SECURITY.md (opensource@simtabi.com), semver CHANGELOG, shellcheck-clean bash, LF line endings enforced via .gitattributes (Windows safety), named volumes for data (never bind mounts; WSL2 performance and permissions), Docker Desktop / OrbStack / colima supported, podman best-effort noted.
 
 ## 16. CI and publishing

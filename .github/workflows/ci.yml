@@ -7,6 +7,12 @@ on:
 permissions:
   contents: read
 
+# Our own Go module is fetched from git, never through proxy.golang.org or
+# sum.golang.org, so a CI build never feeds a version into the public cache.
+env:
+  GOPRIVATE: github.com/simtabi/*
+  GONOSUMDB: github.com/simtabi/*
+
 # A superseded run proves nothing about the commit that replaced it.
 concurrency:
   group: ci-${{ github.ref }}
@@ -38,8 +44,17 @@ jobs:
           # credential into .git/config, where any later step -- or anything
           # that archives the workspace -- can read it.
           persist-credentials: false
+      # The matrix comes from the engine manifest (design.md D-68, F12).
+      # scripts/ci-matrix stays as its oracle: check 62 asserts the two are
+      # byte-identical, so either can produce it.
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: src/go.mod
+          cache-dependency-path: src/go.sum
+      - name: Build dbpantry
+        run: make dbpantry
       - id: gen
-        run: echo "versions=$(scripts/ci-matrix versions)" >> "$GITHUB_OUTPUT"
+        run: echo "versions=$(build/dbpantry manifest --matrix versions)" >> "$GITHUB_OUTPUT"
 
   # ---------------------------------------------------------------------------
   # Every declared version builds, on both architectures.
@@ -198,6 +213,12 @@ jobs:
           tar -xJf sc.tar.xz
           sudo install -m 0755 "shellcheck-${SHELLCHECK_VERSION}/shellcheck" /usr/local/bin/shellcheck
           shellcheck --version
+
+      # Checks 62 to 66 build the dbpantry binary from src/ (design.md D-68).
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: src/go.mod
+          cache-dependency-path: src/go.sum
 
       # CLAUDE.md is explicit that docker is required and never mocked, so a
       # runner without it must fail here rather than silently skipping checks.

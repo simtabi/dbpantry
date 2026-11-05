@@ -50,3 +50,32 @@ services:
     volumes: !override
       - ./certs:/certs:ro
       - ./secrets:/run/secrets:ro
+
+  # MongoDB and Cassandra have no durability switch worth turning off here
+  # (MongoDB journals unconditionally since 6.1), so the overlay moves their
+  # data to tmpfs and drops the named volume, which is what makes a fixture
+  # disposable (design.md D-68, check 64). uid/gid 999 is the mongodb and
+  # cassandra user in both upstream images; their entrypoints chown the
+  # directory as root before dropping to it in any case.
+  #
+  # FerretDB is not here: it has a descriptor but no image yet, so
+  # gen-compose emits no ferretdb service, and an overlay entry for a service
+  # with no image makes Compose refuse the whole project. It joins this file
+  # with its image.
+  mongodb:
+    tmpfs:
+      - /data/db:rw,mode=0700,uid=999,gid=999,size=2g
+    # !override, as above: the named volume and the tmpfs would otherwise
+    # both target /data/db.
+    volumes: !override
+      - ./certs:/certs:ro
+      - ./secrets:/run/secrets:ro
+      - ./overrides/mongodb:/mdb/overrides:ro
+
+  cassandra:
+    tmpfs:
+      - /var/lib/cassandra:rw,mode=0700,uid=999,gid=999,size=2g
+    volumes: !override
+      - ./certs:/certs:ro
+      - ./secrets:/run/secrets:ro
+      - ./overrides/cassandra:/mdb/overrides:ro

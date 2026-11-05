@@ -19,6 +19,7 @@ certs/*
 
 # Build output.
 build/dist/
+build/dbpantry
 
 # OS noise.
 .DS_Store

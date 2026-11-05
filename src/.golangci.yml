@@ -1,0 +1,27 @@
+# golangci-lint gate for the dbpantry module. Run: make go-lint
+#
+# The standard set plus the linters that catch unchecked errors, leaked
+# response bodies, contexts not passed on and insecure constructs (gosec), as
+# simtabi/cloudkit and mesobia use. _test.go files are held to the same bar.
+version: "2"
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0
+
+linters:
+  default: standard
+  enable:
+    - bodyclose
+    - contextcheck
+    - errorlint
+    - gosec
+    - misspell
+    - noctx
+    - revive
+  exclusions:
+    generated: lax
+
+formatters:
+  enable:
+    - gofmt

@@ -39,10 +39,20 @@ for e in $engines; do
             || vfail "$rel: version $v has no pinned base in images/bases.tsv"
     done
 
-    case "$MDB_ENGINE_PARADIGM" in
-        relational|document|wide-column|key-value) ;;
-        *) vfail "$rel: unknown paradigm '$MDB_ENGINE_PARADIGM'" ;;
-    esac
+    # The paradigm vocabulary is mesobia's eight values (refactor plan N11,
+    # design.md D-68): the same list as src/internal/engine/paradigm.go.
+    # PARADIGM_ALSO names any further ones an engine serves (ClickHouse is
+    # relational, also time-series), never the primary one again.
+    for p in "$MDB_ENGINE_PARADIGM" ${MDB_ENGINE_PARADIGM_ALSO:-}; do
+        case "$p" in
+            relational|document|wide-column|key-value|graph|search|vector|time-series) ;;
+            *) vfail "$rel: unknown paradigm '$p'" ;;
+        esac
+    done
+    for p in ${MDB_ENGINE_PARADIGM_ALSO:-}; do
+        [[ "$p" != "$MDB_ENGINE_PARADIGM" ]] \
+            || vfail "$rel: PARADIGM_ALSO repeats the primary paradigm '$p'"
+    done
 
     # Pooling must be one of the two honest answers. SPEC section 22.4 is
     # explicit that a uniform pooling abstraction would be a lie, so a

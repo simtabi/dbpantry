@@ -13,6 +13,12 @@ project to dbpantry and fixes the findings that failed the Trivy gate on every
 image, replacing Cassandra's vulnerable vendored JARs rather than waiving them.
 
 ### Changed
+- The CI build matrix comes from `dbpantry manifest --matrix versions`; `scripts/ci-matrix` stays
+  and check 62 holds the two byte-identical.
+- `scripts/helm-values` and the Kubernetes backend read the engine list from the descriptors
+  (every implemented engine) instead of listing five engines each. The list is the same five.
+- The `.env.example` note on published ports said BASE plus the engine's own port; it is BASE
+  plus the descriptor's offset, which is what `gen-compose` has always done.
 - Markdown files use lowercase slug names (design.md D-61): `design.md`, `docs/runbooks/*.md`,
   `docs/reference/spec.md`, `kit.md` and others. Git and GitHub conventional names stay upper case:
   `README.md` (also `rls/README.md` and `scripts/runtimes/README.md`), `CHANGELOG.md`, `CONTRIBUTING.md`,
@@ -49,6 +55,25 @@ image, replacing Cassandra's vulnerable vendored JARs rather than waiving them.
   D-52 to D-57, which sat after the end of the document, are back in the decision log.
 
 ### Added
+- **The `dbpantry` binary, phase 1: the engine manifest** (design.md D-68,
+  [Engine manifest](docs/reference/manifest.md)). A Go module in `src/`, built from source with
+  `make dbpantry`; nothing releases it yet. `dbpantry manifest` publishes every descriptor as
+  versioned JSON (`schema_version` 1), read with a strict parser of the descriptor subset that
+  refuses anything bash would interpret. `dbpantry endpoints` reports each engine's network,
+  published and pooled endpoints (superusers never through a pooler), its boot budget, and its
+  principals as `/run/secrets` paths, never values. `dbpantry fixture up|down` boots disposable
+  engines on tmpfs for a test suite. Make targets: `dbpantry`, `manifest`, `endpoints`,
+  `fixture-up`, `fixture-down`, `go-ci`, `go-lint`. The descriptors stay the source and every
+  script works without the binary.
+- **The paradigm vocabulary is mesobia's eight values**: relational, document, wide-column,
+  key-value, graph, search, vector and time-series (check 31 accepted four), plus an optional
+  `MDB_ENGINE_PARADIGM_ALSO` for an engine that serves more than one.
+- **The test overlay covers MongoDB and Cassandra** (`compose.test.yml`): their data is on tmpfs
+  with no named volume. FerretDB joins it with its image.
+- Checks 62 (the manifest equals what `engine-lib.sh` loads, key by key, and generates the same CI
+  matrix), 63 (no engine list written out in the files phase 1 derives), 64 (a fixture leaves no
+  volume, on a running stack), 65 (the Helm chart restates every descriptor fact exactly) and 66
+  (no fixture service mounts a volume, from the Compose config).
 - **Kubernetes** (design.md D-64, [Kubernetes](docs/guides/kubernetes.md)): `MDB_BACKEND=kubernetes`
   deploys PG, MySQL, MariaDB, MongoDB and Cassandra with the Helm chart in `deploy/helm/dbpantry`,
   configured from `.env` (`scripts/helm-values`) and deployed only to `MDB_K8S_CONTEXT`. `make up`,
