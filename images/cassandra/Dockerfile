@@ -53,6 +53,9 @@ RUN set -eux; \
     # updates. They are fixable, so they are fixed -- named packages only, so
     # nothing else in the pinned base moves.
     apt-get install -y --only-upgrade libpcre2-8-0 libexpat1 perl-base; \
+    # CVE-2026-109518 (HIGH, apt 3.0.3, fixed in 3.0.4 on trixie, which
+    # cassandra:5.0.9 moved to). apt and its library move together.
+    apt-get install -y --only-upgrade apt libapt-pkg7.0; \
     rm -rf /var/lib/apt/lists/*
 
 # Cassandra vendors its Java dependencies in lib/, and 5.0 ships guava,
