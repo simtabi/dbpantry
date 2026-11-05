@@ -223,7 +223,7 @@ multidb-server/
 | make test-profile | Boot the tmpfs speed profile and run its checks |
 | make verify / verify-fast | Full acceptance harness / inner-loop subset |
 | make self-update | Update the toolkit itself, never project data |
-| make dbpantry | Build the `dbpantry` binary from `src/` into `build/dbpantry` (design.md D-68) |
+| make dbpantry | Build the `dbpantry` binary from `src/` into `build/<os>/dbpantry` (design.md D-68) |
 | make manifest [OUTPUT=tsv\|engines\|helm] [MATRIX=versions\|engines] | The engine manifest generated from `engines/*/engine.conf` ([manifest.md](manifest.md)) |
 | make endpoints [OUTPUT=json] [PROFILES=] [PROJECT=] | Network, published and pooled endpoints per engine, boot budget, principals as `_FILE` paths |
 | make fixture-up PROFILES= / fixture-down | Disposable engines on tmpfs for a test suite; leaves no volume |

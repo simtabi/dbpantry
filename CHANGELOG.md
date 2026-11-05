@@ -13,6 +13,10 @@ project to dbpantry and fixes the findings that failed the Trivy gate on every
 image, replacing Cassandra's vulnerable vendored JARs rather than waiving them.
 
 ### Changed
+- **`make dbpantry` writes `build/<os>/dbpantry`** (`build/macos/dbpantry`, `build/linux/dbpantry`),
+  the org's build layout: one folder per OS and nothing else in `build/`. It wrote `build/dbpantry`
+  before; delete that file if you built one. Check 67 fails on anything else in `build/`, and the
+  binary finds its checkout from either location.
 - The CI build matrix comes from `dbpantry manifest --matrix versions`; `scripts/ci-matrix` stays
   and check 62 holds the two byte-identical.
 - `scripts/helm-values` and the Kubernetes backend read the engine list from the descriptors

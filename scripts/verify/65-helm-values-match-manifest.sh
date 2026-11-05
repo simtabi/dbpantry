@@ -21,7 +21,7 @@ need_file "$MDB_ROOT/$values"
 
 out="$("$DBPANTRY_BIN" --root "$MDB_ROOT" manifest check-helm "$values" 2>&1)" \
     || vfail "$out
-       Fix the chart to match engines/, or see the facts with: build/dbpantry manifest -o helm"
+       Fix the chart to match engines/, or see the facts with: make manifest OUTPUT=helm"
 vinfo "$out"
 
 # The comparison can fail: a chart that drifts on one fact is refused.

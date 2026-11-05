@@ -75,7 +75,7 @@ func (a *app) rootCmd() *cobra.Command {
 	}
 	root.SetFlagErrorFunc(func(_ *cobra.Command, err error) error { return usageError{err} })
 	root.PersistentFlags().StringVar(&a.rootFlag, "root", "",
-		"the dbpantry checkout (default: $DBPANTRY_DIR, else the nearest directory above the current one holding engines/ and scripts/engine-lib.sh, else the one above the binary)")
+		"the dbpantry checkout (default: $DBPANTRY_DIR, else the nearest directory above the current one holding engines/ and scripts/engine-lib.sh, else the nearest one above the binary)")
 	root.AddCommand(a.versionCmd(), a.manifestCmd(), a.endpointsCmd(), a.fixtureCmd())
 	return root
 }
@@ -120,8 +120,12 @@ func (a *app) root() (string, error) {
 		}
 	}
 	if exe, err := os.Executable(); err == nil {
-		if d := filepath.Dir(filepath.Dir(exe)); isRoot(d) {
-			return d, nil
+		// build/<os>/dbpantry: the checkout is two levels above the binary's
+		// directory; walk up rather than assume the depth.
+		for d := filepath.Dir(exe); filepath.Dir(d) != d; d = filepath.Dir(d) {
+			if isRoot(d) {
+				return d, nil
+			}
 		}
 	}
 	return "", usagef("no dbpantry checkout found: run inside one, set DBPANTRY_DIR, or pass --root")
