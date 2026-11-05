@@ -165,6 +165,9 @@ RUN set -eux; \
     # 2026-08-13, so there is no newer digest to repin to (perl 5.36.0-7+deb12u4).
     apt-get install -y --only-upgrade libpcre2-8-0 libexpat1 \
         perl perl-base perl-modules-5.36 libperl5.36; \
+    # CVE-2026-109518 (HIGH, apt 2.6.1, fixed in 2.6.2). apt and its library
+    # move together, for the same reason as perl above.
+    apt-get install -y --only-upgrade apt libapt-pkg6.0; \
     apt-get install -y --no-install-recommends \
         ca-certificates \
         curl \
