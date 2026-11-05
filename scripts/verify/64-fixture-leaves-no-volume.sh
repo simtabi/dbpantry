@@ -34,7 +34,16 @@ out="$(scratch_run "$DBPANTRY_BIN" fixture up --profiles pg,mongodb 2>&1)" \
 $(printf '%s\n' "$out" | tail -20 | sed 's/^/       /')"
 add_cleanup "scratch_run '$DBPANTRY_BIN' fixture down >/dev/null 2>&1 || true"
 
-wait_for 90 "the fixture's pg and mongodb to report healthy" scratch_healthy pg mongodb
+# fixture up returns only once Compose reports every service healthy, or
+# running where the image has no healthcheck: the upstream mongo image ships
+# none, so it reports "none", never "healthy", and is accepted as running.
+fixture_ready() {
+    local pg mongo
+    pg="$(scratch_run bash -c '. scripts/backend-lib.sh && mdb_svc_health pg')"
+    mongo="$(scratch_run bash -c '. scripts/backend-lib.sh && mdb_svc_health mongodb')"
+    [[ "$pg" == healthy && ( "$mongo" == healthy || "$mongo" == none ) ]]
+}
+wait_for 90 "the fixture's pg to report healthy and mongodb to run" fixture_ready
 
 during="$(project_volumes)"
 [[ -z "$during" ]] || vfail "the fixture created volumes while running (data must be on tmpfs): $(printf '%s\n' "$during" | tr '\n' ' ')"
