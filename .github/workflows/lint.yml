@@ -107,5 +107,8 @@ jobs:
       # The checks that compare the manifest with engine-lib.sh, ci-matrix,
       # the chart and the test overlay. 66 renders Compose config, which needs
       # the Compose CLI the runner ships, and no daemon.
-      - name: Manifest checks
-        run: make verify CHECKS=31,62,63,65,66
+      # 67 checks build/ after a real build: one folder per OS, nothing else.
+      - name: Manifest and build-layout checks
+        run: |
+          make dbpantry
+          make verify CHECKS=31,62,63,65,66,67

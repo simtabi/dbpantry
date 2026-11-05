@@ -67,6 +67,7 @@ so a green `make verify` is the criteria being met rather than a proxy for it.
 | `dbpantry fixture up` boots healthy engines on tmpfs and `fixture down` leaves no volume, in a scratch checkout | `64-fixture-leaves-no-volume` |
 | The Helm chart has a block for every implemented engine and restates image, tag, port, paths and the root password file exactly as the descriptors do | `65-helm-values-match-manifest` |
 | With the files `fixture up` uses, no implemented engine or pooler mounts a volume (from `compose config`, no daemon) | `66-fixture-overlay-no-volume` |
+| `build/` holds only `targets.txt`, `nfpm.yaml`, `checksums.txt`, `archives/` and one flat folder per OS (`macos`, never `darwin`; no `dist/`); a self-test proves each defect is refused | `67-build-layout` |
 | The off-site push is wired, authenticated, and fails loudly | `39-offsite-backup` |
 | Configuration reproduces, data persists, recovery data outlives `destroy` | `41-state-survives` |
 | Every image is official, upstream, or justified | `42-image-provenance` |
