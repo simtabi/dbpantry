@@ -87,6 +87,14 @@ tenant's identity into the next request. See [the RLS kit](../../rls/README.md).
 If you need session state, use `session` pool mode and accept a much lower
 multiplexing ratio.
 
+### Under HA
+
+`PROFILES=ha,pooler` starts `pgbouncer` in front of HAProxy's write port instead
+of `pg-pooler`, which points at the standalone `pg` service HA replaces. It is
+configured the same way, holds the same single credential, and authenticates
+through the same `pgbouncer.get_auth()`, which each Patroni node converges when
+it becomes primary. See [Operations: High availability](../runbooks/operations.md#high-availability).
+
 ### The pooler speaks TLS
 
 pgBouncer serves the same certificate `make certs` issues for PostgreSQL

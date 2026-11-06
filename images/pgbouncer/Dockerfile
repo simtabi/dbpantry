@@ -55,6 +55,13 @@ RUN set -eux; \
 # process that listens on 6432 is postgres; check 33 connects and proves it.
 EXPOSE 6432
 
+# Healthy means listening. The image carries no PostgreSQL client, so this reads
+# the kernel's socket table rather than connecting: a LISTEN socket (state 0A)
+# on LISTEN_PORT. It catches the failure that matters most -- a pooler that
+# generated its config and exited, or never bound -- without a credential.
+HEALTHCHECK --interval=10s --timeout=3s --start-period=15s --retries=3 \
+    CMD sh -c 'p="$(printf "%04X" "${LISTEN_PORT:-6432}")"; grep -qE ":${p} [0-9A-F]+:0000 0A" /proc/net/tcp /proc/net/tcp6 2>/dev/null'
+
 # Self-contained: `docker run` on this image starts a pooler, without compose
 # supplying an entrypoint. Leaving it unset meant the image fell through to the
 # base's shell and exited 0 -- a container that "started successfully" and did

@@ -183,6 +183,8 @@ Reproduced from spec.md section 21.1 as the sizing contract:
 | `MDB_UI_BASIC_AUTH_USER` / `_HASH` | unset / unset | Required under `prod` | `prod` |
 | `MDB_PGADMIN_EMAIL` / `_PASSWORD_FILE` | — | pgAdmin login | `ui` |
 | `MDB_PGBOUNCER_POOL_MODE` | `transaction` | Pool mode | `prod`, `ha` |
+| `MDB_HA_POOLER_HOST_PORT` | `6432` | Host port of the HA pooler (`pgbouncer`, `PROFILES=ha,pooler`), on `MDB_BIND_ADDR` | `ha` |
+| `MDB_PGBOUNCER_CPU_LIMIT` / `MDB_PGBOUNCER_MEM_LIMIT` | `1` / `256m` | Prod limits for the HA pooler | `prod` |
 | `MDB_PGBOUNCER_DEFAULT_POOL_SIZE` | from tier | Per capacity table | `prod`, `ha` |
 | `MDB_HA_ENABLE` | `false` | Master HA switch | `ha` |
 | `MDB_HA_CLUSTER_NAME` | `mdb-pg` | Patroni scope | `ha` |
@@ -449,6 +451,13 @@ Relied on: pgBouncer configuration reference (<https://www.pgbouncer.org/config.
 - **CI gates where a finding can have been caused.** `scripts/ci-scan-gate` gates the Trivy scan on the weekly scheduled build of main and on pull requests that change an image input (`images/`, `engines/`, `scripts/build`, `.trivyignore.yaml`, the workflow); other pull requests still scan and print every finding, and do not fail on one. A failed scheduled build opens one tracking issue, or comments on it.
 - **Check 70** holds all of it without building: the upgrade runs in every final stage and no `--only-upgrade` remains; nothing downloads with curl or wget directly; every pinned download version has a digest; `--verified-by` has its check in the same RUN; `mdb-fetch` refuses a wrong or missing digest (tested offline over `file://`); one weekly schedule; and the gate tested on a scratch repository. Each rule proven red by reintroducing the defect.
 - **Not covered yet:** only the engine images are Trivy-scanned in CI. The pgbouncer, cli and caddy images are built and upgraded the same way but no job scans them.
+
+**D-72: the prod overlay's `pgbouncer` becomes the HA pooler; Patroni converges the pooler's auth objects.** The prod overlay defined a `pgbouncer` service from before the pooler was generated: profiles `[prod, ha]`, `DB_HOST: pg`, no `DB_PASSWORD_FILE`. Wherever the overlay applied it exited at once ("DB_PASSWORD_FILE is required") and restarted forever beside the working `pg-pooler`; under HA it pointed at a `pg` service HA replaces. Meanwhile an HA stack had no pooler at all, and could not have had one: the Patroni image deletes the converge stage, so the `pgbouncer` role and `pgbouncer.get_auth()` never existed on a cluster. It was fixed rather than removed (the owner's call).
+- **One pooler per role.** Standalone: `pg-pooler` (generated, `PROFILES=pg,pooler`). HA: `pgbouncer`, defined in `compose.ha.yml` in front of HAProxy's write port, `PROFILES=ha,pooler`, which `scripts/profiles` expands to `ha-pooler`. `ha` alone starts no pooler, as `pg` alone does not. `pg,ha,pooler` starts one of each, for two different upstreams, after check-env's existing refusal of the shared port is resolved. The name `pgbouncer` stays, and `certs/pg` has carried it as a SAN all along.
+- **The overlay entry is now hardening only:** `MDB_TLS_ENFORCE: "true"` and limits (`MDB_PGBOUNCER_CPU_LIMIT`, `MDB_PGBOUNCER_MEM_LIMIT`). No image, no profile, nothing that can start a second pooler.
+- **Patroni convergence.** The pooler SQL moved verbatim from `50-converge.sh` into `converge-pooler.sh`, which the standalone stage now calls. Patroni runs `pooler-callback.sh` on `on_start` and `on_role_change`; on the primary it waits for `pg_is_in_recovery()` to be false and runs the same script over the local socket, bounded at 180s. `run-patroni.sh` stages the pooler secret for postgres as root, as it already does the key.
+- **The pgBouncer image is healthy only when listening**, read from `/proc/net/tcp` (it has no PostgreSQL client), so a pooler that wrote its config and exited cannot report healthy.
+- **The HA pooler's environment mirrors `engines/postgres/compose-pooler.yml`**; check 71 compares the rendered services and fails on drift. Check 27 now boots `ha,pooler` and asserts an application role reaches the primary through the pooler before and after the leader is killed.
 
 ## 8. arm64 deliverability
 

@@ -12,6 +12,7 @@
 # `make up PROFILES=pg,pooler` working without compose needing AND.
 #
 # Usage: scripts/profiles pg,mysql,pooler   ->  pg,mysql,pg-pooler,mysql-pooler
+#        scripts/profiles ha,pooler         ->  ha,ha-pooler
 
 set -euo pipefail
 
@@ -45,5 +46,12 @@ for engine in $(engine_list); do
         *",${MDB_ENGINE_NAME},"*) out="${out:+$out,}${MDB_ENGINE_NAME}-pooler" ;;
     esac
 done
+
+# HA replaces the standalone engine, so its pooler is not an engine's: the
+# `pgbouncer` service in compose.ha.yml, in front of HAProxy (design.md D-72).
+# `ha` plus `pooler` starts it; `ha` alone does not, matching the engines.
+case ",${input}," in
+    *",ha,"*) out="${out:+$out,}ha-pooler" ;;
+esac
 
 printf '%s\n' "$out"

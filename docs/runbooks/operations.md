@@ -345,6 +345,14 @@ be honest about the recovery time.
 HAProxy routes by Patroni's REST health check: the write port follows the
 primary, the read port the replicas.
 
+**Pooling under HA.** `make up PROFILES=ha,pooler` adds `pgbouncer`, a pooler in
+front of HAProxy's write port, so pooled connections follow the leader through a
+failover. It publishes on `MDB_BIND_ADDR:MDB_HA_POOLER_HOST_PORT` (6432) and
+takes the same TLS settings as the standalone pooler. Each Patroni node runs a
+callback that converges the pooler's role and auth function whenever it becomes
+primary (design.md D-72); check 27 proves the pooler reaches the primary before
+and after a failover.
+
 ```bash
 make ha-status              # topology, roles and replication lag
 make ha-failover            # controlled switchover, typed confirmation

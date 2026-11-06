@@ -288,6 +288,9 @@ port_is_active() {
         MDB_HAPROXY_*)  [[ "$active_profiles" == *,ha,* ]] ;;
         MDB_CADDY_*|MDB_ADMINER_*|MDB_PGADMIN_*|MDB_PMA_*|MDB_UI_*)
                          [[ "$active_profiles" == *,ui,* || "$active_profiles" == *,prod,* ]] ;;
+        MDB_HA_POOLER_HOST_PORT)
+                         [[ "$active_profiles" == *,ha-pooler,* \
+                            || ( "$active_profiles" == *,ha,* && "$active_profiles" == *,pooler,* ) ]] ;;
         MDB_*_POOLER_HOST_PORT)
                          [[ "$active_profiles" == *,pooler,* ]] ;;
         MDB_*_HOST_PORT)

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# verify: killing the Patroni leader elects a new one and the write port follows
+# verify: killing the Patroni leader elects a new one, the write port follows, and the HA pooler follows it too
 # tags: ha
 # phase: 7
 
@@ -40,6 +40,19 @@ psql_via_haproxy() {
         -e PGPASSWORD="$pw" \
         --entrypoint psql "$(image_name pg)" \
         "host=haproxy port=${port} user=postgres dbname=postgres sslmode=require" \
+        -tAc "$sql" 2>/dev/null | tr -d ' \r' || true
+}
+
+# Through the HA pooler (design.md D-72): pgBouncer in front of HAProxy's write
+# port, reached by its service name, as an application role -- never the
+# superuser, whose verifier pgbouncer.get_auth() refuses by design.
+psql_via_pooler() {
+    local sql="$1" net
+    net="$(mdb_project_name)_net"
+    mdb_ctr run --rm --network "$net" \
+        -e PGPASSWORD="${TW_APP}" \
+        --entrypoint psql "$(image_name pg)" \
+        "host=pgbouncer port=6432 user=poolha dbname=postgres sslmode=prefer" \
         -tAc "$sql" 2>/dev/null | tr -d ' \r' || true
 }
 
@@ -88,7 +101,8 @@ done
 # HA stack kept haproxy on 5432, so check 28 then failed its port pre-flight
 # and reported a port collision that had nothing to do with its subject.
 add_cleanup 'make down'
-if ! mdb_up PROFILES=ha; then
+# `pooler` too: the HA pooler is part of what has to survive a failover.
+if ! mdb_up PROFILES=ha,pooler; then
     # compose says only "container mdb-patroniN is unhealthy", which is the one
     # fact that does not narrow anything down -- and N moves between runs, which
     # reads as a flaky node. Patroni says exactly why in its own log, so print
@@ -109,7 +123,7 @@ if ! mdb_up PROFILES=ha; then
             | grep -viE '^ +File "|^\s+\^+\s*$|ConnectionResetError' \
             | tail -40 | sed 's/^/      /' >&2 || true
     done
-    vfail "make up PROFILES=ha failed (each node's own log is above)"
+    vfail "make up PROFILES=ha,pooler failed (each node's own log is above)"
 fi
 
 # Parsed through `scripts/ha`'s machine-readable verbs, not by grepping the
@@ -180,6 +194,23 @@ done
 (( caught_up )) || vfail "replicas never caught up to within ${max_lag} bytes; no node would be eligible for election"
 vinfo "replicas caught up (worst lag ${worst} bytes, limit ${max_lag})"
 
+# The HA pooler authenticates an application role before the failover. The
+# role is created through the write port; the pooler resolves it with
+# auth_query, which works only once the leader's callback has converged
+# pgbouncer.get_auth() -- the objects the Patroni image used to have no way to
+# create at all.
+psql_via_haproxy "${MDB_HAPROXY_WRITE_PORT:-5432}" \
+    "DO \$\$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname='poolha') THEN CREATE ROLE poolha LOGIN PASSWORD '${TW_APP}'; END IF; END \$\$" >/dev/null
+pooled=""
+for (( i = 0; i < 90; i++ )); do
+    pooled="$(psql_via_pooler "SELECT 'pooled-' || NOT pg_is_in_recovery()")"
+    [[ "$pooled" == "pooled-true" ]] && break
+    sleep 2
+done
+[[ "$pooled" == "pooled-true" ]] \
+    || vfail "the HA pooler did not reach the primary as an application role (got '${pooled}')"
+vinfo "HA pooler authenticates through auth_query and reaches the primary"
+
 # Write through the HAProxy write port, then kill the leader.
 mdb_compose exec -T haproxy sh -c 'true' >/dev/null 2>&1 || vfail "haproxy is not running"
 
@@ -235,3 +266,16 @@ for (( i = 0; i < budget; i++ )); do
 done
 [[ "$in_recovery" == "t" ]] || vfail "the read port served a primary; it must serve replicas only"
 vinfo "read port serves replicas only"
+
+# The pooler follows the new leader as well: same role, same service name, and
+# the new primary had its own callback converge the auth objects (idempotent;
+# they were already there by replication).
+pooled=""
+for (( i = 0; i < budget; i++ )); do
+    pooled="$(psql_via_pooler "SELECT 'pooled-' || NOT pg_is_in_recovery()")"
+    [[ "$pooled" == "pooled-true" ]] && break
+    sleep 2
+done
+[[ "$pooled" == "pooled-true" ]] \
+    || vfail "the HA pooler does not reach a writable primary after failover (got '${pooled}')"
+vinfo "HA pooler follows the new leader"

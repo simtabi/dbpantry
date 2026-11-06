@@ -72,28 +72,18 @@ services:
   # 21.1): roughly 10 MB per direct PostgreSQL connection means ~500
   # connections cost ~5 GB before a single query runs. check-env refuses a prod
   # boot with no pooler configured.
+  #
+  # This entry USED to define a pgbouncer service of its own, from before the
+  # pooler was generated: profiles [prod, ha], aimed at `pg`, with no
+  # credential, so wherever it ran it restarted forever beside the working
+  # pg-pooler. It is now the HA pooler, defined in compose.ha.yml, and this is
+  # its prod hardening only (design.md D-72): TLS enforced whatever the env
+  # says, and the same limits as the engines.
   pgbouncer:
-    profiles: [prod, ha]
-    # The official pgbouncer image is amd64-only and stuck at 1.15.0; this one
-    # is multi-arch and current (design.md D-10).
-    image: ghcr.io/simtabi/dbpantry-pgbouncer:dev
-    restart: unless-stopped
-    security_opt:
-      - no-new-privileges:true
-    cap_drop:
-      - ALL
     environment:
-      DB_HOST: pg
-      DB_PORT: "5432"
-      POOL_MODE: ${MDB_PGBOUNCER_POOL_MODE:-transaction}
-      DEFAULT_POOL_SIZE: ${MDB_PGBOUNCER_DEFAULT_POOL_SIZE:-25}
-      MAX_CLIENT_CONN: ${MDB_PGBOUNCER_MAX_CLIENT_CONN:-1000}
-      AUTH_TYPE: scram-sha-256
-    volumes:
-      - ./secrets:/run/secrets:ro
-    networks: [mdb]
-    logging:
-      driver: json-file
-      options:
-        max-size: ${MDB_LOG_MAX_SIZE:-10m}
-        max-file: "${MDB_LOG_MAX_FILE:-3}"
+      MDB_TLS_ENFORCE: "true"
+    deploy:
+      resources:
+        limits:
+          cpus: "${MDB_PGBOUNCER_CPU_LIMIT:-1}"
+          memory: ${MDB_PGBOUNCER_MEM_LIMIT:-256m}

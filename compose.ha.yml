@@ -182,6 +182,70 @@ services:
       timeout: 5s
       retries: 6
 
+  # ---------------------------------------------------------------------------
+  # The HA pooler (design.md D-72). pgBouncer in front of HAProxy's WRITE port,
+  # so pooled connections follow the leader through a failover exactly as
+  # direct ones do. The standalone pooler, pg-pooler, points at the `pg`
+  # service, which HA replaces, so without this an HA stack had no pooler at all
+  # -- and prod requires one.
+  #
+  # It keeps the name `pgbouncer` from the prod overlay's original placeholder,
+  # which predated the generated pooler, pointed at `pg`, had no credential and
+  # restarted forever wherever it ran. Clients on the network reach it as
+  # `pgbouncer`, a name certs/pg already carries.
+  #
+  # The environment mirrors engines/postgres/compose-pooler.yml, from which
+  # pg-pooler is generated; check 71 fails if the two drift apart. Started by
+  # `make up PROFILES=ha,pooler`, which scripts/profiles expands to ha-pooler.
+  # ---------------------------------------------------------------------------
+  pgbouncer:
+    profiles: [ha-pooler]
+    image: ghcr.io/simtabi/dbpantry-pgbouncer:dev
+    restart: unless-stopped
+    depends_on:
+      haproxy: {condition: service_healthy}
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+    cap_add: [DAC_OVERRIDE, SETUID, SETGID]
+    entrypoint: ["/usr/local/bin/mdb-pgbouncer-bootstrap"]
+    environment:
+      DB_PASSWORD_FILE: /run/secrets/pgbouncer_password.txt
+      DB_HOST: haproxy
+      DB_PORT: "5432"
+      DB_USER: pgbouncer
+      LISTEN_PORT: "6432"
+      MDB_TLS_ENFORCE: ${MDB_TLS_ENFORCE:-false}
+      AUTH_TYPE: scram-sha-256
+      AUTH_USER: pgbouncer
+      AUTH_DBNAME: postgres
+      AUTH_QUERY: SELECT username, password FROM pgbouncer.get_auth($$1)
+      POOL_MODE: ${MDB_PGBOUNCER_POOL_MODE:-transaction}
+      DEFAULT_POOL_SIZE: ${MDB_PGBOUNCER_DEFAULT_POOL_SIZE:-25}
+      MIN_POOL_SIZE: ${MDB_PGBOUNCER_MIN_POOL_SIZE:-5}
+      RESERVE_POOL_SIZE: ${MDB_PGBOUNCER_RESERVE_POOL_SIZE:-5}
+      MAX_CLIENT_CONN: ${MDB_PGBOUNCER_MAX_CLIENT_CONN:-1000}
+      MAX_DB_CONNECTIONS: ${MDB_PGBOUNCER_MAX_DB_CONNECTIONS:-50}
+      MAX_PREPARED_STATEMENTS: ${MDB_PGBOUNCER_MAX_PREPARED_STATEMENTS:-200}
+      ADMIN_USERS: pgbouncer
+      STATS_USERS: pgbouncer
+      IGNORE_STARTUP_PARAMETERS: extra_float_digits,options,search_path
+      LOG_POOLER_ERRORS: "1"
+    tmpfs:
+      - /etc/pgbouncer:exec,mode=0700,uid=100,gid=100
+    volumes:
+      - ./secrets:/run/secrets:ro
+      - ./certs:/certs:ro
+    # Published like HAProxy's ports, on MDB_BIND_ADDR (loopback by default).
+    ports:
+      - "${MDB_BIND_ADDR:-127.0.0.1}:${MDB_HA_POOLER_HOST_PORT:-6432}:6432"
+    networks: [mdb]
+    logging:
+      driver: json-file
+      options:
+        max-size: ${MDB_LOG_MAX_SIZE:-10m}
+        max-file: "${MDB_LOG_MAX_FILE:-3}"
+
 volumes:
   etcd1_data:
     name: ${COMPOSE_PROJECT_NAME:-mdb}_etcd1_data

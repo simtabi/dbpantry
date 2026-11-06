@@ -64,7 +64,9 @@ fi
 vinfo "check-env refuses prod without UI basic auth"
 
 # Nothing but Caddy may be published.
-published="$(mdb_compose -f docker-compose.yml -f compose.engines.yml -f compose.prod.yml --profile prod config \
+# compose.ha.yml is in the list because the overlay's pgbouncer entry hardens
+# the HA pooler defined there (design.md D-72); COMPOSE_FILE always carries it.
+published="$(mdb_compose -f docker-compose.yml -f compose.engines.yml -f compose.ha.yml -f compose.prod.yml --profile prod config \
     | awk '/^  [a-z-]+:/{svc=$1} /published:/{print svc, $2}' | grep -v '^caddy:' || true)"
 [[ -z "$published" ]] || {
     printf '      %s\n' "$published" >&2

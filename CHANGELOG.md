@@ -155,6 +155,13 @@ image, replacing Cassandra's vulnerable vendored JARs rather than waiving them.
   exist and is not a known generated file.
 
 ### Fixed
+- **The prod overlay's `pgbouncer` service is now the HA pooler** (design.md D-72). It had no credential and
+  pointed at `pg`, so wherever the overlay applied it restarted forever beside `pg-pooler`. It is defined in
+  `compose.ha.yml` in front of HAProxy's write port (`make up PROFILES=ha,pooler`), and the overlay entry only
+  hardens it. Patroni nodes converge the pooler's role and `pgbouncer.get_auth()` when they become primary,
+  through the same script the standalone image now uses, so an HA stack can pool at all. New:
+  `MDB_HA_POOLER_HOST_PORT`, `MDB_PGBOUNCER_CPU_LIMIT`, `MDB_PGBOUNCER_MEM_LIMIT`. The pgBouncer image now
+  reports healthy only while listening.
 - **`MDB_BACKEND=incus` failed on its first live host.** Run on 2026-11-04 on Ubuntu 26.04
   (arm64) with Incus 7.0.2 and incus-compose 1.3.5, the `pg` and `ui` profiles now come up with
   every service healthy, and `status`, `logs`, exec, `backup ENGINE=pg` and data across `down` and
