@@ -63,6 +63,10 @@ RUN set -eux; \
     if dpkg-query -W -f='${Status}' libssl3 2>/dev/null | grep -q 'install ok installed'; then \
         apt-get install -y --only-upgrade libssl3; \
     fi; \
+    # CVE-2026-109518 (HIGH, apt 2.8.3, fixed in 2.8.4ubuntu0.1), as in the pg and Cassandra
+    # images. Upgrading apt by name brings libapt-pkg along at the matching version, whichever
+    # Ubuntu base it is (its library is libapt-pkg6.0t64 on 24.04, libapt-pkg6.0 on 22.04).
+    apt-get install -y --only-upgrade apt; \
     rm -rf /var/lib/apt/lists/*
 
 # rclone from upstream rather than the distribution, so both engine images

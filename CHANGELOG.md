@@ -292,6 +292,9 @@ image, replacing Cassandra's vulnerable vendored JARs rather than waiving them.
 
 ### Security
 
+- **CVE-2026-109518 in `apt` is fixed in the MariaDB images too.** It started failing the Trivy gate
+  on MariaDB 11.8 and 12.3 on both architectures after the pg and Cassandra fix landed. `apt` is
+  upgraded by name (2.8.3 to 2.8.4ubuntu0.1 on Ubuntu 24.04), and brings `libapt-pkg` along.
 - **CVE-2026-109518 in `apt` is fixed in the pg and Cassandra images.** `apt` and `libapt-pkg` are
   upgraded by name, as pcre2, expat and perl already are. The pg images go from 2.6.1 to 2.6.2 on
   bookworm, and Cassandra from 3.0.3 to 3.0.4 on trixie. pgvector has not rebuilt 0.8.6 since
