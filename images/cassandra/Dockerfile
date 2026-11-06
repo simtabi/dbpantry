@@ -47,16 +47,21 @@ LABEL org.opencontainers.image.title="dbpantry-cassandra" \
 USER root
 ENV DEBIAN_FRONTEND=noninteractive
 
+# Supply-chain helpers (design.md D-71): mdb-os-upgrade applies the
+# distribution's own updates without moving the engine, and mdb-fetch is the
+# one way a file is downloaded -- retried, and verified against
+# _shared/supply/checksums.txt or a named key fingerprint.
+COPY --chmod=0755 _shared/supply/os-upgrade.sh /usr/local/bin/mdb-os-upgrade
+COPY --chmod=0755 _shared/supply/fetch.sh /usr/local/bin/mdb-fetch
+COPY _shared/supply/checksums.txt /usr/local/share/mdb-supply/checksums.txt
+# Cassandra and its JVM come from tarballs, not from apt, so the distribution's
+# upgrade cannot move them. This replaced --only-upgrade lines for pcre2,
+# expat, perl-base and apt, each added after a scan failed on it.
+RUN mdb-os-upgrade
+
 RUN set -eux; \
     apt-get update; \
     apt-get install -y --no-install-recommends ca-certificates curl procps xz-utils zstd; \
-    # The base digest predates Debian's pcre2, expat and perl-base security
-    # updates. They are fixable, so they are fixed -- named packages only, so
-    # nothing else in the pinned base moves.
-    apt-get install -y --only-upgrade libpcre2-8-0 libexpat1 perl-base; \
-    # CVE-2026-109518 (HIGH, apt 3.0.3, fixed in 3.0.4 on trixie, which
-    # cassandra:5.0.9 moved to). apt and its library move together.
-    apt-get install -y --only-upgrade apt libapt-pkg7.0; \
     rm -rf /var/lib/apt/lists/*
 
 # Cassandra vendors its Java dependencies in lib/, and 5.0 ships guava,
@@ -92,8 +97,8 @@ RUN set -eux; \
         *) echo "unsupported architecture: $(dpkg --print-architecture)" >&2; exit 1 ;; \
     esac; \
     url="https://github.com/just-containers/s6-overlay/releases/download/v${S6_OVERLAY_VERSION}"; \
-    curl -fsSL -o /tmp/s6-noarch.tar.xz "${url}/s6-overlay-noarch.tar.xz"; \
-    curl -fsSL -o /tmp/s6-arch.tar.xz   "${url}/s6-overlay-${s6_arch}.tar.xz"; \
+    mdb-fetch "${url}/s6-overlay-noarch.tar.xz" /tmp/s6-noarch.tar.xz; \
+    mdb-fetch "${url}/s6-overlay-${s6_arch}.tar.xz" /tmp/s6-arch.tar.xz; \
     tar -C / -Jxpf /tmp/s6-noarch.tar.xz; \
     tar -C / -Jxpf /tmp/s6-arch.tar.xz; \
     rm -f /tmp/s6-noarch.tar.xz /tmp/s6-arch.tar.xz

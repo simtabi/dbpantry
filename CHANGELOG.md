@@ -291,6 +291,14 @@ image, replacing Cassandra's vulnerable vendored JARs rather than waiving them.
   maintained menu. Each still runs through `MDB_<ENGINE>_BASE_IMAGE`, unsupported.
 
 ### Security
+- **Images take their distribution's security updates whole** (design.md D-71): `mdb-os-upgrade` runs in every
+  image and upgrades from the distribution's own repositories only, failing the build if the engine version
+  moves. It replaces the per-package `--only-upgrade` lines (pcre2, expat, perl, libssl3, apt). Downloads go
+  through `mdb-fetch`, which retries with backoff and verifies a recorded SHA-256 (s6-overlay, pg_graphql),
+  a key fingerprint (PGDG) or a named signature check (the MySQL client RPM). Check 70 guards both.
+- **CI gates image findings where they can have been caused** (design.md D-71): the Trivy scan fails the weekly
+  scheduled build of main and pull requests that change an image input; other pull requests report findings
+  without failing. A failed scheduled build opens or updates one tracking issue.
 - **Go dependency floors are one file** (design.md D-70): `images/_shared/gotools/floors.txt`, read by every image
   that rebuilds a Go tool. `golang.org/x/net` is raised to v0.62.0 for CVE-2026-78661, which failed the pg,
   mysql and mariadb builds because the previous floor was written inline in four Dockerfiles. Check 69 keeps

@@ -15,6 +15,15 @@ FROM ${BASE_IMAGE}
 
 ARG PGBOUNCER_VERSION
 
+# Supply-chain helpers (design.md D-71): mdb-os-upgrade applies the
+# distribution's own updates without moving the engine, and mdb-fetch is the
+# one way a file is downloaded -- retried, and verified against
+# _shared/supply/checksums.txt or a named key fingerprint.
+COPY --chmod=0755 _shared/supply/os-upgrade.sh /usr/local/bin/mdb-os-upgrade
+COPY --chmod=0755 _shared/supply/fetch.sh /usr/local/bin/mdb-fetch
+COPY _shared/supply/checksums.txt /usr/local/share/mdb-supply/checksums.txt
+RUN mdb-os-upgrade
+
 RUN set -eux; \
     apt-get update; \
     apt-get install -y --no-install-recommends \

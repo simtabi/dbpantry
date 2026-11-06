@@ -70,13 +70,16 @@ USER root
 # glib2 moves 2.68.4-18.el9_7.1 to 2.68.4-19.el9_8.2 and mysqld does not move.
 #
 # The assertion is still here rather than trusting that reasoning.
-RUN set -eux; \
-    before="$(mysqld --version)"; \
-    microdnf update -y --disablerepo='mysql*'; \
-    microdnf clean all; \
-    after="$(mysqld --version)"; \
-    [ "$before" = "$after" ] || { \
-        echo "OS update moved the server: '$before' -> '$after'" >&2; exit 1; }
+# Supply-chain helpers (design.md D-71): mdb-os-upgrade applies the
+# distribution's own updates without moving the engine, and mdb-fetch is the
+# one way a file is downloaded -- retried, and verified against
+# _shared/supply/checksums.txt or a named key fingerprint.
+COPY --chmod=0755 _shared/supply/os-upgrade.sh /usr/local/bin/mdb-os-upgrade
+COPY --chmod=0755 _shared/supply/fetch.sh /usr/local/bin/mdb-fetch
+COPY _shared/supply/checksums.txt /usr/local/share/mdb-supply/checksums.txt
+# The same update and the same assertion as before, through the helper every
+# image uses (design.md D-71).
+RUN OS_UPGRADE_PROBE='mysqld --version' OS_UPGRADE_DISABLE_REPOS='mysql*' mdb-os-upgrade
 
 # Oracle Linux 9, so microdnf. The base already carries tar, xz, zstd, curl,
 # gosu and openssl; procps-ng and unzip are what it lacks (design.md D-17).
@@ -142,8 +145,14 @@ RUN set -eux; \
     ver="$(rpm -q --qf '%{VERSION}-%{RELEASE}' mysql-community-server-minimal)"; \
     microdnf install -y cpio; \
     series="$(printf '%s' "$ver" | cut -d. -f1,2)"; \
-    curl -fsSL -o /tmp/mysql-client.rpm \
-        "https://repo.mysql.com/yum/mysql-${series}-community/el/9/${arch}/mysql-community-client-${ver}.${arch}.rpm"; \
+    # Its version comes from the base at build time, so it cannot be listed in
+    # checksums.txt; it is verified by its Oracle signature instead, against the
+    # key the base image installed packages from.
+    mdb-fetch --verified-by 'rpm --checksig' \
+        "https://repo.mysql.com/yum/mysql-${series}-community/el/9/${arch}/mysql-community-client-${ver}.${arch}.rpm" \
+        /tmp/mysql-client.rpm; \
+    rpm --checksig /tmp/mysql-client.rpm | grep -qE ': (digests )?signatures OK$' \
+        || { rpm --checksig -v /tmp/mysql-client.rpm >&2; echo "mysql client rpm signature not OK" >&2; exit 1; }; \
     cd /tmp; \
     rpm2cpio /tmp/mysql-client.rpm | cpio -idm ./usr/bin/mysqlbinlog; \
     install -m 0755 /tmp/usr/bin/mysqlbinlog /usr/local/bin/mysqlbinlog; \
@@ -166,8 +175,8 @@ RUN set -eux; \
         aarch64) s6_arch='aarch64' ;; \
     esac; \
     url="https://github.com/just-containers/s6-overlay/releases/download/v${S6_OVERLAY_VERSION}"; \
-    curl -fsSL -o /tmp/s6-noarch.tar.xz "${url}/s6-overlay-noarch.tar.xz"; \
-    curl -fsSL -o /tmp/s6-arch.tar.xz   "${url}/s6-overlay-${s6_arch}.tar.xz"; \
+    mdb-fetch "${url}/s6-overlay-noarch.tar.xz" /tmp/s6-noarch.tar.xz; \
+    mdb-fetch "${url}/s6-overlay-${s6_arch}.tar.xz" /tmp/s6-arch.tar.xz; \
     tar -C / -Jxpf /tmp/s6-noarch.tar.xz; \
     tar -C / -Jxpf /tmp/s6-arch.tar.xz; \
     rm -f /tmp/s6-noarch.tar.xz /tmp/s6-arch.tar.xz

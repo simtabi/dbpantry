@@ -46,6 +46,7 @@ so a green `make verify` is the criteria being met rather than a proxy for it.
 | Vulnerability waivers are package-scoped, justified, and expire | `38-trivy-waivers` |
 | No Dockerfile passes a dnf-only flag to microdnf | `43-microdnf-flags` |
 | Go dependency floors are one file every image reads, never inline, compared by semver | `69-go-floors` |
+| Images take distribution updates whole, download only through a verified, retried helper; CI gates findings where caused | `70-supply-chain` |
 | No leftover old product name outside its history | `44-no-old-name` |
 | Cassandra's replaced JARs are pinned by checksum and installed | `45-cassandra-jars` |
 | Every relative link in the Markdown docs resolves | `46-doc-links-resolve` |

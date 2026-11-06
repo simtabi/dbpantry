@@ -44,6 +44,15 @@ LABEL org.opencontainers.image.title="dbpantry-cli" \
 
 ENV DEBIAN_FRONTEND=noninteractive
 
+# Supply-chain helpers (design.md D-71): mdb-os-upgrade applies the
+# distribution's own updates without moving the engine, and mdb-fetch is the
+# one way a file is downloaded -- retried, and verified against
+# _shared/supply/checksums.txt or a named key fingerprint.
+COPY --chmod=0755 _shared/supply/os-upgrade.sh /usr/local/bin/mdb-os-upgrade
+COPY --chmod=0755 _shared/supply/fetch.sh /usr/local/bin/mdb-fetch
+COPY _shared/supply/checksums.txt /usr/local/share/mdb-supply/checksums.txt
+RUN mdb-os-upgrade
+
 RUN set -eux; \
     apt-get update; \
     apt-get install -y --no-install-recommends \
@@ -63,8 +72,12 @@ RUN set -eux; \
 RUN set -eux; \
     . /etc/os-release; \
     install -d /usr/share/postgresql-common/pgdg; \
-    curl -fsSo /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc \
-        https://www.postgresql.org/media/keys/ACCC4CF8.asc; \
+    # Retried, and accepted only if it is the PGDG signing key
+    # (pgdg-B97B0AFC..., ACCC4CF8) -- the fetch that once failed a verify run on
+    # a reset stream, and that nothing checked when it succeeded.
+    mdb-fetch --fingerprint B97B0AFCAA1A47F044F244A07FCC7D46ACCC4CF8 \
+        https://www.postgresql.org/media/keys/ACCC4CF8.asc \
+        /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc; \
     echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt ${VERSION_CODENAME}-pgdg main" \
         > /etc/apt/sources.list.d/pgdg.list; \
     apt-get update; \

@@ -33,6 +33,9 @@ ARG PGJWT_COMMIT=f3d82fd30151e754e19ce5d6a06c71c20689ce3d
 
 ENV DEBIAN_FRONTEND=noninteractive
 
+COPY --chmod=0755 _shared/supply/fetch.sh /usr/local/bin/mdb-fetch
+COPY _shared/supply/checksums.txt /usr/local/share/mdb-supply/checksums.txt
+
 RUN set -eux; \
     apt-get update; \
     apt-get install -y --no-install-recommends \
@@ -53,7 +56,7 @@ RUN set -eux; \
     arch="$(dpkg --print-architecture)"; \
     url="https://github.com/supabase/pg_graphql/releases/download/v${PG_GRAPHQL_VERSION}"; \
     deb="pg_graphql-v${PG_GRAPHQL_VERSION}-pg${ENGINE_VERSION}-${arch}-linux-gnu.deb"; \
-    curl -fsSL -o "/build/${deb}" "${url}/${deb}"; \
+    mdb-fetch "${url}/${deb}" "/build/${deb}"; \
     mkdir -p /build/out; \
     dpkg-deb -x "/build/${deb}" /build/out
 
@@ -149,22 +152,25 @@ LABEL org.opencontainers.image.title="dbpantry-pg" \
 ENV DEBIAN_FRONTEND=noninteractive \
     PG_MAJOR=${ENGINE_VERSION}
 
+# --- the distribution's security updates -------------------------------------
+# Every update Debian has published since the base digest, and nothing from
+# PGDG, so the PostgreSQL server the digest pins does not move (design.md D-71).
+# This replaced a list of --only-upgrade lines -- pcre2, expat, the four perl
+# packages, apt -- each added after a scan failed on it.
+# Supply-chain helpers (design.md D-71): mdb-os-upgrade applies the
+# distribution's own updates without moving the engine, and mdb-fetch is the
+# one way a file is downloaded -- retried, and verified against
+# _shared/supply/checksums.txt or a named key fingerprint.
+COPY --chmod=0755 _shared/supply/os-upgrade.sh /usr/local/bin/mdb-os-upgrade
+COPY --chmod=0755 _shared/supply/fetch.sh /usr/local/bin/mdb-fetch
+COPY _shared/supply/checksums.txt /usr/local/share/mdb-supply/checksums.txt
+RUN OS_UPGRADE_PROBE="dpkg-query -W -f='\${Version}' postgresql-${PG_MAJOR}" mdb-os-upgrade
+
 # --- PGDG extensions + the baked tool suite ----------------------------------
 # Every package here was confirmed available for arm64 against PGDG bookworm
 # during step 1 research (design.md section 4).
 RUN set -eux; \
     apt-get update; \
-    # The base digest predates Debian's pcre2, expat and perl security updates.
-    # They are fixable, so they are fixed -- named packages only, so the
-    # PostgreSQL server the digest pins does not move. The four perl packages
-    # move together: perl depends on the exact perl-base version, so upgrading
-    # one alone does not resolve. pgvector has not rebuilt 0.8.6 since
-    # 2026-08-13, so there is no newer digest to repin to (perl 5.36.0-7+deb12u4).
-    apt-get install -y --only-upgrade libpcre2-8-0 libexpat1 \
-        perl perl-base perl-modules-5.36 libperl5.36; \
-    # CVE-2026-109518 (HIGH, apt 2.6.1, fixed in 2.6.2). apt and its library
-    # move together, for the same reason as perl above.
-    apt-get install -y --only-upgrade apt libapt-pkg6.0; \
     apt-get install -y --no-install-recommends \
         ca-certificates \
         curl \
@@ -218,8 +224,8 @@ RUN set -eux; \
         *) echo "unsupported architecture: $(dpkg --print-architecture)" >&2; exit 1 ;; \
     esac; \
     url="https://github.com/just-containers/s6-overlay/releases/download/v${S6_OVERLAY_VERSION}"; \
-    curl -fsSL -o /tmp/s6-noarch.tar.xz "${url}/s6-overlay-noarch.tar.xz"; \
-    curl -fsSL -o /tmp/s6-arch.tar.xz   "${url}/s6-overlay-${s6_arch}.tar.xz"; \
+    mdb-fetch "${url}/s6-overlay-noarch.tar.xz" /tmp/s6-noarch.tar.xz; \
+    mdb-fetch "${url}/s6-overlay-${s6_arch}.tar.xz" /tmp/s6-arch.tar.xz; \
     tar -C / -Jxpf /tmp/s6-noarch.tar.xz; \
     tar -C / -Jxpf /tmp/s6-arch.tar.xz; \
     rm -f /tmp/s6-noarch.tar.xz /tmp/s6-arch.tar.xz

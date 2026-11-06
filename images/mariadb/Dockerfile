@@ -48,23 +48,23 @@ LABEL org.opencontainers.image.title="dbpantry-mariadb" \
 USER root
 ENV DEBIAN_FRONTEND=noninteractive
 
+# Supply-chain helpers (design.md D-71): mdb-os-upgrade applies the
+# distribution's own updates without moving the engine, and mdb-fetch is the
+# one way a file is downloaded -- retried, and verified against
+# _shared/supply/checksums.txt or a named key fingerprint.
+COPY --chmod=0755 _shared/supply/os-upgrade.sh /usr/local/bin/mdb-os-upgrade
+COPY --chmod=0755 _shared/supply/fetch.sh /usr/local/bin/mdb-fetch
+COPY _shared/supply/checksums.txt /usr/local/share/mdb-supply/checksums.txt
+# Ubuntu's updates only; MariaDB's own repository is left out, so the server the
+# digest pins does not move (design.md D-71). This replaced the libssl3 and apt
+# --only-upgrade lines.
+RUN OS_UPGRADE_PROBE='mariadbd --version' mdb-os-upgrade
+
 # Ubuntu 24.04, so apt. The base already carries tar, xz, zstd, gosu, procps
 # and openssl; curl and unzip are what it lacks (design.md D-17).
 RUN set -eux; \
     apt-get update; \
     apt-get install -y --no-install-recommends ca-certificates curl unzip; \
-    # An Ubuntu 22.04 base -- 10.11, which is no longer maintained here but
-    # can still be built through MDB_MARIADB_BASE_IMAGE (design.md D-57) --
-    # ships libssl3 below its security update, so it is upgraded where it is
-    # installed. The maintained bases are Ubuntu 24.04, which ships libssl3t64
-    # instead, and their pinned packages do not move.
-    if dpkg-query -W -f='${Status}' libssl3 2>/dev/null | grep -q 'install ok installed'; then \
-        apt-get install -y --only-upgrade libssl3; \
-    fi; \
-    # CVE-2026-109518 (HIGH, apt 2.8.3, fixed in 2.8.4ubuntu0.1), as in the pg and Cassandra
-    # images. Upgrading apt by name brings libapt-pkg along at the matching version, whichever
-    # Ubuntu base it is (its library is libapt-pkg6.0t64 on 24.04, libapt-pkg6.0 on 22.04).
-    apt-get install -y --only-upgrade apt; \
     rm -rf /var/lib/apt/lists/*
 
 # rclone from upstream rather than the distribution, so both engine images
@@ -80,8 +80,8 @@ RUN set -eux; \
         aarch64) s6_arch='aarch64' ;; \
     esac; \
     url="https://github.com/just-containers/s6-overlay/releases/download/v${S6_OVERLAY_VERSION}"; \
-    curl -fsSL -o /tmp/s6-noarch.tar.xz "${url}/s6-overlay-noarch.tar.xz"; \
-    curl -fsSL -o /tmp/s6-arch.tar.xz   "${url}/s6-overlay-${s6_arch}.tar.xz"; \
+    mdb-fetch "${url}/s6-overlay-noarch.tar.xz" /tmp/s6-noarch.tar.xz; \
+    mdb-fetch "${url}/s6-overlay-${s6_arch}.tar.xz" /tmp/s6-arch.tar.xz; \
     tar -C / -Jxpf /tmp/s6-noarch.tar.xz; \
     tar -C / -Jxpf /tmp/s6-arch.tar.xz; \
     rm -f /tmp/s6-noarch.tar.xz /tmp/s6-arch.tar.xz
