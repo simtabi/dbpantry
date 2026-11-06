@@ -90,11 +90,12 @@ wait_ready 60 "the pooler auth function to be converged" \
 # gives pg-pooler (engines/postgres/compose-pooler.yml), minus the pool sizing.
 start_pooler() {
     local name="$1" enforce="$2" certs="$3" alias="${4:-}"
+    # The +-expansion keeps an empty array legal under `set -u` on bash 3.2.
     local -a extra=()
     [[ "$certs" == yes ]] && extra+=(-v "$MDB_ROOT/certs:/certs:ro")
     [[ -n "$alias" ]] && extra+=(--network-alias "$alias")
     # shellcheck disable=SC2016  # $1 is pgbouncer's placeholder, not ours
-    mdb_ctr run -d --name "$name" --network "$net" "${extra[@]}" \
+    mdb_ctr run -d --name "$name" --network "$net" ${extra[@]+"${extra[@]}"} \
         -e DB_PASSWORD_FILE=/run/secrets/pgbouncer_password.txt \
         -e DB_HOST=pg -e DB_PORT=5432 -e DB_USER=pgbouncer \
         -e LISTEN_PORT=6432 -e MDB_TLS_ENFORCE="$enforce" \
