@@ -44,10 +44,14 @@ need_image "$pooler_img"
 # verify-full checks the name the client dialled against the certificate, so
 # the certificate must name the pooler's service. Certificates issued before
 # scripts/certs added pg-pooler do not, and `make certs-renew` re-issues them.
-if ! mdb_ctr run --rm --entrypoint openssl -v "$MDB_ROOT/certs:/certs:ro" "$img" \
-        x509 -in /certs/pg/server.crt -noout -text 2>/dev/null | grep -qF 'DNS:pg-pooler'; then
-    vfail "certs/pg/server.crt has no DNS:pg-pooler SAN; run 'make certs-renew' to re-issue it"
-fi
+# Read on the host with the openssl scripts/certs itself requires. An earlier
+# version ran openssl inside the pg image, which failed in CI and reported a
+# missing SAN for a certificate that had one.
+command -v openssl >/dev/null 2>&1 || vfail "openssl is required (scripts/certs needs it too)"
+sans="$(openssl x509 -in "$MDB_ROOT/certs/pg/server.crt" -noout -text 2>&1)" \
+    || vfail "could not read certs/pg/server.crt: $sans"
+grep -qF 'DNS:pg-pooler' <<< "$sans" \
+    || vfail "certs/pg/server.crt has no DNS:pg-pooler SAN; run 'make certs-renew' to re-issue it"
 
 net="mdb-verify-pooltls-net-$$"
 pg="mdb-verify-pooltls-pg-$$"
