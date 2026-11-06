@@ -269,6 +269,10 @@ for engine in $(engine_list); do
                 "${MDB_ENGINE_POOLER_UID:-0}" "${MDB_ENGINE_POOLER_UID:-0}"
             printf '    volumes:\n'
             printf '      - ./secrets:/run/secrets:ro\n'
+            # The engine's own certificate, reused rather than issuing a second
+            # one: pgBouncer's bootstrap copies certs/pg/server.{crt,key} onto
+            # its tmpfs and serves client TLS with them (design.md D-69), so a
+            # client trusting certs/ca.crt trusts the pooler as well.
             printf '      - ./certs:/certs:ro\n'
             # The ENGINE images bake their bootstrap scripts in (SPEC section 3:
             # an image must start without the checkout). A pooler is a

@@ -87,6 +87,78 @@ tenant's identity into the next request. See [the RLS kit](../../rls/README.md).
 If you need session state, use `session` pool mode and accept a much lower
 multiplexing ratio.
 
+### The pooler speaks TLS
+
+pgBouncer serves the same certificate `make certs` issues for PostgreSQL
+(`certs/pg/server.crt`, signed by `certs/ca.crt`), so a client that trusts the
+toolkit CA trusts the pooler too. What it accepts follows `MDB_TLS_ENFORCE`:
+
+| | Client → pooler | Pooler → PostgreSQL |
+|---|---|---|
+| `MDB_TLS_ENFORCE=true` (prod profile) | TLS required; plaintext refused | TLS required |
+| `MDB_TLS_ENFORCE=false` (dev) | TLS when the client asks, plaintext otherwise | TLS when PostgreSQL offers it |
+
+Under enforcement the pooler refuses to start if no certificate is mounted,
+rather than serving plaintext. With no certificate and no enforcement it serves
+plaintext only. Check 68 asserts each row on the wire. Design rationale:
+design.md D-69.
+
+The certificate is copied when the pooler starts, so after `make certs-renew`
+restart `pg-pooler` to serve the new one.
+
+### Connecting from another host
+
+An application on a different server reaches PostgreSQL **through the pooler**,
+published on a private address. On the database server, in `.env.prod`:
+
+```
+MDB_PUBLISH=direct
+MDB_BIND_ADDR=10.0.1.5         # the database server's private address
+MDB_EXTRA_SANS="10.0.1.5"      # so verify-full by address matches the certificate
+```
+
+```bash
+make certs-renew               # re-issue certs/pg with the new SANs
+make up PROFILES=pg,pooler,backup,prod
+```
+
+With `PROFILES=...,prod` only the pooler is published: `pg-pooler` on
+`MDB_PORT_BASE + 100`, **54100** with the default base (override with
+`MDB_PG_POOLER_HOST_PORT`), bound to `MDB_BIND_ADDR`. The application connects
+with:
+
+| Setting | Value |
+|---|---|
+| host | `10.0.1.5` (the `MDB_BIND_ADDR`, or a name listed in `MDB_EXTRA_SANS`) |
+| port | `54100` |
+| sslmode | `require` to start; `verify-full` once the CA is on the client |
+| sslrootcert | the client's copy of `certs/ca.crt` (for `verify-full`) |
+| user, password, database | the project's own, from `make new-project` |
+
+For Laravel that is:
+
+```
+DB_CONNECTION=pgsql
+DB_HOST=10.0.1.5
+DB_PORT=54100
+DB_SSLMODE=verify-full
+DB_SSLROOTCERT=/etc/ssl/dbpantry/ca.crt
+```
+
+Laravel's stock `config/database.php` hard-codes `'sslmode' => 'prefer'` on the
+`pgsql` connection, so point it at the environment:
+`'sslmode' => env('DB_SSLMODE', 'prefer')` and
+`'sslrootcert' => env('DB_SSLROOTCERT')`. Its PostgreSQL connector passes both
+to libpq.
+Copy `certs/ca.crt` (the certificate, never `ca.key`) to the application server.
+`require` encrypts but does not check who answered; `verify-full` also checks
+that the certificate was issued by your CA for the name you dialled, which is
+why the address or name must be in `MDB_EXTRA_SANS`.
+
+Remember transaction pooling: the application must not rely on session state
+(see the rules above). Firewalling the published port is covered in
+[Operations: Exposure](../runbooks/operations.md#exposure).
+
 ## MySQL and MariaDB: pooling helps, but is not survival
 
 The MySQL family uses **one thread per connection**, not a process. A thread is

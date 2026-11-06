@@ -55,7 +55,63 @@ pre-1.0, so if you would rather not have it in the connection path, `direct`
 publishes the same ports without it.
 
 `MDB_MTLS=true` requires client certificates. On an exposed database it is
-worth the setup.
+worth the setup. It does not yet combine with the pooler, which presents no
+client certificate to PostgreSQL (design.md D-69).
+
+### An application on another host
+
+The supported path for an application on a different server is **direct publish
+of the pooler on a private address**. `proxy` mode forwards PostgreSQL's port
+straight to `pg:5432` and does not publish the pooler at all, because the
+generator cannot know whether a pooler will be running (design.md D-69); under
+the prod profile that would also bypass the pooler the profile requires.
+
+```
+MDB_PUBLISH=direct
+MDB_BIND_ADDR=10.0.1.5        # private address, never 0.0.0.0
+MDB_EXTRA_SANS="10.0.1.5"     # verify-full by address; make certs-renew after changing it
+MDB_TLS_ENFORCE=true          # required by the prod profile anyway
+```
+
+```bash
+make up PROFILES=pg,pooler,backup,prod
+```
+
+The prod overlay removes every engine binding, so the only database port on the
+host is `pg-pooler` at `10.0.1.5:54100` (`MDB_PORT_BASE + 100`). Under
+enforcement the pooler refuses plaintext, so the client uses `sslmode=require`,
+or `sslmode=verify-full` with `sslrootcert` pointing at a copy of
+`certs/ca.crt`. Connection settings and a Laravel example are in
+[Connection pooling](../guides/pooling.md#connecting-from-another-host).
+
+### Firewalling a published port
+
+Docker publishes a port with a DNAT rule in the `nat` table's `PREROUTING`
+chain, so the packet is rewritten *before* the host's `INPUT` chain, where `ufw`
+and most front-ends put their rules, would see it. Forwarded container traffic
+goes through `FORWARD`, and Docker evaluates the `DOCKER-USER` chain first
+there. That is where the rule belongs.
+
+By the time a packet reaches `DOCKER-USER` its destination port is already the
+container's (`6432`), not the published one (`54100`), so `--dport 54100` never
+matches. Match the port the client originally dialled through conntrack:
+
+```bash
+# Allow the application server, drop everyone else, for the published pooler port.
+iptables -I DOCKER-USER 1 -p tcp -s 10.0.1.10 \
+  -m conntrack --ctorigdstport 54100 --ctdir ORIGINAL -j RETURN
+iptables -I DOCKER-USER 2 -p tcp \
+  -m conntrack --ctorigdstport 54100 --ctdir ORIGINAL -j DROP
+```
+
+`--ctdir ORIGINAL` restricts the match to packets travelling in the direction
+the connection was opened, so the rule cannot also match reply traffic. Order
+matters: the allow (`RETURN`, which hands the packet back to Docker's own
+chains) must sit above the drop. Rules added by hand do not survive a reboot; persist
+them with whatever the host uses (`iptables-persistent`, or a systemd unit
+ordered after `docker.service`). Docker creates `DOCKER-USER` but never fills
+it, so what is in it is yours.
+Binding to a private `MDB_BIND_ADDR` is the first fence; this is the second.
 
 The UIs go behind Caddy with basic auth on `MDB_CADDY_BIND_ADDR`, and the prod
 profile will not start without the auth hash set.

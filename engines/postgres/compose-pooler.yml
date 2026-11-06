@@ -1,5 +1,11 @@
       DB_USER: pgbouncer
       LISTEN_PORT: "6432"
+      # Client TLS (design.md D-69). The pooler serves the certificate in
+      # ./certs/pg, mounted by gen-compose. Under enforcement -- the prod
+      # profile -- plaintext clients are refused and the hop to PostgreSQL is
+      # server_tls_sslmode=require; otherwise TLS is offered and plaintext is
+      # still accepted.
+      MDB_TLS_ENFORCE: ${MDB_TLS_ENFORCE:-false}
       # scram-sha-256 end to end. The pooler re-authenticates each client
       # against the verifier it fetches, so a client cannot present a weaker
       # method to the pooler than the server would have demanded.

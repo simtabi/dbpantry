@@ -38,6 +38,7 @@ so a green `make verify` is the criteria being met rather than a proxy for it.
 | No trust or empty-password auth anywhere, including loopback | `30-no-trust-auth` |
 | Every engine descriptor is complete, consistent, and honestly declared | `31-engine-descriptors` |
 | The pooler multiplexes and holds no application password (PostgreSQL) | `33-pooler-works` |
+| The pooler refuses plaintext and requires TLS upstream under enforcement, and still accepts plaintext in dev (PostgreSQL) | `68-pooler-tls` |
 | The pooler holds verifiers, not passwords (MySQL family) | `35-proxysql-verifiers` |
 | Every engine family can provision a project | `34-new-project-every-engine` |
 | PITR recovers to a point in time (PostgreSQL) | `37-pitr-recovers` |

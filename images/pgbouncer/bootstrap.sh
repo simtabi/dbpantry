@@ -19,6 +19,30 @@ set -eu
 DB_PASSWORD="$(tr -d '\n' < "$DB_PASSWORD_FILE")"
 export DB_PASSWORD
 
+# TLS material for client connections (design.md D-69). The pooler serves the
+# certificate `make certs` issues for PostgreSQL -- the same lookup as the pg
+# image's mdb-certs stage, /certs/pg first, then /certs -- so a client that
+# trusts certs/ca.crt trusts the pooler too. It is copied, not referenced in
+# place, for the same reason the password is read here: certs/pg/server.key is
+# host-owned 0600, readable by this root process and not by postgres. The copy
+# lands on the /etc/pgbouncer tmpfs, so the key never reaches the container's
+# writable layer. entrypoint.sh decides what to do with it; finding none is
+# fatal only under MDB_TLS_ENFORCE.
+TLS_DIR="${TLS_DIR:-/etc/pgbouncer/tls}"
+export TLS_DIR
+for candidate in /certs/pg /certs; do
+    if [ -r "$candidate/server.crt" ] && [ -r "$candidate/server.key" ]; then
+        install -d -o postgres -g postgres -m 0700 "$TLS_DIR"
+        install -o postgres -g postgres -m 0600 "$candidate/server.key" "$TLS_DIR/server.key"
+        install -o postgres -g postgres -m 0644 "$candidate/server.crt" "$TLS_DIR/server.crt"
+        if [ -r /certs/ca.crt ]; then
+            install -o postgres -g postgres -m 0644 /certs/ca.crt "$TLS_DIR/ca.crt"
+        fi
+        echo "pgbouncer: serving TLS with the certificate from $candidate" >&2
+        break
+    fi
+done
+
 # The read above happens as ROOT, and the drop to postgres happens here, at
 # exec -- the same read-then-drop the engine entrypoints use, and the reason
 # they never hit this: secrets/ is created on the host by make init as the

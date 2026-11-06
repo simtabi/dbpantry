@@ -15,6 +15,25 @@ set -eu
 CONF=/etc/pgbouncer/pgbouncer.ini
 AUTH_FILE="${AUTH_FILE:-/etc/pgbouncer/userlist.txt}"
 
+TLS_DIR="${TLS_DIR:-/etc/pgbouncer/tls}"
+
+# Client TLS (design.md D-69). bootstrap.sh copies the toolkit certificate into
+# TLS_DIR when one is mounted. Under MDB_TLS_ENFORCE -- the prod profile --
+# plaintext clients are refused and the hop to PostgreSQL must be TLS too;
+# without enforcement TLS is offered and plaintext still accepted, so dev stays
+# painless. Enforcement with no certificate is fatal: starting anyway would
+# serve plaintext on a stack that promised it would not.
+enforce=false
+case "${MDB_TLS_ENFORCE:-false}" in
+    [Tt][Rr][Uu][Ee]|1|[Yy][Ee][Ss]|[Oo][Nn]) enforce=true ;;
+esac
+have_tls=false
+[ -s "$TLS_DIR/server.crt" ] && [ -s "$TLS_DIR/server.key" ] && have_tls=true
+if [ "$enforce" = true ] && [ "$have_tls" = false ]; then
+    echo "pgbouncer: MDB_TLS_ENFORCE is true but no certificate is mounted at /certs/pg; run 'make certs'" >&2
+    exit 1
+fi
+
 : > "$AUTH_FILE"
 chmod 0600 "$AUTH_FILE"
 
@@ -52,6 +71,24 @@ fi
     printf 'admin_users = %s\n' "${ADMIN_USERS:-pgbouncer}"
     [ -n "${STATS_USERS:-}" ]       && printf 'stats_users = %s\n' "$STATS_USERS"
     [ -n "${LOG_POOLER_ERRORS:-}" ] && printf 'log_pooler_errors = %s\n' "$LOG_POOLER_ERRORS"
+    # Setting names and values checked against https://www.pgbouncer.org/config.html
+    # for the PGDG build this image installs (1.26 at the time of writing; none
+    # of these changed after 1.21). client_tls_sslmode defaults to disable,
+    # which is why a client asking for sslmode=require could not connect at all.
+    if [ "$have_tls" = true ]; then
+        if [ "$enforce" = true ]; then
+            printf 'client_tls_sslmode = require\n'
+        else
+            printf 'client_tls_sslmode = prefer\n'
+        fi
+        printf 'client_tls_cert_file = %s/server.crt\n' "$TLS_DIR"
+        printf 'client_tls_key_file = %s/server.key\n' "$TLS_DIR"
+        printf 'client_tls_protocols = secure\n'
+    fi
+    # server_tls_sslmode already defaults to prefer, which falls back to
+    # plaintext without saying so. Under enforcement the pooler -> PostgreSQL
+    # hop must be TLS or fail.
+    [ "$enforce" = true ] && printf 'server_tls_sslmode = require\n'
     # Logging to stdout is what makes `docker compose logs` useful; a logfile
     # inside a container is a file nobody reads.
     printf 'logfile =\n'

@@ -64,12 +64,22 @@ issue() {
     # a published port without a second certificate.
     sans="DNS:${engine},DNS:localhost,IP:127.0.0.1,IP:::1"
     case "$engine" in
-        pg) sans="$sans,DNS:postgres,DNS:pgbouncer,DNS:haproxy" ;;
+        # pg-pooler is the compose service name of pgBouncer, which serves
+        # this same certificate to its clients (design.md D-69).
+        pg) sans="$sans,DNS:postgres,DNS:pgbouncer,DNS:pg-pooler,DNS:haproxy" ;;
     esac
     if [[ -n "$EXTRA_SANS" ]]; then
         old_ifs="$IFS"; IFS=','
         for s in $EXTRA_SANS; do
-            [[ -n "$s" ]] && sans="$sans,DNS:$s"
+            [[ -n "$s" ]] || continue
+            sans="$sans,DNS:$s"
+            # An address also gets an iPAddress SAN, which is what RFC 6125
+            # verification of a client connecting by IP matches against. The
+            # DNS entry stays, so certificates issued before this keep their
+            # shape (design.md D-69).
+            if [[ "$s" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ || "$s" == *:* ]]; then
+                sans="$sans,IP:$s"
+            fi
         done
         IFS="$old_ifs"
     fi

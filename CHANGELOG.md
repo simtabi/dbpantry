@@ -13,6 +13,21 @@ project to dbpantry and fixes the findings that failed the Trivy gate on every
 image, replacing Cassandra's vulnerable vendored JARs rather than waiving them.
 
 ### Changed
+- **pgBouncer serves client TLS** (design.md D-69). It reuses the certificate `make certs` issues for
+  PostgreSQL, so a client trusting `certs/ca.crt` can use `sslmode=verify-full` against `pg-pooler`.
+  Under `MDB_TLS_ENFORCE=true` (the prod profile) it sets `client_tls_sslmode = require`, refusing
+  plaintext clients, and `server_tls_sslmode = require`, so the hop to PostgreSQL can no longer fall
+  back to plaintext; it refuses to start with no certificate mounted. Otherwise it sets
+  `client_tls_sslmode = prefer` and plaintext still connects. Before this the pooler accepted
+  plaintext only, so an application connecting from another host with `sslmode=require` could not
+  connect. Check 68 proves both modes; no new `MDB_` variable.
+- `scripts/certs` adds `DNS:pg-pooler` to the PostgreSQL certificate, and an `MDB_EXTRA_SANS` entry
+  that is an IP address now also gets an `IP:` SAN (it was written as `DNS:` only). Run
+  `make certs-renew` to re-issue existing certificates; restart `pg-pooler` afterwards, since it
+  copies the certificate at start (`certs-renew` says so when it is running).
+- docs/runbooks/operations.md covers an application on another host (direct publish of the pooler
+  on a private `MDB_BIND_ADDR`) and a firewall that works with Docker's DNAT, matching
+  `DOCKER-USER` on `--ctorigdstport`; docs/guides/pooling.md gives the client settings.
 - The CI build matrix comes from `dbpantry manifest --matrix versions`; `scripts/ci-matrix` stays
   and check 62 holds the two byte-identical.
 - `scripts/helm-values` and the Kubernetes backend read the engine list from the descriptors
