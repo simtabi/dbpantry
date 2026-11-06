@@ -23,16 +23,14 @@ FROM --platform=$BUILDPLATFORM ${GO_IMAGE} AS gotools
 ARG TARGETOS
 ARG TARGETARCH
 COPY --chmod=0755 _shared/gotools/build.sh /usr/local/bin/build-go-tool
+COPY _shared/gotools/floors.txt /usr/local/share/build-go-tool/floors.txt
 
-# rclone: grpc raised past CVE-2026-84445 (fixed at d5a41119e0e3; 1.75.1 vendors
-# an earlier 1.84.0-dev pseudo-version) and x/net past CVE-2026-78669 (fixed in
-# v0.60.0; 1.75.1 vendors v0.57.0). VersionSuffix is cleared so the binary
-# reports v1.75.1 rather than a -DEV build.
+# rclone: its vulnerable dependencies (grpc, x/net) are raised from
+# _shared/gotools/floors.txt (design.md D-70). VersionSuffix is cleared so the
+# binary reports v1.75.1 rather than a -DEV build.
 ARG RCLONE_VERSION=1.75.1
 RUN LDFLAGS="-X github.com/rclone/rclone/fs.VersionSuffix=" \
-    build-go-tool rclone https://github.com/rclone/rclone "v${RCLONE_VERSION}" . /out/rclone \
-        google.golang.org/grpc@v1.84.0-dev.0.20260825144003-d5a41119e0e3 \
-        golang.org/x/net@v0.60.0
+    build-go-tool rclone https://github.com/rclone/rclone "v${RCLONE_VERSION}" . /out/rclone
 
 FROM ${BASE_IMAGE}
 

@@ -22,6 +22,7 @@ FROM --platform=$BUILDPLATFORM ${GO_IMAGE} AS gotools
 ARG TARGETOS
 ARG TARGETARCH
 COPY --chmod=0755 _shared/gotools/build.sh /usr/local/bin/build-go-tool
+COPY _shared/gotools/floors.txt /usr/local/share/build-go-tool/floors.txt
 
 # gosu: the tag the base image already ships, and the binary its entrypoint and
 # ours call. Every finding against it was in the Go standard library.

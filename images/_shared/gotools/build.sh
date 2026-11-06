@@ -10,9 +10,15 @@
 # last released in 2025. Rebuilding the same tag on a patched toolchain removes
 # those findings without changing a line of the tool's own code.
 #
-# Trailing module@version arguments raise a vulnerable dependency to its fixed
-# version before building. Each is a floor raised for a named CVE, recorded in
-# the Dockerfile beside the call; nothing else in the module graph moves.
+# Vulnerable dependencies are raised from floors.txt, installed beside this
+# script (design.md D-70): every module listed there that the tool depends on at
+# an older version is raised to the floor before building, and nothing else in
+# the module graph moves. A floor never downgrades and never adds a module.
+#
+# Trailing module@version arguments still work and are applied after the
+# floors, exactly as before, but check 69 refuses them in a Dockerfile: a fix
+# written inline has to be repeated in every image that builds the same tool,
+# which is how one x/net bump was missed in four Dockerfiles at once.
 #
 # Cross-compiled: the stage runs on the BUILD platform and sets GOARCH from
 # TARGETARCH, so an arm64 image never compiles under emulation.
@@ -28,12 +34,47 @@ src="/src/$name"
 git clone --quiet --depth 1 --branch "$tag" "$url" "$src"
 cd "$src"
 
+# ver_lt A B: true when semantic version A sorts before B. sort -V orders the
+# numeric fields correctly but puts a release BEFORE its own pre-releases, the
+# opposite of semver, so equal bases are settled by the pre-release rule.
+ver_lt() {
+    [ "$1" = "$2" ] && return 1
+    a_base=${1%%-*} b_base=${2%%-*}
+    if [ "$a_base" != "$b_base" ]; then
+        [ "$(printf '%s\n%s\n' "$a_base" "$b_base" | sort -V | head -1)" = "$a_base" ]
+        return
+    fi
+    # Same base: a release outranks any pre-release of it.
+    [ "$1" = "$a_base" ] && return 1
+    [ "$2" = "$b_base" ] && return 0
+    [ "$(printf '%s\n%s\n' "$1" "$2" | sort -V | head -1)" = "$1" ]
+}
+
+floors="${GO_FLOORS:-/usr/local/share/build-go-tool/floors.txt}"
+changed=0
+if [ -r "$floors" ]; then
+    while read -r module floor _; do
+        case "$module" in ''|'#'*) continue ;; esac
+        current="$(go list -m -f '{{.Version}}' "$module" 2>/dev/null)" || continue
+        [ -n "$current" ] || continue
+        if ver_lt "$current" "$floor"; then
+            echo "build-go-tool: $name: raising $module $current -> $floor" >&2
+            go get "$module@$floor"
+            changed=1
+        fi
+    done < "$floors"
+else
+    echo "build-go-tool: no floors file at $floors" >&2
+    exit 1
+fi
+
 if [ "$#" -gt 0 ]; then
     for module in "$@"; do
         go get "$module"
     done
-    go mod tidy
+    changed=1
 fi
+[ "$changed" -eq 1 ] && go mod tidy
 
 CGO_ENABLED=0 GOOS="${TARGETOS:-linux}" GOARCH="$TARGETARCH" \
     go build -trimpath -ldflags "-s -w ${LDFLAGS:-}" -o "$out" "$pkg"

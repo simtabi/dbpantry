@@ -45,6 +45,7 @@ so a green `make verify` is the criteria being met rather than a proxy for it.
 | PITR recovers to a point in time (MySQL and MariaDB) | `40-mysql-family-pitr` |
 | Vulnerability waivers are package-scoped, justified, and expire | `38-trivy-waivers` |
 | No Dockerfile passes a dnf-only flag to microdnf | `43-microdnf-flags` |
+| Go dependency floors are one file every image reads, never inline, compared by semver | `69-go-floors` |
 | No leftover old product name outside its history | `44-no-old-name` |
 | Cassandra's replaced JARs are pinned by checksum and installed | `45-cassandra-jars` |
 | Every relative link in the Markdown docs resolves | `46-doc-links-resolve` |

@@ -437,6 +437,12 @@ Check 68 proves it on the wire: under enforcement a plaintext client is refused,
 
 Relied on: pgBouncer configuration reference (<https://www.pgbouncer.org/config.html>: `client_tls_sslmode` values and its `disable` default, the requirement that `client_tls_key_file` and `client_tls_cert_file` be set when it is not `disable`, `server_tls_sslmode` defaulting to `prefer`, `client_tls_protocols = secure`) and changelog (<https://www.pgbouncer.org/changelog.html>: 1.26.1 current at 2026-10-14; no `*_tls_*` setting renamed or removed since 1.21; 1.20.0 made `prefer` the server default), libpq SSL support (<https://www.postgresql.org/docs/current/libpq-ssl.html>), RFC 6125 section 6 for name versus address matching.
 
+**D-70: Go dependency floors live in one file, not beside each build-go-tool call.** D-51 rebuilds gosu, rclone and postgres_exporter on a current toolchain and raised vulnerable modules with trailing `module@version` arguments written next to each call. That put the same `golang.org/x/net@v0.60.0` in four Dockerfiles, so CVE-2026-78661 (fixed in v0.62.0) failed the pg, mysql and mariadb builds on every pull request at once, including ones that touched no image.
+- **`images/_shared/gotools/floors.txt`** lists `<module> <minimum> <advisory>`. Every Dockerfile that installs `build-go-tool` installs the file beside it, and the helper raises each listed module the tool already depends on to its floor when it resolves an older version. It never downgrades and never adds a module the tool does not use (gosu, which uses none of them, builds unchanged).
+- **The comparison is semver, not `sort -V`.** `sort -V` puts a release before its own pre-releases; grpc's floor is a pre-release pseudo-version, so a tool already on `v1.84.0` would have been "raised" backwards. `ver_lt` settles equal bases by the pre-release rule.
+- **Trailing arguments still work** (preserve by default), applied after the floors, but check 69 refuses them in a Dockerfile, refuses a Dockerfile that installs the helper without the floors, refuses a floor that names no advisory, and runs the comparator against seven cases including release against pre-release. Proven red for each of those by reintroducing the defect.
+- **A new Go CVE is now a one-line change**, and the scheduled build on main (D-71) is where it is expected to surface first.
+
 ## 8. arm64 deliverability
 
 **Nothing in the spec is undeliverable on arm64.** The named unknown anticipated gaps that do not exist:

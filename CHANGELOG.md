@@ -291,6 +291,10 @@ image, replacing Cassandra's vulnerable vendored JARs rather than waiving them.
   maintained menu. Each still runs through `MDB_<ENGINE>_BASE_IMAGE`, unsupported.
 
 ### Security
+- **Go dependency floors are one file** (design.md D-70): `images/_shared/gotools/floors.txt`, read by every image
+  that rebuilds a Go tool. `golang.org/x/net` is raised to v0.62.0 for CVE-2026-78661, which failed the pg,
+  mysql and mariadb builds because the previous floor was written inline in four Dockerfiles. Check 69 keeps
+  floors out of Dockerfiles and tests the version comparison.
 
 - **CVE-2026-109518 in `apt` is fixed in the MariaDB images too.** It started failing the Trivy gate
   on MariaDB 11.8 and 12.3 on both architectures after the pg and Cassandra fix landed. `apt` is
