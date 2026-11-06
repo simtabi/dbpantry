@@ -439,11 +439,23 @@ publish_engines="$(get MDB_PUBLISH_ENGINES)"
             printf '    ports: !override []\n'
         fi
         printf '    environment:\n      MDB_TLS_ENFORCE: "true"\n'
+        # Limits for every engine (design.md D-75). compose.prod.yml sets its own
+        # for the engines it names, and those win: this only covers the rest, so
+        # an engine never runs unbounded under prod because nobody listed it.
+        if ! awk -v s="  ${MDB_ENGINE_NAME}:" '$0 == s {f=1; next} f && /^  [a-z]/ {exit} f && /limits:/ {found=1} END {exit !found}' \
+                "$ROOT/compose.prod.yml" 2>/dev/null; then
+            printf '    deploy:\n      resources:\n        limits:\n'
+            printf '          cpus: "${MDB_%s_CPU_LIMIT:-2}"\n' "$upper"
+            printf '          memory: ${MDB_%s_MEM_LIMIT:-2g}\n' "$upper"
+        fi
         if [ "${MDB_ENGINE_POOLING:-driver}" = "external" ] \
            && [ -n "${MDB_ENGINE_POOLER_IMAGE:-}" ] \
            && [ -f "$MDB_ENGINE_DIR/compose-pooler.yml" ]; then
             printf '  %s-pooler:\n' "$MDB_ENGINE_NAME"
             printf '    environment:\n      MDB_TLS_ENFORCE: "true"\n'
+            printf '    deploy:\n      resources:\n        limits:\n'
+            printf '          cpus: "${MDB_POOLER_CPU_LIMIT:-1}"\n'
+            printf '          memory: ${MDB_POOLER_MEM_LIMIT:-256m}\n'
         fi
     done
     # HAProxy is HA's direct path to PostgreSQL, so under prod it follows the

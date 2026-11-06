@@ -20,6 +20,20 @@
 # without it. Until 2026-11-06 nothing put this file in COMPOSE_FILE, so a prod
 # `make up` applied none of it.
 
+# Ceilings for everything that is not an engine or a pooler (design.md D-75).
+x-aux-limits: &aux-limits
+  deploy:
+    resources:
+      limits:
+        cpus: "${MDB_AUX_CPU_LIMIT:-1}"
+        memory: ${MDB_AUX_MEM_LIMIT:-1g}
+x-pg-limits: &pg-limits
+  deploy:
+    resources:
+      limits:
+        cpus: "${MDB_PG_CPU_LIMIT:-2}"
+        memory: ${MDB_PG_MEM_LIMIT:-4g}
+
 services:
   pg:
     # !override empties the published-ports list from the base file rather than
@@ -60,15 +74,19 @@ services:
   # The UIs stay on the internal network with no published port of their own.
   # They are reachable only through Caddy, which is where basic auth lives.
   adminer:
+    <<: *aux-limits
     ports: !override []
   phpmyadmin:
+    <<: *aux-limits
     ports: !override []
   pgadmin:
+    <<: *aux-limits
     ports: !override []
 
   # Caddy binds the host, and is the only service that does. In prod it serves
   # real certificates and requires basic auth on every UI route.
   caddy:
+    <<: *aux-limits
     ports: !override
       - "${MDB_CADDY_BIND_ADDR:-0.0.0.0}:${MDB_CADDY_HTTP_PORT:-80}:80"
       - "${MDB_CADDY_BIND_ADDR:-0.0.0.0}:${MDB_CADDY_HTTPS_PORT:-443}:443"
@@ -92,3 +110,23 @@ services:
         limits:
           cpus: "${MDB_PGBOUNCER_CPU_LIMIT:-1}"
           memory: ${MDB_PGBOUNCER_MEM_LIMIT:-256m}
+
+  # ---------------------------------------------------------------------------
+  # Every other service gets a ceiling too (design.md D-75). Engines and their
+  # poolers are limited above or in the generated compose.prod.engines.yml;
+  # these are the sidecars, the front door, the HA members and the UIs. One
+  # pair of variables, because none of them should ever need much.
+  # ---------------------------------------------------------------------------
+  backup-pg: *aux-limits
+  backup-mysql: *aux-limits
+  backup-mariadb: *aux-limits
+  pg-exporter: *aux-limits
+  mysqld-exporter: *aux-limits
+  etcd1: *aux-limits
+  etcd2: *aux-limits
+  etcd3: *aux-limits
+  haproxy: *aux-limits
+  # Patroni members are PostgreSQL servers, so they take PostgreSQL's limits.
+  patroni1: *pg-limits
+  patroni2: *pg-limits
+  patroni3: *pg-limits

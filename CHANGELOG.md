@@ -320,6 +320,11 @@ image, replacing Cassandra's vulnerable vendored JARs rather than waiving them.
   maintained menu. Each still runs through `MDB_<ENGINE>_BASE_IMAGE`, unsupported.
 
 ### Security
+- **Every service drops privileges, has a health signal, and is limited under prod** (design.md D-75). etcd and
+  HAProxy drop all capabilities; MongoDB, Cassandra, poolers, sidecars, etcd, HAProxy, Patroni and the UIs get
+  prod limits (`MDB_<ENGINE>_CPU_LIMIT`/`_MEM_LIMIT`, `MDB_POOLER_*`, `MDB_AUX_*`); the exporters and MongoDB get
+  healthchecks. pg-exporter now connects with `sslmode=require` and ProxySQL reaches its server over TLS, so
+  neither is refused by a TLS-only server under prod. Check 72 holds this, and lists what is not done yet.
 - **Images take their distribution's security updates whole** (design.md D-71): `mdb-os-upgrade` runs in every
   image and upgrades from the distribution's own repositories only, failing the build if the engine version
   moves. It replaces the per-package `--only-upgrade` lines (pcre2, expat, perl, libssl3, apt). Downloads go

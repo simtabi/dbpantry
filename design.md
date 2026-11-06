@@ -183,6 +183,9 @@ Reproduced from spec.md section 21.1 as the sizing contract:
 | `MDB_UI_BASIC_AUTH_USER` / `_HASH` | unset / unset | Required under `prod` | `prod` |
 | `MDB_PGADMIN_EMAIL` / `_PASSWORD_FILE` | — | pgAdmin login | `ui` |
 | `MDB_PGBOUNCER_POOL_MODE` | `transaction` | Pool mode | `prod`, `ha` |
+| `MDB_POOLER_CPU_LIMIT` / `MDB_POOLER_MEM_LIMIT` | `1` / `256m` | Prod limits for every generated pooler (D-75) | `prod` |
+| `MDB_AUX_CPU_LIMIT` / `MDB_AUX_MEM_LIMIT` | `1` / `1g` | Prod limits for Caddy, sidecars, etcd, HAProxy and the UIs (D-75) | `prod` |
+| `MDB_<ENGINE>_POOLER_ADDR` | set by `gen-compose` | The pooler's fixed address, for the engine's mTLS rule (D-74); never set by hand | `pooler` |
 | `MDB_PUBLISH_ENGINES` | `false` | Under the prod overlay, keep engines' own direct-mode ports published (deprecated for prod; check-env warns) | `prod` |
 | `MDB_HA_POOLER_HOST_PORT` | `6432` | Host port of the HA pooler (`pgbouncer`, `PROFILES=ha,pooler`), on `MDB_BIND_ADDR` | `ha` |
 | `MDB_PGBOUNCER_CPU_LIMIT` / `MDB_PGBOUNCER_MEM_LIMIT` | `1` / `256m` | Prod limits for the HA pooler | `prod` |
@@ -476,6 +479,14 @@ Relied on: pgBouncer configuration reference (<https://www.pgbouncer.org/config.
 - **Certificates:** `scripts/certs` issues the pooler's (`certs/pooler/`), `--client NAME [--out DIR]` issues a role's (CN = role, `clientAuth` only, key 0600), `make new-project` issues one per role under `MDB_MTLS`, and `--renew` (so `make certs-renew`) re-issues every one, keeping the CA. Helm values never carry the Compose address.
 - **Not covered:** Patroni's `pg_hba` has never applied `MDB_MTLS`, so under HA the database end does not demand client certificates (the HA pooler still presents its own). ProxySQL does not use `MDB_MTLS`. Both stay documented as remaining.
 - **Check 68** proves it in its own subnet: no certificate refused at the pooler; a toolkit-CA certificate connects; another CA's is refused; `pg_stat_ssl.client_dn` on the pooler's connection is the pooler's certificate; and directly, the pooler's certificate cannot log in as `poolapp` while `poolapp`'s can. Thirteen attempts, counted.
+
+**D-75: every service is hardened, health-checked and limited, and a check holds it; what is not yet is listed with its reason.** Measured 2026-11-06 over the broadest render (every engine and pooler, `ui`, `backup`, `metrics`, `ha`, `prod`: 25 services). etcd and HAProxy kept every capability. 18 services had no limit under prod, MongoDB and Cassandra among them, because the hand-written overlay named only pg, mysql and mariadb. Five had no health signal at all. pg-exporter connected with `sslmode=disable` to a server that is hostssl-only under prod, and ProxySQL connected to its server in plaintext while that server sets `require_secure_transport` under prod, so under the prod profile neither could reach what it serves.
+- **Privileges:** etcd and HAProxy get `no-new-privileges` and `cap_drop: [ALL]` (etcd writes only its volume; HAProxy runs unprivileged above 1024).
+- **Limits under prod:** `compose.prod.engines.yml` limits every engine the hand-written overlay does not (`MDB_<ENGINE>_CPU_LIMIT`/`_MEM_LIMIT`, 2 and 2g by default) and every pooler (`MDB_POOLER_CPU_LIMIT`/`_MEM_LIMIT`); `compose.prod.yml` limits the rest through one pair, `MDB_AUX_CPU_LIMIT`/`MDB_AUX_MEM_LIMIT`, and gives Patroni members PostgreSQL's.
+- **Health:** the exporters probe their own `/metrics`, MongoDB answers `ping` (no credential), and images this repository builds keep their own `HEALTHCHECK`.
+- **TLS where a sidecar talks to a TLS-only server:** pg-exporter uses `sslmode=require`; ProxySQL's backend row has `use_ssl=1` (check 35 asserts it).
+- **Check 72** renders the broad combination with `docker compose config` and fails on a service without privileges dropped, a health signal, a prod limit, or with a credential-named variable holding a value instead of a `/run/secrets` path. Its exceptions carry a reason each and fail when they stop being needed. Each rule proven red by reintroducing its defect.
+- **Remaining, recorded as check 72's exceptions or here:** pgAdmin binds port 80 through a file capability that `no-new-privileges` disables, so it keeps its privileges until it moves to an unprivileged port with its Caddy route; Adminer, phpMyAdmin, pgAdmin, Caddy (prod disables its admin API and redirects :80) and the two ProxySQL poolers have no probe yet, unverified without a daemon. ProxySQL's client-facing TLS (`mysql-have_ssl`) and `MDB_MTLS` are not wired, so the MySQL-family poolers accept plaintext clients. mysqld-exporter does not request TLS, so under prod it cannot reach MySQL. MongoDB and Cassandra take no TLS settings at all; the prod overlay's `MDB_TLS_ENFORCE` reaches them and changes nothing. Patroni's `pg_hba` does not apply `MDB_MTLS` (D-74).
 
 ## 8. arm64 deliverability
 

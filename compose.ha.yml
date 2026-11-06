@@ -15,6 +15,11 @@ x-etcd: &etcd
   profiles: [ha]
   restart: unless-stopped
   networks: [mdb]
+  # etcd writes only its own data volume and binds unprivileged ports, so it
+  # needs no capability at all (design.md D-75).
+  security_opt:
+    - no-new-privileges:true
+  cap_drop: [ALL]
   environment: &etcd_env
     ETCD_INITIAL_CLUSTER: etcd1=http://etcd1:2380,etcd2=http://etcd2:2380,etcd3=http://etcd3:2380
     ETCD_INITIAL_CLUSTER_STATE: new
@@ -170,6 +175,11 @@ services:
     restart: unless-stopped
     networks: [mdb]
     depends_on: [patroni1, patroni2, patroni3]
+    # The official image runs as the unprivileged haproxy user on ports above
+    # 1024: nothing to keep (design.md D-75).
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
     volumes:
       - ./config/haproxy/haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro
     ports:
