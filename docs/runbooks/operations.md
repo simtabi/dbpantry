@@ -69,6 +69,12 @@ layer4 module — see [image provenance](../reference/image-provenance.md). That
 pre-1.0, so if you would rather not have it in the connection path, `direct`
 publishes the same ports without it.
 
+**Under the prod overlay, `proxy` publishes no database port.** The overlay sets
+Caddy's ports to 80 and 443 only, and its layer-4 route for PostgreSQL goes to
+`pg`, not the pooler (design.md D-69, D-73). A prod stack that serves an
+application on another host uses `direct`, which publishes the pooler and no
+engine; see the next section.
+
 `MDB_MTLS=true` requires client certificates. On an exposed database it is
 worth the setup. Through the pooler it holds end to end: the client presents a
 certificate from the toolkit CA, pgBouncer presents its own to PostgreSQL, and
