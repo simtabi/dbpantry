@@ -15,6 +15,21 @@ make up PROFILES=pg,pooler,backup,metrics,prod
 - `MDB_TLS_ENFORCE` is not `true`
 - an engine that requires a pooler does not have one
 - a UI route is exposed without basic auth
+- `COMPOSE_FILE` does not include the prod overlay (`compose.prod.yml` and the
+  generated `compose.prod.engines.yml`)
+
+The overlay is what removes engine ports, forces TLS on every engine and pooler,
+and sets limits. `make init-prod` writes it into `COMPOSE_FILE`. An env file made
+before that did not have it, so its prod boot published the engines' own ports;
+`check-env` now refuses that boot and names the fix, which edits only
+`COMPOSE_FILE` and is safe to repeat:
+
+```bash
+make prod-overlay ENV_FILE=.env
+```
+
+`prod` is active when either the file's `MDB_PROFILES` or the run's `PROFILES=`
+names it; `make up PROFILES=pg,pooler,prod` on a dev `.env` gets every guard.
 
 These are refusals, not warnings, because every one of them is a mistake that
 looks fine until it is on the internet.
@@ -77,8 +92,11 @@ MDB_TLS_ENFORCE=true          # required by the prod profile anyway
 make up PROFILES=pg,pooler,backup,prod
 ```
 
-The prod overlay removes every engine binding, so the only database port on the
-host is `pg-pooler` at `10.0.1.5:54100` (`MDB_PORT_BASE + 100`). Under
+The prod overlay removes every engine binding, so with it in `COMPOSE_FILE`
+(see above) the only database port on the host is `pg-pooler` at
+`10.0.1.5:54100` (`MDB_PORT_BASE + 100`). `MDB_PUBLISH_ENGINES=true` puts the
+engines' own ports back under prod; it exists for the client that genuinely
+cannot use the pooler, is deprecated for prod, and makes `check-env` warn. Under
 enforcement the pooler refuses plaintext, so the client uses `sslmode=require`,
 or `sslmode=verify-full` with `sslrootcert` pointing at a copy of
 `certs/ca.crt`. Connection settings and a Laravel example are in

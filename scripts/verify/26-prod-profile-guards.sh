@@ -26,6 +26,11 @@ grep -q '^MDB_TLS_ENFORCE=true' "$tmp/.env.prod" \
     || vfail "init-prod did not enforce TLS"
 vinfo "init-prod renders TLS enforced"
 
+# design.md D-73: init-prod applies the overlay through COMPOSE_FILE.
+grep -q '^COMPOSE_FILE=.*compose\.prod\.yml:compose\.prod\.engines\.yml' "$tmp/.env.prod" \
+    || vfail "init-prod did not put the prod overlay in COMPOSE_FILE"
+vinfo "init-prod writes the prod overlay into COMPOSE_FILE"
+
 # Validated the way init-prod validates it. Rendering and booting are different
 # questions: rendering produces a file, often on a machine that is not the one
 # that will run it, so a port held here or an S3 key not yet created is not a
@@ -62,11 +67,34 @@ if MDB_ENV_FILE="$tmp/.env.prod" scripts/check-env >/dev/null 2>&1; then
     vfail "check-env allowed a prod boot with no UI basic auth"
 fi
 vinfo "check-env refuses prod without UI basic auth"
+mv "$tmp/.env.prod.bak" "$tmp/.env.prod"
+
+# A prod env whose COMPOSE_FILE lacks the overlay -- every env file made before
+# design.md D-73 -- is refused, and the refusal names the fix.
+sed -i.bak 's/^COMPOSE_FILE=.*/COMPOSE_FILE=docker-compose.yml:compose.engines.yml:compose.proxy.yml:compose.ha.yml/' "$tmp/.env.prod"
+if out="$(env -u COMPOSE_FILE MDB_ENV_FILE="$tmp/.env.prod" MDB_CHECK_RENDERING=1 scripts/check-env 2>&1)"; then
+    vfail "check-env allowed a prod env whose COMPOSE_FILE has no prod overlay"
+fi
+grep -q 'make prod-overlay' <<< "$out" || vfail "check-env refused the missing overlay without naming make prod-overlay"
+scripts/prod-overlay "$tmp/.env.prod" >/dev/null || vfail "scripts/prod-overlay failed"
+env -u COMPOSE_FILE MDB_ENV_FILE="$tmp/.env.prod" MDB_CHECK_RENDERING=1 scripts/check-env >/dev/null 2>&1 \
+    || vfail "check-env still refuses after scripts/prod-overlay"
+vinfo "a prod env without the overlay is refused, and make prod-overlay fixes it"
+
+# `make up PROFILES=pg,pooler,prod` on a DEV env file must get the prod guards.
+# They used to read MDB_PROFILES from the file alone and skip every one.
+cp .env.example "$tmp/.env.dev"
+if env -u COMPOSE_FILE COMPOSE_PROFILES=pg,pg-pooler,prod MDB_ENV_FILE="$tmp/.env.dev" \
+        scripts/check-env >/dev/null 2>&1; then
+    vfail "check-env let PROFILES=...,prod boot a dev env file; the prod guards were skipped"
+fi
+vinfo "prod named only in PROFILES= still applies the prod guards"
 
 # Nothing but Caddy may be published.
-# compose.ha.yml is in the list because the overlay's pgbouncer entry hardens
-# the HA pooler defined there (design.md D-72); COMPOSE_FILE always carries it.
-published="$(mdb_compose -f docker-compose.yml -f compose.engines.yml -f compose.ha.yml -f compose.prod.yml --profile prod config \
+# The files init-prod writes into COMPOSE_FILE (design.md D-73), in its order:
+# compose.ha.yml because the overlay's pgbouncer hardens the HA pooler defined
+# there (D-72), and the generated half that covers every engine.
+published="$(mdb_compose -f docker-compose.yml -f compose.engines.yml -f compose.ha.yml -f compose.prod.yml -f compose.prod.engines.yml --profile prod config \
     | awk '/^  [a-z-]+:/{svc=$1} /published:/{print svc, $2}' | grep -v '^caddy:' || true)"
 [[ -z "$published" ]] || {
     printf '      %s\n' "$published" >&2

@@ -130,7 +130,9 @@ make certs-renew               # re-issue certs/pg with the new SANs
 make up PROFILES=pg,pooler,backup,prod
 ```
 
-With `PROFILES=...,prod` only the pooler is published: `pg-pooler` on
+With `PROFILES=...,prod` and the prod overlay in `COMPOSE_FILE` (`make
+init-prod` writes it; `make prod-overlay` adds it to an older env file), only
+the pooler is published: `pg-pooler` on
 `MDB_PORT_BASE + 100`, **54100** with the default base (override with
 `MDB_PG_POOLER_HOST_PORT`), bound to `MDB_BIND_ADDR`. The application connects
 with:

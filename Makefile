@@ -74,6 +74,10 @@ init: ## Create .env, generate secrets and certs, run check-env
 init-prod: ## Render .env.prod with prod-safe values
 	@ENV_FILE="$(or $(ENV_FILE_ARG),$(ENV_FILE_PROD))" scripts/init --prod
 
+.PHONY: prod-overlay
+prod-overlay: ## Add the prod overlay to COMPOSE_FILE in ENV_FILE (idempotent; for existing prod installs)
+	@scripts/prod-overlay "$(ENV_FILE)"
+
 .PHONY: check-env
 check-env: ## Validate env: sentinels, required vars, port collisions
 	@scripts/check-env

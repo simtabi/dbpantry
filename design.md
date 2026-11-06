@@ -183,6 +183,7 @@ Reproduced from spec.md section 21.1 as the sizing contract:
 | `MDB_UI_BASIC_AUTH_USER` / `_HASH` | unset / unset | Required under `prod` | `prod` |
 | `MDB_PGADMIN_EMAIL` / `_PASSWORD_FILE` | — | pgAdmin login | `ui` |
 | `MDB_PGBOUNCER_POOL_MODE` | `transaction` | Pool mode | `prod`, `ha` |
+| `MDB_PUBLISH_ENGINES` | `false` | Under the prod overlay, keep engines' own direct-mode ports published (deprecated for prod; check-env warns) | `prod` |
 | `MDB_HA_POOLER_HOST_PORT` | `6432` | Host port of the HA pooler (`pgbouncer`, `PROFILES=ha,pooler`), on `MDB_BIND_ADDR` | `ha` |
 | `MDB_PGBOUNCER_CPU_LIMIT` / `MDB_PGBOUNCER_MEM_LIMIT` | `1` / `256m` | Prod limits for the HA pooler | `prod` |
 | `MDB_PGBOUNCER_DEFAULT_POOL_SIZE` | from tier | Per capacity table | `prod`, `ha` |
@@ -458,6 +459,14 @@ Relied on: pgBouncer configuration reference (<https://www.pgbouncer.org/config.
 - **Patroni convergence.** The pooler SQL moved verbatim from `50-converge.sh` into `converge-pooler.sh`, which the standalone stage now calls. Patroni runs `pooler-callback.sh` on `on_start` and `on_role_change`; on the primary it waits for `pg_is_in_recovery()` to be false and runs the same script over the local socket, bounded at 180s. `run-patroni.sh` stages the pooler secret for postgres as root, as it already does the key.
 - **The pgBouncer image is healthy only when listening**, read from `/proc/net/tcp` (it has no PostgreSQL client), so a pooler that wrote its config and exited cannot report healthy.
 - **The HA pooler's environment mirrors `engines/postgres/compose-pooler.yml`**; check 71 compares the rendered services and fails on drift. Check 27 now boots `ha,pooler` and asserts an application role reaches the primary through the pooler before and after the leader is killed.
+
+**D-73: the prod overlay is applied through `COMPOSE_FILE`, for every engine, and a prod boot without it is refused.** `compose.prod.yml` removes engine ports, forces TLS and sets limits, but nothing ever put it in `COMPOSE_FILE`: only check 26 passed it with `-f`. So `make up PROFILES=...,prod` applied none of it, and with `MDB_PUBLISH=direct` PostgreSQL's own port was published beside the pooler's. The spec says `init-prod` renders a prod env with no published engine ports (section 15, criterion in section 18); this makes that true. No production install exists yet (owner, 2026-11-06), so nothing live depends on the old behaviour; the rules below are still written for one that does.
+- **New installs:** `scripts/init --prod` appends `compose.prod.yml:compose.prod.engines.yml` to `COMPOSE_FILE`, after `compose.ha.yml`.
+- **Existing installs are never changed silently.** `check-env` refuses a prod boot whose `COMPOSE_FILE` lacks either file and names the one command that fixes it, `make prod-overlay ENV_FILE=...` (`scripts/prod-overlay`): idempotent, edits only the last `COMPOSE_FILE` line, keeps the file's mode, `--check` to ask without changing anything.
+- **`compose.prod.engines.yml` is generated** from the descriptors, so MongoDB and Cassandra, which the hand-written overlay never named, lose their published ports under prod too; every engine and pooler gets `MDB_TLS_ENFORCE: "true"`. Pooler ports stay: under `MDB_PUBLISH=direct` the pooler is the one published database port.
+- **Opt-out:** `MDB_PUBLISH_ENGINES=true` restores the engines' direct-mode bindings under prod. Deprecated for prod; `check-env` warns.
+- **Prod is detected from the run as well as the file.** The guards read only `MDB_PROFILES`, so `make up PROFILES=pg,pooler,prod` on a dev `.env` skipped all of them. They now apply when either names `prod`.
+- **Check 71** renders the profile combinations with `docker compose config` (no daemon) and asserts the prod rules, one pooler per upstream, and no pooler that cannot authenticate; check 26 renders through the same files.
 
 ## 8. arm64 deliverability
 

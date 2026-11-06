@@ -12,7 +12,23 @@ for amd64 and arm64, each with an SBOM and build provenance. It also renames the
 project to dbpantry and fixes the findings that failed the Trivy gate on every
 image, replacing Cassandra's vulnerable vendored JARs rather than waiving them.
 
+### Upgrade
+
+- **Prod: PostgreSQL's own port stops being published.** With the prod overlay applied (see Changed), a prod
+  stack under `MDB_PUBLISH=direct` publishes the pooler, `pg-pooler` on `MDB_PORT_BASE + 100` (54100 by
+  default), and no engine port: 54000 and the other engines' ports go away. Point applications at 54100 with
+  `sslmode=verify-full` and `sslrootcert` set to a copy of `certs/ca.crt` (docs/guides/pooling.md). An env
+  file made before this needs `make prod-overlay ENV_FILE=...` once; `check-env` refuses the prod boot until
+  then. `MDB_PUBLISH_ENGINES=true` keeps the engine ports, deprecated for prod.
+- **Certificates:** run `make certs-renew` to add the `pg-pooler` SAN and IP SANs for addresses in
+  `MDB_EXTRA_SANS`, then restart `pg-pooler`.
+
 ### Changed
+- **The prod overlay is applied** (design.md D-73). Nothing put `compose.prod.yml` in `COMPOSE_FILE`, so a prod
+  `make up` applied none of it. `make init-prod` now writes `COMPOSE_FILE` with the overlay and a generated
+  `compose.prod.engines.yml` that covers every engine and pooler; `check-env` refuses a prod boot without them
+  and names `make prod-overlay`, and detects `prod` from `PROFILES=` as well as `MDB_PROFILES`.
+  `MDB_PUBLISH_ENGINES=true` is the deprecated opt-out.
 - **pgBouncer serves client TLS** (design.md D-69). It reuses the certificate `make certs` issues for
   PostgreSQL, so a client trusting `certs/ca.crt` can use `sslmode=verify-full` against `pg-pooler`.
   Under `MDB_TLS_ENFORCE=true` (the prod profile) it sets `client_tls_sslmode = require`, refusing

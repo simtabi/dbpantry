@@ -13,7 +13,12 @@
 #   3. Resource limits and log caps are on, because an unbounded container on a
 #      VPS takes the host with it.
 #
-# Used as an overlay: docker compose -f docker-compose.yml -f compose.prod.yml
+# Applied through COMPOSE_FILE, after compose.ha.yml and before
+# compose.prod.engines.yml, which gen-compose generates for every engine and
+# pooler (design.md D-73). `make init-prod` writes that COMPOSE_FILE; an older
+# env file gets it from `make prod-overlay`, and check-env refuses a prod boot
+# without it. Until 2026-11-06 nothing put this file in COMPOSE_FILE, so a prod
+# `make up` applied none of it.
 
 services:
   pg:
