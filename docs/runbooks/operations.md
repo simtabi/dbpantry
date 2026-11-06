@@ -70,8 +70,11 @@ pre-1.0, so if you would rather not have it in the connection path, `direct`
 publishes the same ports without it.
 
 `MDB_MTLS=true` requires client certificates. On an exposed database it is
-worth the setup. It does not yet combine with the pooler, which presents no
-client certificate to PostgreSQL (design.md D-69).
+worth the setup. Through the pooler it holds end to end: the client presents a
+certificate from the toolkit CA, pgBouncer presents its own to PostgreSQL, and
+PostgreSQL still demands a certificate whose CN is the role from any client that
+is not the pooler. Settings are in
+[Connection pooling](../guides/pooling.md#mutual-tls) (design.md D-74).
 
 ### An application on another host
 

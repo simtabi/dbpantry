@@ -114,6 +114,47 @@ design.md D-69.
 The certificate is copied when the pooler starts, so after `make certs-renew`
 restart `pg-pooler` to serve the new one.
 
+### Mutual TLS
+
+`MDB_MTLS=true` (with `MDB_TLS_ENFORCE=true`) makes every hop present a
+certificate:
+
+| Hop | What is checked |
+|---|---|
+| Client → pooler | `client_tls_sslmode = verify-full`: a client certificate issued by the toolkit CA (`client_tls_ca_file`). pgBouncer documents `verify-full` as the same as `verify-ca` here: it does not match the certificate's CN to the user, so the role's password is still checked. |
+| Pooler → PostgreSQL | `server_tls_sslmode = verify-full` against the toolkit CA and the `pg` host name, and the pooler presents `certs/pooler/client.crt` (CN `pgbouncer`). |
+| PostgreSQL | From the pooler's fixed address only: `clientcert=verify-ca` plus scram, because the pooler logs in as every role and no CN can match them all. From anywhere else: `clientcert=verify-full`, the certificate's CN must be the role. |
+
+The pooler's address is fixed by `gen-compose` near the top of
+`MDB_NETWORK_SUBNET`, and the engine learns it as `MDB_PG_POOLER_ADDR`.
+PostgreSQL cannot relax the CN check any other way: its `map=` option is not
+allowed with `scram-sha-256`. Design rationale: design.md D-74.
+
+`make new-project` issues each role a certificate when `MDB_MTLS` is on, in
+`certs/clients/<role>/` (`client.crt`, `client.key`, and `ca.crt`). Copy the
+three files to the application server. For Laravel, add the client certificate
+to the TLS-only settings in the next section:
+
+```
+DB_SSLMODE=verify-full
+DB_SSLROOTCERT=/etc/ssl/dbpantry/ca.crt
+DB_SSLCERT=/etc/ssl/dbpantry/client.crt
+DB_SSLKEY=/etc/ssl/dbpantry/client.key
+```
+
+and in `config/database.php`'s `pgsql` connection,
+`'sslcert' => env('DB_SSLCERT')` and `'sslkey' => env('DB_SSLKEY')` beside
+`sslmode` and `sslrootcert`. libpq refuses a key readable by anyone but its
+owner (`chmod 0600`). Check 68 proves the cases: no certificate is refused,
+a toolkit-CA certificate connects, another CA's is refused, PostgreSQL sees the
+pooler's certificate on the pooler's connection, and a direct client still
+needs its role's certificate.
+
+Not covered yet: the HA pooler presents its certificate, but Patroni's
+`pg_hba` has never applied `MDB_MTLS`, so under HA the database end does not
+require client certificates; and the MySQL family's ProxySQL poolers do not use
+`MDB_MTLS` at all.
+
 ### Connecting from another host
 
 An application on a different server reaches PostgreSQL **through the pooler**,

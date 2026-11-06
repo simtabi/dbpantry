@@ -183,8 +183,26 @@ if engine_has_external_pooler; then
 
 # A pooler is available and is REQUIRED in production for this engine. With
 # \`make up PROFILES=${ENGINE},pooler\`, connect through it instead:
+#   DB_HOST=${ENGINE}-pooler
 #   DB_PORT=${MDB_ENGINE_POOLER_PORT:-6432}
 BLOCK
+fi
+
+# Mutual TLS (design.md D-74): the role gets a client certificate whose CN is
+# its own name, which is what PostgreSQL checks on a direct connection and what
+# the pooler requires before it asks for the password.
+if [[ "$(get MDB_MTLS)" == "true" ]] && engine_tls_always; then
+    if "$ROOT/scripts/certs" --client "$USER_NAME" >/dev/null; then
+        cat <<BLOCK
+
+# MDB_MTLS is on: present this role's client certificate as well. Copy the
+# three files to the application server; the key never leaves it again.
+DB_SSLCERT=/path/to/dbpantry/certs/clients/${USER_NAME}/client.crt
+DB_SSLKEY=/path/to/dbpantry/certs/clients/${USER_NAME}/client.key
+BLOCK
+    else
+        log "WARNING: could not issue a client certificate for '$USER_NAME'; run: scripts/certs --client $USER_NAME"
+    fi
 fi
 
 cat <<BLOCK

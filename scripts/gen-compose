@@ -37,7 +37,7 @@ emit_engine_env() {
         case "$v" in
             # *_BASE_IMAGE picks what the image is built FROM; the container
             # has no use for it.
-            *_VERSION|*_HOST_PORT|*_DATABASES|*_EMBED_EXPORTER|*_EMBED_BACKUP|*_BASE_IMAGE) continue ;;
+            *_VERSION|*_HOST_PORT|*_DATABASES|*_EMBED_EXPORTER|*_EMBED_BACKUP|*_BASE_IMAGE|*_POOLER_ADDR) continue ;;
         esac
         printf '      %s: ${%s:-}\n' "$v" "$v"
     done
@@ -68,6 +68,24 @@ get() { mdb_env_get "$1" "$ENV_FILE"; }
 
 PUBLISH="$(get MDB_PUBLISH)"; PUBLISH="${PUBLISH:-none}"
 PORT_BASE="$(get MDB_PORT_BASE)"; PORT_BASE="${PORT_BASE:-54000}"
+
+# pooler_addr INDEX -> an address near the top of MDB_NETWORK_SUBNET.
+#
+# Under mTLS PostgreSQL has to tell its pooler apart from a direct client
+# (design.md D-74): a direct client's certificate CN must be the role, while the
+# pooler logs in as every role. pg_hba can only tell them apart by address, so
+# each pooler gets a fixed one: the subnet's broadcast address minus 1, 2, ...
+# in descriptor order. Docker hands out dynamic addresses from the bottom of
+# the range, so the top is where a fixed one does not collide.
+SUBNET="$(get MDB_NETWORK_SUBNET)"; SUBNET="${SUBNET:-172.28.0.0/16}"
+pooler_addr() {
+    local idx="$1" ip="${SUBNET%/*}" bits="${SUBNET#*/}" a b c d n host
+    IFS=. read -r a b c d <<< "$ip"
+    n=$(( (a << 24) | (b << 16) | (c << 8) | d ))
+    host=$(( (1 << (32 - bits)) - 1 ))
+    n=$(( (n | host) - idx ))
+    printf '%d.%d.%d.%d' $(( (n >> 24) & 255 )) $(( (n >> 16) & 255 )) $(( (n >> 8) & 255 )) $(( n & 255 ))
+}
 
 # Emit a ports: block, or nothing at all.
 #   $1 variable name for an explicit override, $2 offset from the base,
@@ -168,6 +186,12 @@ for engine in $(engine_list); do
         # services (SPEC section 6.1).
         printf '      MDB_%s_EMBED_EXPORTER: "false"\n' "$upper"
         printf '      MDB_%s_EMBED_BACKUP: "false"\n' "$upper"
+        # The pooler's fixed address, for the engine's mTLS rule (D-74).
+        if [ "${MDB_ENGINE_POOLING:-driver}" = "external" ] \
+           && [ -n "${MDB_ENGINE_POOLER_IMAGE:-}" ] \
+           && [ -f "$MDB_ENGINE_DIR/compose-pooler.yml" ]; then
+            printf '      MDB_%s_POOLER_ADDR: %s/32\n' "$upper" "$(pooler_addr $(( poolers + 1 )))"
+        fi
         emit_engine_env "$upper"
         # An engine may need variables of the image's own, not MDB_ ones.
         # These go INSIDE the environment block; service-level settings use
@@ -283,7 +307,7 @@ for engine in $(engine_list); do
                     "$MDB_ENGINE_POOLER_BOOTSTRAP" "$MDB_ENGINE_POOLER_CMD"
             emit_ports "MDB_${upper}_POOLER_HOST_PORT" \
                 "$(( MDB_ENGINE_PORT_OFFSET + 100 ))" "${MDB_ENGINE_POOLER_PORT:-6432}"
-            printf '    networks: [mdb]\n'
+            printf '    networks:\n      mdb:\n        ipv4_address: %s\n' "$(pooler_addr $(( poolers + 1 )))"
             printf '    logging:\n      driver: json-file\n'
             printf '      options:\n'
             printf '        max-size: ${MDB_LOG_MAX_SIZE:-10m}\n'

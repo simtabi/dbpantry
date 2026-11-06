@@ -216,6 +216,7 @@ services:
       DB_USER: pgbouncer
       LISTEN_PORT: "6432"
       MDB_TLS_ENFORCE: ${MDB_TLS_ENFORCE:-false}
+      MDB_MTLS: ${MDB_MTLS:-false}
       AUTH_TYPE: scram-sha-256
       AUTH_USER: pgbouncer
       AUTH_DBNAME: postgres

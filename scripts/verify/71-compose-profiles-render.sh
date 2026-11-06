@@ -164,3 +164,10 @@ PY
 )"
 [[ -z "$drift" ]] || vfail "the HA pooler's environment has drifted from pg-pooler's: $drift"
 vinfo "the HA pooler's environment matches pg-pooler's apart from its upstream"
+
+# A Compose network address must not reach Kubernetes: helm-values reads the
+# engines' environment from compose.engines.yml, and the pooler address there
+# (design.md D-74) means nothing in a cluster.
+leak="$(cd "$s" && COMPOSE_PROFILES=pg,pg-pooler MDB_ENV_FILE="$s/.env" scripts/helm-values 2>/dev/null | grep -c '_POOLER_ADDR' || true)"
+[[ "$leak" == 0 ]] || vfail "helm-values carries $leak Compose pooler address(es) into the chart"
+vinfo "no Compose pooler address reaches the Helm values"

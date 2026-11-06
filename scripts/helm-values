@@ -195,6 +195,8 @@ render() {
             # The chart sets the memory variable from memory, and mounts the
             # password files itself.
             [[ "$key" == "MDB_${ENG}_MEM_LIMIT" ]] && continue
+            # A Compose network address (design.md D-74); the chart has no pooler.
+            [[ "$key" == MDB_*_POOLER_ADDR ]] && continue
             val="$(resolve "$expr")"
             [[ -n "$val" ]] || continue
             [[ "$val" == /run/secrets/* ]] && continue

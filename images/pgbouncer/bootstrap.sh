@@ -43,6 +43,14 @@ for candidate in /certs/pg /certs; do
     fi
 done
 
+# The pooler's own CLIENT certificate, presented to PostgreSQL under mTLS
+# (design.md D-74). Issued by `make certs` as certs/pooler/client.{crt,key}.
+if [ -r /certs/pooler/client.crt ] && [ -r /certs/pooler/client.key ]; then
+    install -d -o postgres -g postgres -m 0700 "$TLS_DIR"
+    install -o postgres -g postgres -m 0600 /certs/pooler/client.key "$TLS_DIR/pooler-client.key"
+    install -o postgres -g postgres -m 0644 /certs/pooler/client.crt "$TLS_DIR/pooler-client.crt"
+fi
+
 # The read above happens as ROOT, and the drop to postgres happens here, at
 # exec -- the same read-then-drop the engine entrypoints use, and the reason
 # they never hit this: secrets/ is created on the host by make init as the

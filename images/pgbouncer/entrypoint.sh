@@ -34,6 +34,23 @@ if [ "$enforce" = true ] && [ "$have_tls" = false ]; then
     exit 1
 fi
 
+# Mutual TLS (design.md D-74). Clients must present a certificate the toolkit
+# CA issued, and the pooler presents its own to PostgreSQL and verifies
+# PostgreSQL's by name. Everything it needs must be present, or it refuses to
+# start: half of mTLS is not mTLS.
+mtls=false
+case "${MDB_MTLS:-false}" in
+    [Tt][Rr][Uu][Ee]|1|[Yy][Ee][Ss]|[Oo][Nn]) mtls=true ;;
+esac
+if [ "$mtls" = true ]; then
+    for f in server.crt server.key ca.crt pooler-client.crt pooler-client.key; do
+        if [ ! -s "$TLS_DIR/$f" ]; then
+            echo "pgbouncer: MDB_MTLS is true but $f is missing; run 'make certs' (it issues certs/pooler/client.*)" >&2
+            exit 1
+        fi
+    done
+fi
+
 : > "$AUTH_FILE"
 chmod 0600 "$AUTH_FILE"
 
@@ -76,7 +93,13 @@ fi
     # of these changed after 1.21). client_tls_sslmode defaults to disable,
     # which is why a client asking for sslmode=require could not connect at all.
     if [ "$have_tls" = true ]; then
-        if [ "$enforce" = true ]; then
+        if [ "$mtls" = true ]; then
+            # pgBouncer documents verify-full as "same as verify-ca": a
+            # certificate from client_tls_ca_file is required, and its CN is
+            # not matched to the user. The role's password is still checked.
+            printf 'client_tls_sslmode = verify-full\n'
+            printf 'client_tls_ca_file = %s/ca.crt\n' "$TLS_DIR"
+        elif [ "$enforce" = true ]; then
             printf 'client_tls_sslmode = require\n'
         else
             printf 'client_tls_sslmode = prefer\n'
@@ -87,8 +110,16 @@ fi
     fi
     # server_tls_sslmode already defaults to prefer, which falls back to
     # plaintext without saying so. Under enforcement the pooler -> PostgreSQL
-    # hop must be TLS or fail.
-    [ "$enforce" = true ] && printf 'server_tls_sslmode = require\n'
+    # hop must be TLS or fail; under mTLS it also presents the pooler's own
+    # certificate and checks PostgreSQL's against the CA and its host name.
+    if [ "$mtls" = true ]; then
+        printf 'server_tls_sslmode = verify-full\n'
+        printf 'server_tls_ca_file = %s/ca.crt\n' "$TLS_DIR"
+        printf 'server_tls_cert_file = %s/pooler-client.crt\n' "$TLS_DIR"
+        printf 'server_tls_key_file = %s/pooler-client.key\n' "$TLS_DIR"
+    elif [ "$enforce" = true ]; then
+        printf 'server_tls_sslmode = require\n'
+    fi
     # Logging to stdout is what makes `docker compose logs` useful; a logfile
     # inside a container is a file nobody reads.
     printf 'logfile =\n'

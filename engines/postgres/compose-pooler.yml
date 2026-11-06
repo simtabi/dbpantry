@@ -6,6 +6,9 @@
       # server_tls_sslmode=require; otherwise TLS is offered and plaintext is
       # still accepted.
       MDB_TLS_ENFORCE: ${MDB_TLS_ENFORCE:-false}
+      # Mutual TLS (design.md D-74): clients present a toolkit-CA certificate,
+      # and the pooler presents certs/pooler/client.* to PostgreSQL.
+      MDB_MTLS: ${MDB_MTLS:-false}
       # scram-sha-256 end to end. The pooler re-authenticates each client
       # against the verifier it fetches, so a client cannot present a weaker
       # method to the pooler than the server would have demanded.

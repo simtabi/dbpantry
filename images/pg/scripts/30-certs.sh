@@ -124,21 +124,25 @@ fi
 # SPEC section 9.1 requires explicitly.
 if is_true "${MDB_TLS_ENFORCE:-false}"; then
     stage "TLS enforcement on: pg_hba will be hostssl-only"
+    # The first-boot hook and the restart path call the same function
+    # (apply_tls_hba, design.md D-74), so mTLS holds from the first boot too.
     cat > "$MDB_INITDB_DIR/02-mdb-tls-hba.sh" <<'EOF'
 #!/usr/bin/env bash
 set -eu
-sed -i 's/^host\([[:space:]]\)/hostssl\1/' "$PGDATA/pg_hba.conf"
+MDB_STAGE=mdb-tls-hba
+export MDB_STAGE
+# shellcheck source=/dev/null
+source /usr/local/lib/mdb/mdb-lib.sh
+apply_tls_hba "$PGDATA/pg_hba.conf"
 EOF
     chmod +x "$MDB_INITDB_DIR/02-mdb-tls-hba.sh"
 
     if pgdata_initialised; then
-        sed -i 's/^host\([[:space:]]\)/hostssl\1/' "$PGDATA_DIR/pg_hba.conf"
+        apply_tls_hba "$PGDATA_DIR/pg_hba.conf"
         stage "rewrote existing pg_hba.conf to hostssl"
     fi
 
     if is_true "${MDB_MTLS:-false}"; then
-        stage "mutual TLS on: client certificates required"
-        sed -i 's/^hostssl\(.*\)scram-sha-256$/hostssl\1scram-sha-256 clientcert=verify-full/' \
-            "$PGDATA_DIR/pg_hba.conf" 2>/dev/null || true
+        stage "mutual TLS on: client certificates required${MDB_PG_POOLER_ADDR:+ (pooler at $MDB_PG_POOLER_ADDR: CA-issued certificate plus password)}"
     fi
 fi

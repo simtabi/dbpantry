@@ -140,6 +140,14 @@ keeps working. pgBouncer follows the same switch: it refuses plaintext clients
 and requires TLS to PostgreSQL, serving `certs/pg`'s certificate (see
 [Connection pooling](pooling.md#the-pooler-speaks-tls)).
 
+`MDB_MTLS=true` (with enforcement) adds client certificates. PostgreSQL requires
+one whose CN is the role on every direct TCP connection; pgBouncer requires one
+issued by the toolkit CA and presents its own, `certs/pooler/client.crt`, to
+PostgreSQL. `make certs` issues the pooler's; `make new-project` issues one per
+role under `certs/clients/<role>/` when `MDB_MTLS` is on, and
+`scripts/certs --client <role>` issues one by hand. `make certs-renew` re-issues
+all of them. See [Connection pooling](pooling.md#mutual-tls).
+
 ```
 MDB_EXTRA_SANS="db.internal,10.0.1.5"
 ```

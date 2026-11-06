@@ -86,6 +86,12 @@ image, replacing Cassandra's vulnerable vendored JARs rather than waiving them.
   D-52 to D-57, which sat after the end of the document, are back in the decision log.
 
 ### Added
+- **Mutual TLS through the pooler** (design.md D-74). Under `MDB_MTLS=true` pgBouncer requires a toolkit-CA client
+  certificate (`client_tls_sslmode = verify-full`), presents its own (`certs/pooler/client.crt`) to PostgreSQL and
+  verifies PostgreSQL's by name, and PostgreSQL admits the pooler from its fixed address with `clientcert=verify-ca`
+  while every other client keeps `verify-full`. `scripts/certs --client NAME` issues role certificates,
+  `make new-project` issues one per role under mTLS, and `make certs-renew` re-issues all of them. Check 68 covers
+  it. A fresh volume under `MDB_MTLS` now gets the client-certificate rules from its first boot.
 - **The `dbpantry` binary, phase 1: the engine manifest** (design.md D-68,
   [Engine manifest](docs/reference/manifest.md)). A Go module in `src/`, built from source with
   `make dbpantry`; nothing releases it yet. `dbpantry manifest` publishes every descriptor as
