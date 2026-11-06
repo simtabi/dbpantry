@@ -58,6 +58,20 @@ sans="$(openssl x509 -in "$MDB_ROOT/certs/pg/server.crt" -noout -text 2>&1)" \
 grep -qF 'DNS:pg-pooler' <<< "$sans" \
     || vfail "certs/pg/server.crt has no DNS:pg-pooler SAN; run 'make certs-renew' to re-issue it"
 
+# The pooler runs here with exactly the privileges Compose gives pg-pooler,
+# read from the generated service rather than restated. The first version ran
+# it with Docker's default capabilities, which include CHOWN, so it passed
+# while the Compose pooler -- without CHOWN -- exited in its bootstrap the
+# moment certificates existed. Same image, same privileges, or the check is
+# testing a different container.
+[[ -f compose.engines.yml ]] || scripts/gen-compose >/dev/null
+caps_line="$(awk '/^  pg-pooler:$/{f=1; next} f && /^  [a-z]/{exit} f && /cap_add:/{print; exit}' compose.engines.yml)"
+pooler_caps=()
+read -r -a _caps <<< "$(sed -E 's/.*\[//; s/\].*//; s/,/ /g' <<< "$caps_line")"
+for c in "${_caps[@]}"; do pooler_caps+=(--cap-add "$c"); done
+(( ${#pooler_caps[@]} >= 6 )) || vfail "could not read pg-pooler's cap_add from compose.engines.yml ('$caps_line')"
+pooler_priv=(--cap-drop ALL "${pooler_caps[@]}" --security-opt no-new-privileges:true)
+
 net="mdb-verify-pooltls-net-$$"
 pg="mdb-verify-pooltls-pg-$$"
 prod="mdb-verify-pooltls-prod-$$"
@@ -104,7 +118,7 @@ start_pooler() {
     [[ "$certs" == yes ]] && extra+=(-v "$MDB_ROOT/certs:/certs:ro")
     [[ -n "$alias" ]] && extra+=(--network-alias "$alias")
     # shellcheck disable=SC2016  # $1 is pgbouncer's placeholder, not ours
-    mdb_ctr run -d --name "$name" --network "$net" ${extra[@]+"${extra[@]}"} \
+    mdb_ctr run -d --name "$name" --network "$net" ${extra[@]+"${extra[@]}"} "${pooler_priv[@]}" \
         -e DB_PASSWORD_FILE=/run/secrets/pgbouncer_password.txt \
         -e DB_HOST=pg -e DB_PORT=5432 -e DB_USER=pgbouncer \
         -e LISTEN_PORT=6432 -e MDB_TLS_ENFORCE="$enforce" \
@@ -237,7 +251,7 @@ mdb_ctr exec "$mpg" grep -qE "^hostssl[[:space:]]+all[[:space:]]+all[[:space:]]+
     || vfail "pg_hba ($hba_file) has no verify-ca rule for the pooler's address ${pool_ip}"
 
 # shellcheck disable=SC2016  # $1 is pgbouncer's placeholder, not ours
-mdb_ctr run -d --name "$mpool" --network "$mnet" --ip "$pool_ip" --network-alias pg-pooler \
+mdb_ctr run -d --name "$mpool" --network "$mnet" --ip "$pool_ip" --network-alias pg-pooler "${pooler_priv[@]}" \
     -e DB_PASSWORD_FILE=/run/secrets/pgbouncer_password.txt \
     -e DB_HOST=pg -e DB_PORT=5432 -e DB_USER=pgbouncer \
     -e LISTEN_PORT=6432 -e MDB_TLS_ENFORCE=true -e MDB_MTLS=true \

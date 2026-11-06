@@ -123,6 +123,9 @@ if ! mdb_up PROFILES=ha,pooler; then
             | grep -viE '^ +File "|^\s+\^+\s*$|ConnectionResetError' \
             | tail -40 | sed 's/^/      /' >&2 || true
     done
+    # The HA pooler too: compose names it unhealthy and nothing else.
+    printf '      ----- pgbouncer -----\n' >&2
+    mdb_compose logs --tail 30 pgbouncer 2>&1 | sed 's/^/      /' >&2 || true
     vfail "make up PROFILES=ha,pooler failed (each node's own log is above)"
 fi
 

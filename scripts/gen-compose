@@ -269,7 +269,14 @@ for engine in $(engine_list); do
             # no-new-privileges does not forbid it, since shedding privilege is
             # not gaining it. macOS hid all of this by flattening host
             # ownership, exactly as it hid the Patroni key and pgAdmin.
-            printf '    cap_add: [DAC_OVERRIDE, SETUID, SETGID]\n'
+            #
+            # CHOWN, the fourth, since pgBouncer serves TLS (design.md D-69):
+            # its bootstrap installs the certificate and key onto the tmpfs
+            # owned by postgres, which is a chown. Without it the bootstrap
+            # exited before pgBouncer started, under Compose only -- check 68
+            # ran the image with the default capabilities and passed, and now
+            # runs it with exactly these.
+            printf '    cap_add: [DAC_OVERRIDE, SETUID, SETGID, CHOWN]\n'
             # Every pooler starts through a bootstrap script from the
             # repository rather than an inline shell snippet in generated YAML.
             # The two poolers need genuinely different startup work -- pgBouncer
