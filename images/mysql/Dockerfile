@@ -146,8 +146,13 @@ RUN set -eux; \
     microdnf install -y cpio; \
     series="$(printf '%s' "$ver" | cut -d. -f1,2)"; \
     # Its version comes from the base at build time, so it cannot be listed in
-    # checksums.txt; it is verified by its Oracle signature instead, against the
-    # key the base image installed packages from.
+    # checksums.txt; it is verified by its Oracle signature instead. The keys
+    # are the ones the base's own MySQL repository definition names -- the
+    # trust root the server in this digest was installed under -- imported into
+    # the rpm database, which the official image leaves empty (NOKEY).
+    keys="$(sed -n 's/^gpgkey=//p' /etc/yum.repos.d/mysql*.repo | tr ' ,' '\n\n' | sed -n 's#^file://##p' | sort -u)"; \
+    [ -n "$keys" ] || { echo "the base names no local MySQL repository key to verify against" >&2; exit 1; }; \
+    for k in $keys; do rpm --import "$k"; done; \
     mdb-fetch --verified-by 'rpm --checksig' \
         "https://repo.mysql.com/yum/mysql-${series}-community/el/9/${arch}/mysql-community-client-${ver}.${arch}.rpm" \
         /tmp/mysql-client.rpm; \
