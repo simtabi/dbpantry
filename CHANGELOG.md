@@ -24,6 +24,10 @@ image, replacing Cassandra's vulnerable vendored JARs rather than waiving them.
   `MDB_EXTRA_SANS`, then restart `pg-pooler`.
 
 ### Changed
+- **`make dbpantry` writes `build/<os>/dbpantry`** (`build/macos/dbpantry`, `build/linux/dbpantry`),
+  the org's build layout: one folder per OS and nothing else in `build/`. It wrote `build/dbpantry`
+  before; delete that file if you built one. Check 67 fails on anything else in `build/`, and the
+  binary finds its checkout from either location.
 - **The prod overlay is applied** (design.md D-73). Nothing put `compose.prod.yml` in `COMPOSE_FILE`, so a prod
   `make up` applied none of it. `make init-prod` now writes `COMPOSE_FILE` with the overlay and a generated
   `compose.prod.engines.yml` that covers every engine and pooler; `check-env` refuses a prod boot without them

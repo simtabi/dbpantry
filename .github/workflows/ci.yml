@@ -60,7 +60,7 @@ jobs:
       - name: Build dbpantry
         run: make dbpantry
       - id: gen
-        run: echo "versions=$(build/dbpantry manifest --matrix versions)" >> "$GITHUB_OUTPUT"
+        run: echo "versions=$(build/linux/dbpantry manifest --matrix versions)" >> "$GITHUB_OUTPUT"
 
   # ---------------------------------------------------------------------------
   # Every declared version builds, on both architectures.

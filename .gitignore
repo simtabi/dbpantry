@@ -19,7 +19,10 @@ certs/*
 
 # Build output.
 build/dist/
-build/dbpantry
+build/macos/
+build/linux/
+build/windows/
+build/freebsd/
 
 # OS noise.
 .DS_Store

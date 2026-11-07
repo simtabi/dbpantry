@@ -12,16 +12,16 @@ The binary is built from source. No release publishes it yet, and nothing in thi
 downloads one.
 
 ```bash
-make dbpantry          # builds build/dbpantry (needs Go 1.27; src/go.mod names the toolchain)
-build/dbpantry version
+make dbpantry                # builds build/<os>/dbpantry, e.g. build/macos/dbpantry (needs Go 1.27)
+build/macos/dbpantry version
 ```
 
 The Go module lives in `src/` (`github.com/simtabi/dbpantry/src`). Run Go against it as
 `go -C src …`, or through the Makefile: `make go-ci` (format check, vet, race tests), `make go-lint`.
 
 The binary finds the checkout from `--root`, then `DBPANTRY_DIR`, then the nearest directory above
-the current one that holds `engines/` and `scripts/engine-lib.sh`, then the directory above the
-binary. `MDB_ENGINES_DIR` moves where descriptors are read from, as it does for
+the current one that holds `engines/` and `scripts/engine-lib.sh`, then the nearest such
+directory above the binary (so `build/macos/dbpantry` finds its own checkout). `MDB_ENGINES_DIR` moves where descriptors are read from, as it does for
 `scripts/engine-lib.sh`.
 
 ## Commands

@@ -288,13 +288,16 @@ self-update: ## Update the toolkit itself, never project data
 
 GO ?= go
 GOLANGCI_LINT_VERSION ?= v2.15.0
-DBPANTRY := build/dbpantry
+# The host build lives in build/<os>/ (macos, linux, windows, freebsd: the
+# org's build layout, one folder per OS and nothing else in build/).
+HOST_OS := $(shell uname -s | tr '[:upper:]' '[:lower:]' | sed -e 's/^darwin$$/macos/' -e 's/^mingw.*\|^msys.*\|^cygwin.*/windows/')
+DBPANTRY := build/$(HOST_OS)/dbpantry
 GO_VERSION_STAMP := $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 GO_COMMIT_STAMP := $(shell git rev-parse --short HEAD 2>/dev/null || echo none)
 
 .PHONY: dbpantry
-dbpantry: ## Build the dbpantry binary into build/dbpantry
-	@mkdir -p build
+dbpantry: ## Build the dbpantry binary into build/<os>/dbpantry
+	@mkdir -p "$(dir $(DBPANTRY))"
 	@CGO_ENABLED=0 $(GO) -C src build -trimpath \
 		-ldflags "-s -w -X github.com/simtabi/dbpantry/src/internal/cli.version=$(GO_VERSION_STAMP) -X github.com/simtabi/dbpantry/src/internal/cli.commit=$(GO_COMMIT_STAMP)" \
 		-o ../$(DBPANTRY) ./cmd/dbpantry

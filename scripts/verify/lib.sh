@@ -83,7 +83,7 @@ need_runtime() {
 need_docker() { need_runtime; }
 
 # The dbpantry binary (design.md D-68), built from src/ into a private
-# directory removed at exit, so a check never runs a stale build/dbpantry.
+# directory removed at exit, so a check never runs a stale build/<os>/dbpantry.
 # DBPANTRY_BIN names a prebuilt one instead. Go is a prerequisite like the
 # container runtime: without it the check FAILS, it never skips.
 # Not in $(...): the cleanup it registers would be lost with the subshell.
