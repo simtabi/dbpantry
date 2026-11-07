@@ -285,6 +285,8 @@ image, replacing Cassandra's vulnerable vendored JARs rather than waiving them.
   upgraded by name, as pcre2, expat and perl already are. The pg images go from 2.6.1 to 2.6.2 on
   bookworm, and Cassandra from 3.0.3 to 3.0.4 on trixie. pgvector has not rebuilt 0.8.6 since
   2026-08-13, so there was no newer digest to repin to.
+- **CVE-2026-109518 is fixed in the MariaDB images too.** Their Ubuntu 24.04 bases carry `apt`
+  2.8.3; `apt` and the installed `libapt-pkg` move to 2.8.4ubuntu0.1, the same way.
 - **The CloudNativePG superuser Secret is built from files, not `--from-literal`.** Both keys come
   from a umask 077 temporary directory removed on exit, so no credential reaches argv or the
   source, and the pattern secret scanners reported is gone (check 54).
