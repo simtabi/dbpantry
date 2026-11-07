@@ -288,6 +288,9 @@ port_is_active() {
         MDB_HAPROXY_*)  [[ "$active_profiles" == *,ha,* ]] ;;
         MDB_CADDY_*|MDB_ADMINER_*|MDB_PGADMIN_*|MDB_PMA_*|MDB_UI_*)
                          [[ "$active_profiles" == *,ui,* || "$active_profiles" == *,prod,* ]] ;;
+        MDB_HA_POOLER_HOST_PORT)
+                         [[ "$active_profiles" == *,ha-pooler,* \
+                            || ( "$active_profiles" == *,ha,* && "$active_profiles" == *,pooler,* ) ]] ;;
         MDB_*_POOLER_HOST_PORT)
                          [[ "$active_profiles" == *,pooler,* ]] ;;
         MDB_*_HOST_PORT)
@@ -432,9 +435,30 @@ fi
 # -----------------------------------------------------------------------------
 # 5. Prod-profile guards (SPEC sections 18 and 21.1)
 # -----------------------------------------------------------------------------
+# The file's MDB_PROFILES OR the profiles this run starts. Reading the file
+# alone let `make up PROFILES=pg,pooler,prod` on a dev .env skip every guard
+# below, which is the one combination they exist for.
 profiles="$(get MDB_PROFILES)"
-if [[ ",${profiles}," == *",prod,"* ]]; then
+if [[ ",${profiles},${COMPOSE_PROFILES:-}," == *",prod,"* ]]; then
     note "prod profile detected: applying prod guards"
+
+    # The overlay must be in COMPOSE_FILE, or none of what prod promises is
+    # applied: engine ports stay published, TLS is not forced on the engines,
+    # and the limits do not exist (design.md D-73). Compose reads COMPOSE_FILE
+    # from the environment first, then the file; so does this.
+    _cf="${COMPOSE_FILE:-$(get COMPOSE_FILE)}"
+    for _f in compose.prod.yml compose.prod.engines.yml; do
+        case ":${_cf}:" in
+            *":${_f}:"*) ;;
+            *) err "the prod profile is on but COMPOSE_FILE does not include ${_f}, so engine ports stay
+       published, TLS is not forced and no limits apply. Fix it (idempotent, edits only COMPOSE_FILE):
+         make prod-overlay ENV_FILE=${ENV_FILE#"$ROOT"/}" ;;
+        esac
+    done
+    if [[ "$(get MDB_PUBLISH_ENGINES)" == "true" ]]; then
+        warn "MDB_PUBLISH_ENGINES=true keeps engine ports published under prod. It is deprecated for prod:
+       applications should reach PostgreSQL through its pooler (docs/runbooks/operations.md#exposure)."
+    fi
 
     [[ "$(get MDB_TLS_ENFORCE)" == "true" ]] \
         || err "the prod profile requires MDB_TLS_ENFORCE=true"

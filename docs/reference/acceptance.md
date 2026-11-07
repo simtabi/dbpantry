@@ -38,12 +38,17 @@ so a green `make verify` is the criteria being met rather than a proxy for it.
 | No trust or empty-password auth anywhere, including loopback | `30-no-trust-auth` |
 | Every engine descriptor is complete, consistent, and honestly declared | `31-engine-descriptors` |
 | The pooler multiplexes and holds no application password (PostgreSQL) | `33-pooler-works` |
+| The pooler refuses plaintext and requires TLS upstream under enforcement, still accepts plaintext in dev, and holds mutual TLS end to end under MDB_MTLS (PostgreSQL) | `68-pooler-tls` |
 | The pooler holds verifiers, not passwords (MySQL family) | `35-proxysql-verifiers` |
 | Every engine family can provision a project | `34-new-project-every-engine` |
 | PITR recovers to a point in time (PostgreSQL) | `37-pitr-recovers` |
 | PITR recovers to a point in time (MySQL and MariaDB) | `40-mysql-family-pitr` |
 | Vulnerability waivers are package-scoped, justified, and expire | `38-trivy-waivers` |
 | No Dockerfile passes a dnf-only flag to microdnf | `43-microdnf-flags` |
+| Go dependency floors are one file every image reads, never inline, compared by semver | `69-go-floors` |
+| Images take distribution updates whole, download only through a verified, retried helper; CI gates findings where caused | `70-supply-chain` |
+| Every profile combination renders with one authenticating pooler per upstream; prod publishes only poolers and the front door | `71-compose-profiles-render` |
+| Every service drops privileges, has a health signal, is limited under prod and takes secrets as files; exceptions must stay needed | `72-service-hardening` |
 | No leftover old product name outside its history | `44-no-old-name` |
 | Cassandra's replaced JARs are pinned by checksum and installed | `45-cassandra-jars` |
 | Every relative link in the Markdown docs resolves | `46-doc-links-resolve` |

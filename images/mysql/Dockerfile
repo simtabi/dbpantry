@@ -20,21 +20,19 @@ FROM --platform=$BUILDPLATFORM ${GO_IMAGE} AS gotools
 ARG TARGETOS
 ARG TARGETARCH
 COPY --chmod=0755 _shared/gotools/build.sh /usr/local/bin/build-go-tool
+COPY _shared/gotools/floors.txt /usr/local/share/build-go-tool/floors.txt
 
 # gosu: the tag the base image already ships, and the binary its entrypoint and
 # ours call. Every finding against it was in the Go standard library.
 ARG GOSU_VERSION=1.19
 RUN build-go-tool gosu https://github.com/tianon/gosu "$GOSU_VERSION" . /out/gosu
 
-# rclone: grpc raised past CVE-2026-84445 (fixed at d5a41119e0e3; 1.75.1 vendors
-# an earlier 1.84.0-dev pseudo-version) and x/net past CVE-2026-78669 (fixed in
-# v0.60.0; 1.75.1 vendors v0.57.0). VersionSuffix is cleared so the binary
-# reports v1.75.1 rather than a -DEV build.
+# rclone: its vulnerable dependencies (grpc, x/net) are raised from
+# _shared/gotools/floors.txt (design.md D-70). VersionSuffix is cleared so the
+# binary reports v1.75.1 rather than a -DEV build.
 ARG RCLONE_VERSION=1.75.1
 RUN LDFLAGS="-X github.com/rclone/rclone/fs.VersionSuffix=" \
-    build-go-tool rclone https://github.com/rclone/rclone "v${RCLONE_VERSION}" . /out/rclone \
-        google.golang.org/grpc@v1.84.0-dev.0.20260825144003-d5a41119e0e3 \
-        golang.org/x/net@v0.60.0
+    build-go-tool rclone https://github.com/rclone/rclone "v${RCLONE_VERSION}" . /out/rclone
 
 FROM ${BASE_IMAGE}
 
@@ -72,13 +70,16 @@ USER root
 # glib2 moves 2.68.4-18.el9_7.1 to 2.68.4-19.el9_8.2 and mysqld does not move.
 #
 # The assertion is still here rather than trusting that reasoning.
-RUN set -eux; \
-    before="$(mysqld --version)"; \
-    microdnf update -y --disablerepo='mysql*'; \
-    microdnf clean all; \
-    after="$(mysqld --version)"; \
-    [ "$before" = "$after" ] || { \
-        echo "OS update moved the server: '$before' -> '$after'" >&2; exit 1; }
+# Supply-chain helpers (design.md D-71): mdb-os-upgrade applies the
+# distribution's own updates without moving the engine, and mdb-fetch is the
+# one way a file is downloaded -- retried, and verified against
+# _shared/supply/checksums.txt or a named key fingerprint.
+COPY --chmod=0755 _shared/supply/os-upgrade.sh /usr/local/bin/mdb-os-upgrade
+COPY --chmod=0755 _shared/supply/fetch.sh /usr/local/bin/mdb-fetch
+COPY _shared/supply/checksums.txt /usr/local/share/mdb-supply/checksums.txt
+# The same update and the same assertion as before, through the helper every
+# image uses (design.md D-71).
+RUN OS_UPGRADE_PROBE='mysqld --version' OS_UPGRADE_DISABLE_REPOS='mysql*' mdb-os-upgrade
 
 # Oracle Linux 9, so microdnf. The base already carries tar, xz, zstd, curl,
 # gosu and openssl; procps-ng and unzip are what it lacks (design.md D-17).
@@ -144,8 +145,19 @@ RUN set -eux; \
     ver="$(rpm -q --qf '%{VERSION}-%{RELEASE}' mysql-community-server-minimal)"; \
     microdnf install -y cpio; \
     series="$(printf '%s' "$ver" | cut -d. -f1,2)"; \
-    curl -fsSL -o /tmp/mysql-client.rpm \
-        "https://repo.mysql.com/yum/mysql-${series}-community/el/9/${arch}/mysql-community-client-${ver}.${arch}.rpm"; \
+    # Its version comes from the base at build time, so it cannot be listed in
+    # checksums.txt; it is verified by its Oracle signature instead. The keys
+    # are the ones the base's own MySQL repository definition names -- the
+    # trust root the server in this digest was installed under -- imported into
+    # the rpm database, which the official image leaves empty (NOKEY).
+    keys="$(sed -n 's/^gpgkey=//p' /etc/yum.repos.d/mysql*.repo | tr ' ,' '\n\n' | sed -n 's#^file://##p' | sort -u)"; \
+    [ -n "$keys" ] || { echo "the base names no local MySQL repository key to verify against" >&2; exit 1; }; \
+    for k in $keys; do rpm --import "$k"; done; \
+    mdb-fetch --verified-by 'rpm --checksig' \
+        "https://repo.mysql.com/yum/mysql-${series}-community/el/9/${arch}/mysql-community-client-${ver}.${arch}.rpm" \
+        /tmp/mysql-client.rpm; \
+    rpm --checksig /tmp/mysql-client.rpm | grep -qE ': (digests )?signatures OK$' \
+        || { rpm --checksig -v /tmp/mysql-client.rpm >&2; echo "mysql client rpm signature not OK" >&2; exit 1; }; \
     cd /tmp; \
     rpm2cpio /tmp/mysql-client.rpm | cpio -idm ./usr/bin/mysqlbinlog; \
     install -m 0755 /tmp/usr/bin/mysqlbinlog /usr/local/bin/mysqlbinlog; \
@@ -168,8 +180,8 @@ RUN set -eux; \
         aarch64) s6_arch='aarch64' ;; \
     esac; \
     url="https://github.com/just-containers/s6-overlay/releases/download/v${S6_OVERLAY_VERSION}"; \
-    curl -fsSL -o /tmp/s6-noarch.tar.xz "${url}/s6-overlay-noarch.tar.xz"; \
-    curl -fsSL -o /tmp/s6-arch.tar.xz   "${url}/s6-overlay-${s6_arch}.tar.xz"; \
+    mdb-fetch "${url}/s6-overlay-noarch.tar.xz" /tmp/s6-noarch.tar.xz; \
+    mdb-fetch "${url}/s6-overlay-${s6_arch}.tar.xz" /tmp/s6-arch.tar.xz; \
     tar -C / -Jxpf /tmp/s6-noarch.tar.xz; \
     tar -C / -Jxpf /tmp/s6-arch.tar.xz; \
     rm -f /tmp/s6-noarch.tar.xz /tmp/s6-arch.tar.xz

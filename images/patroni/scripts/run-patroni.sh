@@ -123,6 +123,17 @@ install -o postgres -g postgres -m 0600 /certs/pg/server.key "$pg_certs/server.k
 install -o postgres -g postgres -m 0644 /certs/pg/server.crt "$pg_certs/server.crt"
 install -o postgres -g postgres -m 0644 /certs/ca.crt        "$pg_certs/ca.crt"
 
+# The pooler's password, for the callback that converges its auth objects on
+# the leader (pooler-callback.sh, design.md D-72). Staged here, as root, for the
+# same reason as the key above: the callback runs as postgres, which cannot
+# traverse the host-owned secrets mount on Linux.
+pooler_secret=/run/secrets/pgbouncer_password.txt
+if [[ -r "$pooler_secret" ]]; then
+    install -o postgres -g postgres -m 0600 "$pooler_secret" /etc/patroni/pgbouncer_password
+else
+    stage "no pooler secret mounted; the HA pooler will not be able to authenticate"
+fi
+
 stage "writing $conf for node $name in scope $scope"
 
 # YAML, generated rather than templated with sed: the values include generated
@@ -203,6 +214,11 @@ postgresql:
       password: '${repl_pw}'
   parameters:
     shared_buffers: ${MDB_PG_SHARED_BUFFERS:-256MB}
+  # Converge the pooler's role and auth function on whichever node leads
+  # (design.md D-72). Idempotent, and a no-op on replicas.
+  callbacks:
+    on_start: /usr/local/lib/mdb/pooler-callback.sh
+    on_role_change: /usr/local/lib/mdb/pooler-callback.sh
   # pg_hba, which Patroni writes every time it starts PostgreSQL. Same shape
   # the standalone image generates, plus the replication rules the cluster
   # needs. Here and not under bootstrap:, where it is written once: the

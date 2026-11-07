@@ -15,6 +15,21 @@ make up PROFILES=pg,pooler,backup,metrics,prod
 - `MDB_TLS_ENFORCE` is not `true`
 - an engine that requires a pooler does not have one
 - a UI route is exposed without basic auth
+- `COMPOSE_FILE` does not include the prod overlay (`compose.prod.yml` and the
+  generated `compose.prod.engines.yml`)
+
+The overlay is what removes engine ports, forces TLS on every engine and pooler,
+and sets limits. `make init-prod` writes it into `COMPOSE_FILE`. An env file made
+before that did not have it, so its prod boot published the engines' own ports;
+`check-env` now refuses that boot and names the fix, which edits only
+`COMPOSE_FILE` and is safe to repeat:
+
+```bash
+make prod-overlay ENV_FILE=.env
+```
+
+`prod` is active when either the file's `MDB_PROFILES` or the run's `PROFILES=`
+names it; `make up PROFILES=pg,pooler,prod` on a dev `.env` gets every guard.
 
 These are refusals, not warnings, because every one of them is a mistake that
 looks fine until it is on the internet.
@@ -54,8 +69,76 @@ layer4 module — see [image provenance](../reference/image-provenance.md). That
 pre-1.0, so if you would rather not have it in the connection path, `direct`
 publishes the same ports without it.
 
+**Under the prod overlay, `proxy` publishes no database port.** The overlay sets
+Caddy's ports to 80 and 443 only, and its layer-4 route for PostgreSQL goes to
+`pg`, not the pooler (design.md D-69, D-73). A prod stack that serves an
+application on another host uses `direct`, which publishes the pooler and no
+engine; see the next section.
+
 `MDB_MTLS=true` requires client certificates. On an exposed database it is
-worth the setup.
+worth the setup. Through the pooler it holds end to end: the client presents a
+certificate from the toolkit CA, pgBouncer presents its own to PostgreSQL, and
+PostgreSQL still demands a certificate whose CN is the role from any client that
+is not the pooler. Settings are in
+[Connection pooling](../guides/pooling.md#mutual-tls) (design.md D-74).
+
+### An application on another host
+
+The supported path for an application on a different server is **direct publish
+of the pooler on a private address**. `proxy` mode forwards PostgreSQL's port
+straight to `pg:5432` and does not publish the pooler at all, because the
+generator cannot know whether a pooler will be running (design.md D-69); under
+the prod profile that would also bypass the pooler the profile requires.
+
+```
+MDB_PUBLISH=direct
+MDB_BIND_ADDR=10.0.1.5        # private address, never 0.0.0.0
+MDB_EXTRA_SANS="10.0.1.5"     # verify-full by address; make certs-renew after changing it
+MDB_TLS_ENFORCE=true          # required by the prod profile anyway
+```
+
+```bash
+make up PROFILES=pg,pooler,backup,prod
+```
+
+The prod overlay removes every engine binding, so with it in `COMPOSE_FILE`
+(see above) the only database port on the host is `pg-pooler` at
+`10.0.1.5:54100` (`MDB_PORT_BASE + 100`). `MDB_PUBLISH_ENGINES=true` puts the
+engines' own ports back under prod; it exists for the client that genuinely
+cannot use the pooler, is deprecated for prod, and makes `check-env` warn. Under
+enforcement the pooler refuses plaintext, so the client uses `sslmode=require`,
+or `sslmode=verify-full` with `sslrootcert` pointing at a copy of
+`certs/ca.crt`. Connection settings and a Laravel example are in
+[Connection pooling](../guides/pooling.md#connecting-from-another-host).
+
+### Firewalling a published port
+
+Docker publishes a port with a DNAT rule in the `nat` table's `PREROUTING`
+chain, so the packet is rewritten *before* the host's `INPUT` chain, where `ufw`
+and most front-ends put their rules, would see it. Forwarded container traffic
+goes through `FORWARD`, and Docker evaluates the `DOCKER-USER` chain first
+there. That is where the rule belongs.
+
+By the time a packet reaches `DOCKER-USER` its destination port is already the
+container's (`6432`), not the published one (`54100`), so `--dport 54100` never
+matches. Match the port the client originally dialled through conntrack:
+
+```bash
+# Allow the application server, drop everyone else, for the published pooler port.
+iptables -I DOCKER-USER 1 -p tcp -s 10.0.1.10 \
+  -m conntrack --ctorigdstport 54100 --ctdir ORIGINAL -j RETURN
+iptables -I DOCKER-USER 2 -p tcp \
+  -m conntrack --ctorigdstport 54100 --ctdir ORIGINAL -j DROP
+```
+
+`--ctdir ORIGINAL` restricts the match to packets travelling in the direction
+the connection was opened, so the rule cannot also match reply traffic. Order
+matters: the allow (`RETURN`, which hands the packet back to Docker's own
+chains) must sit above the drop. Rules added by hand do not survive a reboot; persist
+them with whatever the host uses (`iptables-persistent`, or a systemd unit
+ordered after `docker.service`). Docker creates `DOCKER-USER` but never fills
+it, so what is in it is yours.
+Binding to a private `MDB_BIND_ADDR` is the first fence; this is the second.
 
 The UIs go behind Caddy with basic auth on `MDB_CADDY_BIND_ADDR`, and the prod
 profile will not start without the auth hash set.
@@ -288,6 +371,14 @@ be honest about the recovery time.
 
 HAProxy routes by Patroni's REST health check: the write port follows the
 primary, the read port the replicas.
+
+**Pooling under HA.** `make up PROFILES=ha,pooler` adds `pgbouncer`, a pooler in
+front of HAProxy's write port, so pooled connections follow the leader through a
+failover. It publishes on `MDB_BIND_ADDR:MDB_HA_POOLER_HOST_PORT` (6432) and
+takes the same TLS settings as the standalone pooler. Each Patroni node runs a
+callback that converges the pooler's role and auth function whenever it becomes
+primary (design.md D-72); check 27 proves the pooler reaches the primary before
+and after a failover.
 
 ```bash
 make ha-status              # topology, roles and replication lag

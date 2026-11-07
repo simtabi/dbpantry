@@ -8,6 +8,16 @@
 # valid across runs. `certs-renew` rotates only the server certificates.
 #
 # Usage: scripts/certs [--renew]
+#        scripts/certs --client NAME [--out DIR] [--renew]
+#
+# Client certificates (design.md D-74), for mutual TLS (MDB_MTLS=true):
+#   - the pooler's own, certs/pooler/client.{crt,key}, CN=pgbouncer, which
+#     pgBouncer presents to PostgreSQL. Issued with the server certificates.
+#   - one per database role, certs/clients/<NAME>/client.{crt,key}, CN=<NAME>,
+#     which `make new-project` issues under MDB_MTLS. A role's certificate CN is
+#     the role, which is what PostgreSQL's clientcert=verify-full checks on a
+#     direct connection.
+# --renew re-issues every one of them, keeping the CA.
 
 set -euo pipefail
 
@@ -19,7 +29,20 @@ ENV_FILE="${MDB_ENV_FILE:-$ROOT/.env}"
 [[ -f "$ENV_FILE" ]] || ENV_FILE="$ROOT/.env.example"
 
 RENEW=0
-[[ "${1:-}" == "--renew" ]] && RENEW=1
+CLIENT=""
+OUT=""
+while (( $# )); do
+    case "$1" in
+        --renew) RENEW=1; shift ;;
+        --client) CLIENT="${2:?--client needs a name}"; shift 2 ;;
+        --out) OUT="${2:?--out needs a directory}"; shift 2 ;;
+        *) printf 'certs: unknown argument %s\n' "$1" >&2; exit 2 ;;
+    esac
+done
+if [[ -n "$CLIENT" ]] && ! [[ "$CLIENT" =~ ^[a-z_][a-z0-9_]{0,62}$ ]]; then
+    printf 'certs: %s is not a role name (lowercase letters, digits, underscore)\n' "$CLIENT" >&2
+    exit 2
+fi
 
 get() { mdb_env_get "$1" "$ENV_FILE"; }
 
@@ -64,12 +87,22 @@ issue() {
     # a published port without a second certificate.
     sans="DNS:${engine},DNS:localhost,IP:127.0.0.1,IP:::1"
     case "$engine" in
-        pg) sans="$sans,DNS:postgres,DNS:pgbouncer,DNS:haproxy" ;;
+        # pg-pooler is the compose service name of pgBouncer, which serves
+        # this same certificate to its clients (design.md D-69).
+        pg) sans="$sans,DNS:postgres,DNS:pgbouncer,DNS:pg-pooler,DNS:haproxy" ;;
     esac
     if [[ -n "$EXTRA_SANS" ]]; then
         old_ifs="$IFS"; IFS=','
         for s in $EXTRA_SANS; do
-            [[ -n "$s" ]] && sans="$sans,DNS:$s"
+            [[ -n "$s" ]] || continue
+            sans="$sans,DNS:$s"
+            # An address also gets an iPAddress SAN, which is what RFC 6125
+            # verification of a client connecting by IP matches against. The
+            # DNS entry stays, so certificates issued before this keep their
+            # shape (design.md D-69).
+            if [[ "$s" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ || "$s" == *:* ]]; then
+                sans="$sans,IP:$s"
+            fi
         done
         IFS="$old_ifs"
     fi
@@ -95,9 +128,51 @@ issue() {
     printf '  %s: certificate issued (%s days, SAN %s)\n' "$engine" "$CERT_DAYS" "$sans"
 }
 
+# issue_client NAME DIR -- a client certificate, CN=NAME, clientAuth only.
+issue_client() {
+    local name="$1" dir="$2"
+    mkdir -p "$dir"
+    if [[ -s "$dir/client.crt" ]] && (( ! RENEW )); then
+        printf '  client %s: certificate already present\n' "$name"
+        return 0
+    fi
+    openssl req -newkey rsa:2048 -nodes \
+        -subj "/O=Simtabi LLC/OU=dbpantry/CN=${name}" \
+        -keyout "$dir/client.key" \
+        -out "$dir/client.csr" 2>/dev/null
+    openssl x509 -req \
+        -in "$dir/client.csr" \
+        -CA "$CERT_DIR/ca.crt" -CAkey "$CERT_DIR/ca.key" -CAcreateserial \
+        -days "$CERT_DAYS" \
+        -extfile <(printf 'extendedKeyUsage=clientAuth\nkeyUsage=critical,digitalSignature,keyEncipherment\n') \
+        -out "$dir/client.crt" 2>/dev/null
+    rm -f "$dir/client.csr"
+    # libpq refuses a key readable by group or world.
+    chmod 0600 "$dir/client.key"
+    chmod 0644 "$dir/client.crt"
+    cp "$CERT_DIR/ca.crt" "$dir/ca.crt"
+    printf '  client %s: certificate issued (%s days)\n' "$name" "$CERT_DAYS"
+}
+
+if [[ -n "$CLIENT" ]]; then
+    issue_client "$CLIENT" "${OUT:-$CERT_DIR/clients/$CLIENT}"
+    exit 0
+fi
+
 for engine in pg mysql mariadb; do
     issue "$engine"
 done
+
+# The pooler's own client certificate, presented to PostgreSQL under mTLS.
+issue_client pgbouncer "$CERT_DIR/pooler"
+
+# Every role certificate issued before, on --renew.
+if (( RENEW )) && [[ -d "$CERT_DIR/clients" ]]; then
+    for d in "$CERT_DIR"/clients/*/; do
+        [[ -s "$d/client.crt" ]] || continue
+        issue_client "$(basename "$d")" "${d%/}"
+    done
+fi
 
 printf '✓ certificates ready in %s\n' "${CERT_DIR#"$ROOT"/}"
 printf '  clients trust %s and connect with sslmode=verify-full\n' "certs/ca.crt"

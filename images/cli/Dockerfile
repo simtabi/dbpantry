@@ -23,16 +23,14 @@ FROM --platform=$BUILDPLATFORM ${GO_IMAGE} AS gotools
 ARG TARGETOS
 ARG TARGETARCH
 COPY --chmod=0755 _shared/gotools/build.sh /usr/local/bin/build-go-tool
+COPY _shared/gotools/floors.txt /usr/local/share/build-go-tool/floors.txt
 
-# rclone: grpc raised past CVE-2026-84445 (fixed at d5a41119e0e3; 1.75.1 vendors
-# an earlier 1.84.0-dev pseudo-version) and x/net past CVE-2026-78669 (fixed in
-# v0.60.0; 1.75.1 vendors v0.57.0). VersionSuffix is cleared so the binary
-# reports v1.75.1 rather than a -DEV build.
+# rclone: its vulnerable dependencies (grpc, x/net) are raised from
+# _shared/gotools/floors.txt (design.md D-70). VersionSuffix is cleared so the
+# binary reports v1.75.1 rather than a -DEV build.
 ARG RCLONE_VERSION=1.75.1
 RUN LDFLAGS="-X github.com/rclone/rclone/fs.VersionSuffix=" \
-    build-go-tool rclone https://github.com/rclone/rclone "v${RCLONE_VERSION}" . /out/rclone \
-        google.golang.org/grpc@v1.84.0-dev.0.20260825144003-d5a41119e0e3 \
-        golang.org/x/net@v0.60.0
+    build-go-tool rclone https://github.com/rclone/rclone "v${RCLONE_VERSION}" . /out/rclone
 
 FROM ${BASE_IMAGE}
 
@@ -45,6 +43,15 @@ LABEL org.opencontainers.image.title="dbpantry-cli" \
       org.opencontainers.image.source="https://github.com/simtabi/dbpantry"
 
 ENV DEBIAN_FRONTEND=noninteractive
+
+# Supply-chain helpers (design.md D-71): mdb-os-upgrade applies the
+# distribution's own updates without moving the engine, and mdb-fetch is the
+# one way a file is downloaded -- retried, and verified against
+# _shared/supply/checksums.txt or a named key fingerprint.
+COPY --chmod=0755 _shared/supply/os-upgrade.sh /usr/local/bin/mdb-os-upgrade
+COPY --chmod=0755 _shared/supply/fetch.sh /usr/local/bin/mdb-fetch
+COPY _shared/supply/checksums.txt /usr/local/share/mdb-supply/checksums.txt
+RUN mdb-os-upgrade
 
 RUN set -eux; \
     apt-get update; \
@@ -65,8 +72,12 @@ RUN set -eux; \
 RUN set -eux; \
     . /etc/os-release; \
     install -d /usr/share/postgresql-common/pgdg; \
-    curl -fsSo /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc \
-        https://www.postgresql.org/media/keys/ACCC4CF8.asc; \
+    # Retried, and accepted only if it is the PGDG signing key
+    # (pgdg-B97B0AFC..., ACCC4CF8) -- the fetch that once failed a verify run on
+    # a reset stream, and that nothing checked when it succeeded.
+    mdb-fetch --fingerprint B97B0AFCAA1A47F044F244A07FCC7D46ACCC4CF8 \
+        https://www.postgresql.org/media/keys/ACCC4CF8.asc \
+        /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc; \
     echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt ${VERSION_CODENAME}-pgdg main" \
         > /etc/apt/sources.list.d/pgdg.list; \
     apt-get update; \

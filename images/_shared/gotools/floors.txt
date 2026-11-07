@@ -1,0 +1,12 @@
+# Minimum versions for Go modules inside the tools we rebuild (design.md D-51, D-70).
+#
+# One file for every image. build-go-tool raises a module to its floor only when
+# the tool actually depends on it and resolves an OLDER version; it never
+# downgrades and never adds a module the tool does not use. So a new Go CVE is
+# fixed by editing one line here, not by finding every Dockerfile that builds
+# an affected tool. Check 69 refuses a module@version passed inline instead.
+#
+# Format: <module> <minimum version> <why: the advisory it closes>
+golang.org/x/net        v0.62.0  CVE-2026-78661 (also CVE-2026-78669, CVE-2026-46600)
+golang.org/x/crypto     v0.57.0  CVE-2026-56854
+google.golang.org/grpc  v1.84.0-dev.0.20260825144003-d5a41119e0e3  CVE-2026-84445 (fixed at d5a41119e0e3)

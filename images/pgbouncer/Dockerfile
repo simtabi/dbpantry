@@ -15,6 +15,15 @@ FROM ${BASE_IMAGE}
 
 ARG PGBOUNCER_VERSION
 
+# Supply-chain helpers (design.md D-71): mdb-os-upgrade applies the
+# distribution's own updates without moving the engine, and mdb-fetch is the
+# one way a file is downloaded -- retried, and verified against
+# _shared/supply/checksums.txt or a named key fingerprint.
+COPY --chmod=0755 _shared/supply/os-upgrade.sh /usr/local/bin/mdb-os-upgrade
+COPY --chmod=0755 _shared/supply/fetch.sh /usr/local/bin/mdb-fetch
+COPY _shared/supply/checksums.txt /usr/local/share/mdb-supply/checksums.txt
+RUN mdb-os-upgrade
+
 RUN set -eux; \
     apt-get update; \
     apt-get install -y --no-install-recommends \
@@ -45,6 +54,13 @@ RUN set -eux; \
 # match -- and it drops to postgres via setpriv before pgBouncer starts. The
 # process that listens on 6432 is postgres; check 33 connects and proves it.
 EXPOSE 6432
+
+# Healthy means listening. The image carries no PostgreSQL client, so this reads
+# the kernel's socket table rather than connecting: a LISTEN socket (state 0A)
+# on LISTEN_PORT. It catches the failure that matters most -- a pooler that
+# generated its config and exited, or never bound -- without a credential.
+HEALTHCHECK --interval=10s --timeout=3s --start-period=15s --retries=3 \
+    CMD sh -c 'p="$(printf "%04X" "${LISTEN_PORT:-6432}")"; grep -qE ":${p} [0-9A-F]+:0000 0A" /proc/net/tcp /proc/net/tcp6 2>/dev/null'
 
 # Self-contained: `docker run` on this image starts a pooler, without compose
 # supplying an entrypoint. Leaving it unset meant the image fell through to the

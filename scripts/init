@@ -157,6 +157,10 @@ if (( PROD )); then
         "$TARGET" > "$tmp"
     mv "$tmp" "$TARGET"
 
+    # COMPOSE_FILE gains the prod overlay, so a new prod install publishes only
+    # the pooler and the front door and gets the limits (design.md D-73).
+    "$ROOT/scripts/prod-overlay" "$TARGET" >/dev/null
+
     printf '  TLS enforced, no engine ports published\n'
     # Said every time, because the opposite was printed here until it was
     # found to be false: nothing encrypts the dumps (MDB_BACKUP_ENCRYPT is

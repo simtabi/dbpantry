@@ -73,6 +73,13 @@ if running mariadb; then
     reloaded=$(( reloaded + 1 ))
 fi
 
+# pgBouncer serves certs/pg too (design.md D-69), but copies it at start, so it
+# keeps the old pair until it restarts -- which drops its client connections,
+# so that is the operator's call, not this script's.
+if running pg-pooler; then
+    log "pg-pooler still serves the previous certificate; restart it when a brief reconnect is acceptable"
+fi
+
 if (( reloaded == 0 )); then
     log "no engines are running; the new certificates will be used at next start"
 else

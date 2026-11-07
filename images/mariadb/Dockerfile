@@ -20,21 +20,19 @@ FROM --platform=$BUILDPLATFORM ${GO_IMAGE} AS gotools
 ARG TARGETOS
 ARG TARGETARCH
 COPY --chmod=0755 _shared/gotools/build.sh /usr/local/bin/build-go-tool
+COPY _shared/gotools/floors.txt /usr/local/share/build-go-tool/floors.txt
 
 # gosu: the tag the base image already ships, and the binary its entrypoint and
 # ours call. Every finding against it was in the Go standard library.
 ARG GOSU_VERSION=1.19
 RUN build-go-tool gosu https://github.com/tianon/gosu "$GOSU_VERSION" . /out/gosu
 
-# rclone: grpc raised past CVE-2026-84445 (fixed at d5a41119e0e3; 1.75.1 vendors
-# an earlier 1.84.0-dev pseudo-version) and x/net past CVE-2026-78669 (fixed in
-# v0.60.0; 1.75.1 vendors v0.57.0). VersionSuffix is cleared so the binary
-# reports v1.75.1 rather than a -DEV build.
+# rclone: its vulnerable dependencies (grpc, x/net) are raised from
+# _shared/gotools/floors.txt (design.md D-70). VersionSuffix is cleared so the
+# binary reports v1.75.1 rather than a -DEV build.
 ARG RCLONE_VERSION=1.75.1
 RUN LDFLAGS="-X github.com/rclone/rclone/fs.VersionSuffix=" \
-    build-go-tool rclone https://github.com/rclone/rclone "v${RCLONE_VERSION}" . /out/rclone \
-        google.golang.org/grpc@v1.84.0-dev.0.20260825144003-d5a41119e0e3 \
-        golang.org/x/net@v0.60.0
+    build-go-tool rclone https://github.com/rclone/rclone "v${RCLONE_VERSION}" . /out/rclone
 
 FROM ${BASE_IMAGE}
 
@@ -50,19 +48,23 @@ LABEL org.opencontainers.image.title="dbpantry-mariadb" \
 USER root
 ENV DEBIAN_FRONTEND=noninteractive
 
+# Supply-chain helpers (design.md D-71): mdb-os-upgrade applies the
+# distribution's own updates without moving the engine, and mdb-fetch is the
+# one way a file is downloaded -- retried, and verified against
+# _shared/supply/checksums.txt or a named key fingerprint.
+COPY --chmod=0755 _shared/supply/os-upgrade.sh /usr/local/bin/mdb-os-upgrade
+COPY --chmod=0755 _shared/supply/fetch.sh /usr/local/bin/mdb-fetch
+COPY _shared/supply/checksums.txt /usr/local/share/mdb-supply/checksums.txt
+# Ubuntu's updates only; MariaDB's own repository is left out, so the server the
+# digest pins does not move (design.md D-71). This replaced the libssl3 and apt
+# --only-upgrade lines.
+RUN OS_UPGRADE_PROBE='mariadbd --version' mdb-os-upgrade
+
 # Ubuntu 24.04, so apt. The base already carries tar, xz, zstd, gosu, procps
 # and openssl; curl and unzip are what it lacks (design.md D-17).
 RUN set -eux; \
     apt-get update; \
     apt-get install -y --no-install-recommends ca-certificates curl unzip; \
-    # An Ubuntu 22.04 base -- 10.11, which is no longer maintained here but
-    # can still be built through MDB_MARIADB_BASE_IMAGE (design.md D-57) --
-    # ships libssl3 below its security update, so it is upgraded where it is
-    # installed. The maintained bases are Ubuntu 24.04, which ships libssl3t64
-    # instead, and their pinned packages do not move.
-    if dpkg-query -W -f='${Status}' libssl3 2>/dev/null | grep -q 'install ok installed'; then \
-        apt-get install -y --only-upgrade libssl3; \
-    fi; \
     rm -rf /var/lib/apt/lists/*
 
 # rclone from upstream rather than the distribution, so both engine images
@@ -78,8 +80,8 @@ RUN set -eux; \
         aarch64) s6_arch='aarch64' ;; \
     esac; \
     url="https://github.com/just-containers/s6-overlay/releases/download/v${S6_OVERLAY_VERSION}"; \
-    curl -fsSL -o /tmp/s6-noarch.tar.xz "${url}/s6-overlay-noarch.tar.xz"; \
-    curl -fsSL -o /tmp/s6-arch.tar.xz   "${url}/s6-overlay-${s6_arch}.tar.xz"; \
+    mdb-fetch "${url}/s6-overlay-noarch.tar.xz" /tmp/s6-noarch.tar.xz; \
+    mdb-fetch "${url}/s6-overlay-${s6_arch}.tar.xz" /tmp/s6-arch.tar.xz; \
     tar -C / -Jxpf /tmp/s6-noarch.tar.xz; \
     tar -C / -Jxpf /tmp/s6-arch.tar.xz; \
     rm -f /tmp/s6-noarch.tar.xz /tmp/s6-arch.tar.xz

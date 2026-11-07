@@ -69,54 +69,11 @@ until gosu postgres pg_isready -q -h /var/run/postgresql 2>/dev/null; do
 done
 
 if (( converge_pgbouncer )); then
-pw="$(tr -d '\n' < "$secret")"
-esc_pw="${pw//\'/\'\'}"
-
-# The pooler authenticates application users with auth_query rather than
-# holding their passwords. It therefore needs:
-#
-#   1. a login role of its own -- the ONLY credential the pooler ever stores;
-#   2. a way to read password verifiers, which lives in pg_shadow and is
-#      superuser-only.
-#
-# (2) is granted through a SECURITY DEFINER function rather than by making the
-# pooler a superuser. The function is deliberately narrow: it takes a single
-# username and returns that one row. Note the WHERE clause excludes superusers,
-# so a compromised pooler role cannot obtain the superuser's verifier.
-#
-# search_path is pinned inside the function because a SECURITY DEFINER function
-# that resolves unqualified names through the caller's search_path is a
-# privilege-escalation bug (CVE-2018-1058 is the canonical example).
-
-gosu postgres psql -v ON_ERROR_STOP=1 -q --no-psqlrc -h /var/run/postgresql \
-    -d postgres <<SQL
-DO \$mdb\$
-BEGIN
-    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'pgbouncer') THEN
-        ALTER ROLE pgbouncer WITH LOGIN PASSWORD '${esc_pw}';
-    ELSE
-        CREATE ROLE pgbouncer WITH LOGIN PASSWORD '${esc_pw}';
-    END IF;
-END
-\$mdb\$;
-
-CREATE SCHEMA IF NOT EXISTS pgbouncer AUTHORIZATION pgbouncer;
-
-CREATE OR REPLACE FUNCTION pgbouncer.get_auth(p_username TEXT)
-RETURNS TABLE(username TEXT, password TEXT)
-LANGUAGE sql
-SECURITY DEFINER
-SET search_path = pg_catalog
-AS \$mdb\$
-    SELECT usename::TEXT, passwd::TEXT
-      FROM pg_shadow
-     WHERE usename = p_username
-       AND NOT usesuper;
-\$mdb\$;
-
-REVOKE ALL ON FUNCTION pgbouncer.get_auth(TEXT) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION pgbouncer.get_auth(TEXT) TO pgbouncer;
-SQL
+# The pooler's role and its narrow auth function. Moved verbatim to
+# converge-pooler.sh so the Patroni image -- which has no converge stage --
+# runs exactly the same SQL on whichever node leads (design.md D-72).
+/usr/local/lib/mdb/converge-pooler.sh "$secret" -- \
+    gosu postgres psql -h /var/run/postgresql
 
 stage "converged pooler auth objects"
 else

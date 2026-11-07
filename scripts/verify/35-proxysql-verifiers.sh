@@ -80,6 +80,13 @@ got="$(mdb_ctr run --rm --network "$(mdb_project_name)_net" \
 [[ "$got" == "42" ]] || vfail "query through the pooler returned '$got', expected 42"
 vinfo "application user authenticated through ProxySQL"
 
+# 1b. ProxySQL reaches its server over TLS (design.md D-75): under the prod
+#     profile the server sets require_secure_transport and refuses plaintext.
+backend_ssl="$(proxy_admin "SELECT DISTINCT use_ssl FROM runtime_mysql_servers" | tr -d ' \r')"
+[[ "$backend_ssl" == "1" ]] \
+    || vfail "ProxySQL's backend has use_ssl='${backend_ssl}'; a plaintext backend is refused under MDB_TLS_ENFORCE"
+vinfo "ProxySQL reaches its server over TLS"
+
 # 2. A verifier, not the password. caching_sha2_password verifiers begin '$A$'.
 prefix="$(proxy_admin "SELECT SUBSTR(password,1,3) FROM mysql_users WHERE username='${proj}_user'" | tr -d ' \r')"
 # Matched literally: caching_sha2_password verifiers begin with a $A$ prefix.

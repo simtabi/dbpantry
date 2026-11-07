@@ -4,6 +4,12 @@ on:
   pull_request:
 
   workflow_dispatch:
+  # Weekly, on the default branch (design.md D-71). A base image's distribution
+  # keeps publishing fixes after its digest was pinned, and a pull request that
+  # touches no image cannot have caused a new finding -- so the scheduled build
+  # is where drift is expected to surface, and where it fails loudly.
+  schedule:
+    - cron: '17 6 * * 1'
 permissions:
   contents: read
 
@@ -146,20 +152,35 @@ jobs:
           sudo mv trivy /usr/local/bin/
           trivy --version
 
+      # Which runs gate (design.md D-71). The scheduled build on main and any
+      # pull request that changes an image's inputs fail on a fixable HIGH or
+      # CRITICAL finding. A pull request that changes none of them still scans
+      # and prints every finding, but does not fail on one: it cannot have
+      # introduced it, and blocking it trains people to stop reading the scan.
+      - name: Decide whether the scan gates
+        id: gate
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: scripts/ci-scan-gate
+
       - name: Scan ${{ matrix.entry.engine }} ${{ matrix.entry.version }}
         env:
           ENGINE: ${{ matrix.entry.engine }}
           VERSION: ${{ matrix.entry.version }}
+          GATE: ${{ steps.gate.outputs.gate }}
         run: |
           set -euo pipefail
-          # Fails the build on HIGH and CRITICAL with a known fix. Unfixed
-          # findings are reported but do not fail: there is nothing to do about
-          # them yet, and a scanner that cannot be made green stops being read.
+          # HIGH and CRITICAL with a known fix. Unfixed findings are reported
+          # but never fail: there is nothing to do about them yet, and a
+          # scanner that cannot be made green stops being read.
+          code=0
+          [ "$GATE" = true ] && code=1
           trivy image \
             --severity HIGH,CRITICAL \
             --ignore-unfixed \
             --ignorefile .trivyignore.yaml \
-            --exit-code 1 \
+            --exit-code "$code" \
             --format table \
             "ghcr.io/simtabi/dbpantry-${ENGINE}:${VERSION}"
 
@@ -171,6 +192,43 @@ jobs:
         run: |
           trivy image --severity HIGH,CRITICAL --exit-code 0 --format table \
             "ghcr.io/simtabi/dbpantry-${ENGINE}:${VERSION}" || true
+
+  # ---------------------------------------------------------------------------
+  # When the scheduled build fails, say so where people look (design.md D-71).
+  # A red scheduled run on main is easy to miss in a list of green pull
+  # requests; an open issue is not. One issue, commented on each later failure,
+  # never one per run.
+  # ---------------------------------------------------------------------------
+  scheduled-scan-report:
+    name: report scheduled build failure
+    needs: build
+    if: ${{ always() && github.event_name == 'schedule' && needs.build.result == 'failure' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      issues: write
+    steps:
+      - name: Open or update the tracking issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          title="Scheduled image build or scan failed on main"
+          body="The weekly build of the default branch failed: ${RUN_URL}
+
+          A fixable HIGH or CRITICAL finding is the usual cause: a base image's
+          distribution, or a Go module in a rebuilt tool, published a fix after
+          the pin. Pull requests that touch no image input do not gate on these
+          (design.md D-71), so this is where they are expected to surface."
+          num="$(gh issue list --repo "$REPO" --state open --search "\"$title\" in:title" \
+                  --json number,title --jq ".[] | select(.title == \"$title\") | .number" | head -1)"
+          if [ -n "$num" ]; then
+            gh issue comment "$num" --repo "$REPO" --body "Failed again: ${RUN_URL}"
+          else
+            gh issue create --repo "$REPO" --title "$title" --body "$body"
+          fi
 
   # ---------------------------------------------------------------------------
   # The acceptance harness, on default versions, on both architectures.
