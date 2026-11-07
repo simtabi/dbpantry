@@ -63,12 +63,6 @@ RUN set -eux; \
     if dpkg-query -W -f='${Status}' libssl3 2>/dev/null | grep -q 'install ok installed'; then \
         apt-get install -y --only-upgrade libssl3; \
     fi; \
-    # CVE-2026-109518 (HIGH, apt 2.8.3 on Ubuntu 24.04, fixed in
-    # 2.8.4ubuntu0.1). apt and its library move together; the library is
-    # libapt-pkg6.0t64 on 24.04 and libapt-pkg6.0 on 22.04, so it is named by
-    # what is installed.
-    apt-get install -y --only-upgrade apt \
-        $(dpkg-query -W -f='${Package}\n' 'libapt-pkg*'); \
     rm -rf /var/lib/apt/lists/*
 
 # rclone from upstream rather than the distribution, so both engine images
