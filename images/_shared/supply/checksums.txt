@@ -1,0 +1,20 @@
+# SHA-256 of every file an image build downloads by URL (design.md D-71).
+#
+# mdb-fetch looks a download up here by its full URL -- which carries the
+# version, unlike some of the file names -- and refuses it if the digest
+# differs, or if the URL is missing and the call does not say how the file is
+# verified instead. A version bump in a Dockerfile therefore fails the
+# build until the new digest is recorded here -- on purpose: that is the moment
+# someone looks at what changed upstream.
+#
+# Each digest was compared against the publisher's own .sha256 file where one
+# exists (s6-overlay), and recorded from the release asset otherwise.
+#
+# <url>  <sha256>
+https://github.com/just-containers/s6-overlay/releases/download/v3.2.3.2/s6-overlay-noarch.tar.xz    5379750ed30a84bbd2e2dd74847ba6b5bd29cd0b2e3ea2ec58049b57eb2eda12
+https://github.com/just-containers/s6-overlay/releases/download/v3.2.3.2/s6-overlay-x86_64.tar.xz    e6befcc96a437a3831386ecfc51808c5d3e939dc5fe3c02ae9284599e8aa2408
+https://github.com/just-containers/s6-overlay/releases/download/v3.2.3.2/s6-overlay-aarch64.tar.xz   b17f17a82e7a515c682a91edaf2ffdabb73f891981b6c1fd712115693a2f8b4c
+https://github.com/supabase/pg_graphql/releases/download/v1.6.1/pg_graphql-v1.6.1-pg17-amd64-linux-gnu.deb  958f009aa457a70917b6c42fc6de9694445771df454a4b506e7ae5b2038ebf42
+https://github.com/supabase/pg_graphql/releases/download/v1.6.1/pg_graphql-v1.6.1-pg17-arm64-linux-gnu.deb  819cb6c3ad4915441a74079551c1cd8921ca52991453540f6c701500147e3456
+https://github.com/supabase/pg_graphql/releases/download/v1.6.1/pg_graphql-v1.6.1-pg18-amd64-linux-gnu.deb  b4c11adb9609580cbdbcfef44fd29593b9bd7fb2d60aecc13f71561c821b043c
+https://github.com/supabase/pg_graphql/releases/download/v1.6.1/pg_graphql-v1.6.1-pg18-arm64-linux-gnu.deb  ed0d8628428c560cc33ad9a944e2bbbae1ebbc4b96de84193f0735179b02885d

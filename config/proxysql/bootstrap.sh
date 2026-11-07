@@ -93,9 +93,14 @@ until admin "SELECT 1" >/dev/null; do
     sleep 1
 done
 
+# use_ssl=1: ProxySQL's connections to the server are TLS (design.md D-75).
+# Under MDB_TLS_ENFORCE the server sets require_secure_transport, so a
+# plaintext backend connection is refused -- the pooler could never reach its
+# own server under the prod profile. The server has TLS in every mode, so this
+# costs nothing in dev.
 admin "DELETE FROM mysql_servers;
-       INSERT INTO mysql_servers (hostgroup_id, hostname, port, max_connections)
-       VALUES (0, '${upstream}', ${upstream_port}, ${MAX_BACKEND_CONN:-100});
+       INSERT INTO mysql_servers (hostgroup_id, hostname, port, max_connections, use_ssl)
+       VALUES (0, '${upstream}', ${upstream_port}, ${MAX_BACKEND_CONN:-100}, 1);
        LOAD MYSQL SERVERS TO RUNTIME; SAVE MYSQL SERVERS TO DISK;"
 
 admin "UPDATE global_variables SET variable_value='proxysql'

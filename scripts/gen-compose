@@ -37,7 +37,7 @@ emit_engine_env() {
         case "$v" in
             # *_BASE_IMAGE picks what the image is built FROM; the container
             # has no use for it.
-            *_VERSION|*_HOST_PORT|*_DATABASES|*_EMBED_EXPORTER|*_EMBED_BACKUP|*_BASE_IMAGE) continue ;;
+            *_VERSION|*_HOST_PORT|*_DATABASES|*_EMBED_EXPORTER|*_EMBED_BACKUP|*_BASE_IMAGE|*_POOLER_ADDR) continue ;;
         esac
         printf '      %s: ${%s:-}\n' "$v" "$v"
     done
@@ -68,6 +68,24 @@ get() { mdb_env_get "$1" "$ENV_FILE"; }
 
 PUBLISH="$(get MDB_PUBLISH)"; PUBLISH="${PUBLISH:-none}"
 PORT_BASE="$(get MDB_PORT_BASE)"; PORT_BASE="${PORT_BASE:-54000}"
+
+# pooler_addr INDEX -> an address near the top of MDB_NETWORK_SUBNET.
+#
+# Under mTLS PostgreSQL has to tell its pooler apart from a direct client
+# (design.md D-74): a direct client's certificate CN must be the role, while the
+# pooler logs in as every role. pg_hba can only tell them apart by address, so
+# each pooler gets a fixed one: the subnet's broadcast address minus 1, 2, ...
+# in descriptor order. Docker hands out dynamic addresses from the bottom of
+# the range, so the top is where a fixed one does not collide.
+SUBNET="$(get MDB_NETWORK_SUBNET)"; SUBNET="${SUBNET:-172.28.0.0/16}"
+pooler_addr() {
+    local idx="$1" ip="${SUBNET%/*}" bits="${SUBNET#*/}" a b c d n host
+    IFS=. read -r a b c d <<< "$ip"
+    n=$(( (a << 24) | (b << 16) | (c << 8) | d ))
+    host=$(( (1 << (32 - bits)) - 1 ))
+    n=$(( (n | host) - idx ))
+    printf '%d.%d.%d.%d' $(( (n >> 24) & 255 )) $(( (n >> 16) & 255 )) $(( (n >> 8) & 255 )) $(( n & 255 ))
+}
 
 # Emit a ports: block, or nothing at all.
 #   $1 variable name for an explicit override, $2 offset from the base,
@@ -168,6 +186,12 @@ for engine in $(engine_list); do
         # services (SPEC section 6.1).
         printf '      MDB_%s_EMBED_EXPORTER: "false"\n' "$upper"
         printf '      MDB_%s_EMBED_BACKUP: "false"\n' "$upper"
+        # The pooler's fixed address, for the engine's mTLS rule (D-74).
+        if [ "${MDB_ENGINE_POOLING:-driver}" = "external" ] \
+           && [ -n "${MDB_ENGINE_POOLER_IMAGE:-}" ] \
+           && [ -f "$MDB_ENGINE_DIR/compose-pooler.yml" ]; then
+            printf '      MDB_%s_POOLER_ADDR: %s/32\n' "$upper" "$(pooler_addr $(( poolers + 1 )))"
+        fi
         emit_engine_env "$upper"
         # An engine may need variables of the image's own, not MDB_ ones.
         # These go INSIDE the environment block; service-level settings use
@@ -245,7 +269,14 @@ for engine in $(engine_list); do
             # no-new-privileges does not forbid it, since shedding privilege is
             # not gaining it. macOS hid all of this by flattening host
             # ownership, exactly as it hid the Patroni key and pgAdmin.
-            printf '    cap_add: [DAC_OVERRIDE, SETUID, SETGID]\n'
+            #
+            # CHOWN, the fourth, since pgBouncer serves TLS (design.md D-69):
+            # its bootstrap installs the certificate and key onto the tmpfs
+            # owned by postgres, which is a chown. Without it the bootstrap
+            # exited before pgBouncer started, under Compose only -- check 68
+            # ran the image with the default capabilities and passed, and now
+            # runs it with exactly these.
+            printf '    cap_add: [DAC_OVERRIDE, SETUID, SETGID, CHOWN]\n'
             # Every pooler starts through a bootstrap script from the
             # repository rather than an inline shell snippet in generated YAML.
             # The two poolers need genuinely different startup work -- pgBouncer
@@ -269,6 +300,10 @@ for engine in $(engine_list); do
                 "${MDB_ENGINE_POOLER_UID:-0}" "${MDB_ENGINE_POOLER_UID:-0}"
             printf '    volumes:\n'
             printf '      - ./secrets:/run/secrets:ro\n'
+            # The engine's own certificate, reused rather than issuing a second
+            # one: pgBouncer's bootstrap copies certs/pg/server.{crt,key} onto
+            # its tmpfs and serves client TLS with them (design.md D-69), so a
+            # client trusting certs/ca.crt trusts the pooler as well.
             printf '      - ./certs:/certs:ro\n'
             # The ENGINE images bake their bootstrap scripts in (SPEC section 3:
             # an image must start without the checkout). A pooler is a
@@ -279,7 +314,7 @@ for engine in $(engine_list); do
                     "$MDB_ENGINE_POOLER_BOOTSTRAP" "$MDB_ENGINE_POOLER_CMD"
             emit_ports "MDB_${upper}_POOLER_HOST_PORT" \
                 "$(( MDB_ENGINE_PORT_OFFSET + 100 ))" "${MDB_ENGINE_POOLER_PORT:-6432}"
-            printf '    networks: [mdb]\n'
+            printf '    networks:\n      mdb:\n        ipv4_address: %s\n' "$(pooler_addr $(( poolers + 1 )))"
             printf '    logging:\n      driver: json-file\n'
             printf '      options:\n'
             printf '        max-size: ${MDB_LOG_MAX_SIZE:-10m}\n'
@@ -372,4 +407,76 @@ CADDY_PORTS="$ROOT/compose.proxy.yml"
     fi
 } > "$CADDY_PORTS"
 printf 'generated %s\n' "${CADDY_PORTS#"$ROOT"/}"
+# -----------------------------------------------------------------------------
+# The prod overlay's generated half (design.md D-73)
+# -----------------------------------------------------------------------------
+# compose.prod.yml is hand-written and names the engines it knew when it was
+# written (pg, mysql, mariadb), so MongoDB and Cassandra kept their published
+# ports under prod. This half covers every implemented engine, from the same
+# descriptors as the services:
+#
+#   - engine ports removed (`!override []`), HAProxy's too: under prod the
+#     database is reached through its pooler or the mdb network, never its own
+#     port, and HAProxy's stats page is never published. With
+#     MDB_PUBLISH_ENGINES=true -- the documented, deprecated opt-out -- the
+#     direct-mode binding is put back instead;
+#   - MDB_TLS_ENFORCE forced true on every engine and every pooler, whatever
+#     the env file says.
+#
+# Pooler ports are left alone: under MDB_PUBLISH=direct the pooler is the one
+# published database port, which is the point. Written in every mode, so
+# COMPOSE_FILE never changes when MDB_PUBLISH does.
+PROD_ENGINES="$ROOT/compose.prod.engines.yml"
+publish_engines="$(get MDB_PUBLISH_ENGINES)"
+{
+    printf '# GENERATED by scripts/gen-compose. Do not edit.\n'
+    printf '# The prod overlay for every engine and pooler (design.md D-73);\n'
+    printf '# used after compose.prod.yml in COMPOSE_FILE.\n'
+    printf 'services:\n'
+    for engine in $(engine_list); do
+        engine_load "$engine" || continue
+        engine_implemented || continue
+        upper="$(printf '%s' "$MDB_ENGINE_NAME" | tr '[:lower:]-' '[:upper:]_')"
+        printf '  %s:\n' "$MDB_ENGINE_NAME"
+        if [ "$publish_engines" = "true" ] && [ "$PUBLISH" = "direct" ]; then
+            printf '    ports: !override\n'
+            printf '      - "${MDB_BIND_ADDR:-127.0.0.1}:${MDB_%s_HOST_PORT:-%s}:%s"\n' \
+                "$upper" "$(( PORT_BASE + MDB_ENGINE_PORT_OFFSET ))" "$MDB_ENGINE_PORT"
+        else
+            printf '    ports: !override []\n'
+        fi
+        printf '    environment:\n      MDB_TLS_ENFORCE: "true"\n'
+        # Limits for every engine (design.md D-75). compose.prod.yml sets its own
+        # for the engines it names, and those win: this only covers the rest, so
+        # an engine never runs unbounded under prod because nobody listed it.
+        if ! awk -v s="  ${MDB_ENGINE_NAME}:" '$0 == s {f=1; next} f && /^  [a-z]/ {exit} f && /limits:/ {found=1} END {exit !found}' \
+                "$ROOT/compose.prod.yml" 2>/dev/null; then
+            printf '    deploy:\n      resources:\n        limits:\n'
+            printf '          cpus: "${MDB_%s_CPU_LIMIT:-2}"\n' "$upper"
+            printf '          memory: ${MDB_%s_MEM_LIMIT:-2g}\n' "$upper"
+        fi
+        if [ "${MDB_ENGINE_POOLING:-driver}" = "external" ] \
+           && [ -n "${MDB_ENGINE_POOLER_IMAGE:-}" ] \
+           && [ -f "$MDB_ENGINE_DIR/compose-pooler.yml" ]; then
+            printf '  %s-pooler:\n' "$MDB_ENGINE_NAME"
+            printf '    environment:\n      MDB_TLS_ENFORCE: "true"\n'
+            printf '    deploy:\n      resources:\n        limits:\n'
+            printf '          cpus: "${MDB_POOLER_CPU_LIMIT:-1}"\n'
+            printf '          memory: ${MDB_POOLER_MEM_LIMIT:-256m}\n'
+        fi
+    done
+    # HAProxy is HA's direct path to PostgreSQL, so under prod it follows the
+    # engines: unpublished, the HA pooler being the published door; with the
+    # opt-out, the write and read ports come back. Its stats page never does.
+    printf '  haproxy:\n'
+    if [ "$publish_engines" = "true" ]; then
+        printf '    ports: !override\n'
+        printf '      - "${MDB_BIND_ADDR:-127.0.0.1}:${MDB_HAPROXY_WRITE_PORT:-5432}:5432"\n'
+        printf '      - "${MDB_BIND_ADDR:-127.0.0.1}:${MDB_HAPROXY_READ_PORT:-5433}:5433"\n'
+    else
+        printf '    ports: !override []\n'
+    fi
+} > "$PROD_ENGINES"
+printf 'generated %s\n' "${PROD_ENGINES#"$ROOT"/}"
+
 printf 'generated %s (%d engines, %d pooler(s))\n' "${OUT#"$ROOT"/}" "$count" "$poolers"

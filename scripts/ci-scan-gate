@@ -1,0 +1,70 @@
+#!/usr/bin/env bash
+#
+# Decide whether this CI run's image scan fails on a fixable finding
+# (design.md D-71). Prints gate=true|false to $GITHUB_OUTPUT, or to stdout.
+#
+#   schedule, workflow_dispatch, push   -> gate: these build what main is.
+#   pull_request                        -> gate only if the pull request
+#                                          changes an image input below.
+#
+# A pull request that touches no image input cannot have introduced a new
+# finding in an image; the finding came from time passing over a pinned base.
+# Failing it anyway is what made unrelated pull requests red for an apt or
+# x/net advisory, and the fix belongs in its own change, prompted by the
+# scheduled build. The scan still runs and prints everything either way.
+#
+# Usage: EVENT=pull_request BASE_SHA=<sha> scripts/ci-scan-gate
+#        scripts/ci-scan-gate --paths      list the image inputs, one per line
+
+set -euo pipefail
+
+# Paths whose change can change what an image contains or how it is judged.
+INPUTS=(
+    images/
+    engines/
+    scripts/build
+    scripts/ci-scan-gate
+    .trivyignore.yaml
+    .github/workflows/ci.yml
+)
+
+if [[ "${1:-}" == "--paths" ]]; then
+    printf '%s\n' "${INPUTS[@]}"
+    exit 0
+fi
+
+emit() {
+    printf 'gate=%s\n' "$1"
+    [[ -n "${GITHUB_OUTPUT:-}" ]] && printf 'gate=%s\n' "$1" >> "$GITHUB_OUTPUT"
+    printf '%s\n' "$2" >&2
+}
+
+event="${EVENT:-${GITHUB_EVENT_NAME:-}}"
+if [[ "$event" != "pull_request" ]]; then
+    emit true "event '$event' builds the default branch: the scan gates"
+    exit 0
+fi
+
+base="${BASE_SHA:?BASE_SHA is required for a pull_request}"
+# The checkout is shallow. A tree diff between two commits needs both objects,
+# not their history, so one extra commit is all this fetches.
+git cat-file -e "${base}^{commit}" 2>/dev/null \
+    || git fetch --quiet --no-tags --depth=1 origin "$base"
+
+changed="$(git diff --name-only "$base" HEAD)"
+hits=""
+for p in "${INPUTS[@]}"; do
+    while IFS= read -r f; do
+        [[ -n "$f" ]] || continue
+        if [[ "$p" == */ ]]; then [[ "$f" == "$p"* ]] && hits+="$f"$'\n'
+        else [[ "$f" == "$p" ]] && hits+="$f"$'\n'
+        fi
+    done <<< "$changed"
+done
+
+if [[ -n "$hits" ]]; then
+    emit true "this pull request changes image inputs, so the scan gates:
+$(printf '%s' "$hits" | sort -u | sed 's/^/  /')"
+else
+    emit false "this pull request changes no image input; findings are reported, not gated (the scheduled build gates them)"
+fi

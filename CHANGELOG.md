@@ -12,11 +12,42 @@ for amd64 and arm64, each with an SBOM and build provenance. It also renames the
 project to dbpantry and fixes the findings that failed the Trivy gate on every
 image, replacing Cassandra's vulnerable vendored JARs rather than waiving them.
 
+### Upgrade
+
+- **Prod: PostgreSQL's own port stops being published.** With the prod overlay applied (see Changed), a prod
+  stack under `MDB_PUBLISH=direct` publishes the pooler, `pg-pooler` on `MDB_PORT_BASE + 100` (54100 by
+  default), and no engine port: 54000 and the other engines' ports go away. Point applications at 54100 with
+  `sslmode=verify-full` and `sslrootcert` set to a copy of `certs/ca.crt` (docs/guides/pooling.md). An env
+  file made before this needs `make prod-overlay ENV_FILE=...` once; `check-env` refuses the prod boot until
+  then. `MDB_PUBLISH_ENGINES=true` keeps the engine ports, deprecated for prod.
+- **Certificates:** run `make certs-renew` to add the `pg-pooler` SAN and IP SANs for addresses in
+  `MDB_EXTRA_SANS`, then restart `pg-pooler`.
+
 ### Changed
 - **`make dbpantry` writes `build/<os>/dbpantry`** (`build/macos/dbpantry`, `build/linux/dbpantry`),
   the org's build layout: one folder per OS and nothing else in `build/`. It wrote `build/dbpantry`
   before; delete that file if you built one. Check 67 fails on anything else in `build/`, and the
   binary finds its checkout from either location.
+- **The prod overlay is applied** (design.md D-73). Nothing put `compose.prod.yml` in `COMPOSE_FILE`, so a prod
+  `make up` applied none of it. `make init-prod` now writes `COMPOSE_FILE` with the overlay and a generated
+  `compose.prod.engines.yml` that covers every engine and pooler; `check-env` refuses a prod boot without them
+  and names `make prod-overlay`, and detects `prod` from `PROFILES=` as well as `MDB_PROFILES`.
+  `MDB_PUBLISH_ENGINES=true` is the deprecated opt-out.
+- **pgBouncer serves client TLS** (design.md D-69). It reuses the certificate `make certs` issues for
+  PostgreSQL, so a client trusting `certs/ca.crt` can use `sslmode=verify-full` against `pg-pooler`.
+  Under `MDB_TLS_ENFORCE=true` (the prod profile) it sets `client_tls_sslmode = require`, refusing
+  plaintext clients, and `server_tls_sslmode = require`, so the hop to PostgreSQL can no longer fall
+  back to plaintext; it refuses to start with no certificate mounted. Otherwise it sets
+  `client_tls_sslmode = prefer` and plaintext still connects. Before this the pooler accepted
+  plaintext only, so an application connecting from another host with `sslmode=require` could not
+  connect. Check 68 proves both modes; no new `MDB_` variable.
+- `scripts/certs` adds `DNS:pg-pooler` to the PostgreSQL certificate, and an `MDB_EXTRA_SANS` entry
+  that is an IP address now also gets an `IP:` SAN (it was written as `DNS:` only). Run
+  `make certs-renew` to re-issue existing certificates; restart `pg-pooler` afterwards, since it
+  copies the certificate at start (`certs-renew` says so when it is running).
+- docs/runbooks/operations.md covers an application on another host (direct publish of the pooler
+  on a private `MDB_BIND_ADDR`) and a firewall that works with Docker's DNAT, matching
+  `DOCKER-USER` on `--ctorigdstport`; docs/guides/pooling.md gives the client settings.
 - The CI build matrix comes from `dbpantry manifest --matrix versions`; `scripts/ci-matrix` stays
   and check 62 holds the two byte-identical.
 - `scripts/helm-values` and the Kubernetes backend read the engine list from the descriptors
@@ -59,6 +90,12 @@ image, replacing Cassandra's vulnerable vendored JARs rather than waiving them.
   D-52 to D-57, which sat after the end of the document, are back in the decision log.
 
 ### Added
+- **Mutual TLS through the pooler** (design.md D-74). Under `MDB_MTLS=true` pgBouncer requires a toolkit-CA client
+  certificate (`client_tls_sslmode = verify-full`), presents its own (`certs/pooler/client.crt`) to PostgreSQL and
+  verifies PostgreSQL's by name, and PostgreSQL admits the pooler from its fixed address with `clientcert=verify-ca`
+  while every other client keeps `verify-full`. `scripts/certs --client NAME` issues role certificates,
+  `make new-project` issues one per role under mTLS, and `make certs-renew` re-issues all of them. Check 68 covers
+  it. A fresh volume under `MDB_MTLS` now gets the client-certificate rules from its first boot.
 - **The `dbpantry` binary, phase 1: the engine manifest** (design.md D-68,
   [Engine manifest](docs/reference/manifest.md)). A Go module in `src/`, built from source with
   `make dbpantry`; nothing releases it yet. `dbpantry manifest` publishes every descriptor as
@@ -144,6 +181,13 @@ image, replacing Cassandra's vulnerable vendored JARs rather than waiving them.
   exist and is not a known generated file.
 
 ### Fixed
+- **The prod overlay's `pgbouncer` service is now the HA pooler** (design.md D-72). It had no credential and
+  pointed at `pg`, so wherever the overlay applied it restarted forever beside `pg-pooler`. It is defined in
+  `compose.ha.yml` in front of HAProxy's write port (`make up PROFILES=ha,pooler`), and the overlay entry only
+  hardens it. Patroni nodes converge the pooler's role and `pgbouncer.get_auth()` when they become primary,
+  through the same script the standalone image now uses, so an HA stack can pool at all. New:
+  `MDB_HA_POOLER_HOST_PORT`, `MDB_PGBOUNCER_CPU_LIMIT`, `MDB_PGBOUNCER_MEM_LIMIT`. The pgBouncer image now
+  reports healthy only while listening.
 - **`MDB_BACKEND=incus` failed on its first live host.** Run on 2026-11-04 on Ubuntu 26.04
   (arm64) with Incus 7.0.2 and incus-compose 1.3.5, the `pg` and `ui` profiles now come up with
   every service healthy, and `status`, `logs`, exec, `backup ENGINE=pg` and data across `down` and
@@ -280,7 +324,27 @@ image, replacing Cassandra's vulnerable vendored JARs rather than waiving them.
   maintained menu. Each still runs through `MDB_<ENGINE>_BASE_IMAGE`, unsupported.
 
 ### Security
+- **Every service drops privileges, has a health signal, and is limited under prod** (design.md D-75). etcd and
+  HAProxy drop all capabilities; MongoDB, Cassandra, poolers, sidecars, etcd, HAProxy, Patroni and the UIs get
+  prod limits (`MDB_<ENGINE>_CPU_LIMIT`/`_MEM_LIMIT`, `MDB_POOLER_*`, `MDB_AUX_*`); the exporters get
+  healthchecks. pg-exporter now connects with `sslmode=require` and ProxySQL reaches its server over TLS, so
+  neither is refused by a TLS-only server under prod. Check 72 holds this, and lists what is not done yet.
+- **Images take their distribution's security updates whole** (design.md D-71): `mdb-os-upgrade` runs in every
+  image and upgrades from the distribution's own repositories only, failing the build if the engine version
+  moves. It replaces the per-package `--only-upgrade` lines (pcre2, expat, perl, libssl3, apt). Downloads go
+  through `mdb-fetch`, which retries with backoff and verifies a recorded SHA-256 (s6-overlay, pg_graphql),
+  a key fingerprint (PGDG) or a named signature check (the MySQL client RPM). Check 70 guards both.
+- **CI gates image findings where they can have been caused** (design.md D-71): the Trivy scan fails the weekly
+  scheduled build of main and pull requests that change an image input; other pull requests report findings
+  without failing. A failed scheduled build opens or updates one tracking issue.
+- **Go dependency floors are one file** (design.md D-70): `images/_shared/gotools/floors.txt`, read by every image
+  that rebuilds a Go tool. `golang.org/x/net` is raised to v0.62.0 for CVE-2026-78661, which failed the pg,
+  mysql and mariadb builds because the previous floor was written inline in four Dockerfiles. Check 69 keeps
+  floors out of Dockerfiles and tests the version comparison.
 
+- **CVE-2026-109518 in `apt` is fixed in the MariaDB images too.** It started failing the Trivy gate
+  on MariaDB 11.8 and 12.3 on both architectures after the pg and Cassandra fix landed. `apt` is
+  upgraded by name (2.8.3 to 2.8.4ubuntu0.1 on Ubuntu 24.04), and brings `libapt-pkg` along.
 - **CVE-2026-109518 in `apt` is fixed in the pg and Cassandra images.** `apt` and `libapt-pkg` are
   upgraded by name, as pcre2, expat and perl already are. The pg images go from 2.6.1 to 2.6.2 on
   bookworm, and Cassandra from 3.0.3 to 3.0.4 on trixie. pgvector has not rebuilt 0.8.6 since

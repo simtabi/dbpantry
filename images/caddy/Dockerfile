@@ -29,6 +29,16 @@ RUN xcaddy build \
 
 FROM ${CADDY_BASE}
 
+# Supply-chain helpers (design.md D-71): mdb-os-upgrade applies the
+# distribution's own updates without moving the engine, and mdb-fetch is the
+# one way a file is downloaded -- retried, and verified against
+# _shared/supply/checksums.txt or a named key fingerprint.
+COPY --chmod=0755 _shared/supply/os-upgrade.sh /usr/local/bin/mdb-os-upgrade
+COPY --chmod=0755 _shared/supply/fetch.sh /usr/local/bin/mdb-fetch
+COPY _shared/supply/checksums.txt /usr/local/share/mdb-supply/checksums.txt
+# Alpine's updates since the base digest (design.md D-71).
+RUN mdb-os-upgrade
+
 COPY --from=builder /usr/bin/caddy /usr/bin/caddy
 
 RUN caddy version && caddy list-modules | grep -q '^layer4' \

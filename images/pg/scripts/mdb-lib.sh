@@ -100,6 +100,46 @@ EOF
     chown postgres:postgres "$hba" 2>/dev/null || true
 }
 
+# apply_tls_hba FILE
+#
+# The transport rules layered on a hardened pg_hba, one function for both the
+# first-boot initdb hook and every later start, so the two cannot disagree
+# (design.md D-74). They did: the hook only rewrote host to hostssl, so a FRESH
+# volume under MDB_MTLS=true accepted connections without a client certificate
+# until its first restart.
+#
+#   MDB_TLS_ENFORCE  every TCP rule becomes hostssl; plaintext TCP is refused.
+#   MDB_MTLS         (with enforcement) every hostssl scram rule also demands
+#                    clientcert=verify-full: a certificate from the toolkit CA
+#                    whose CN is the role being logged into.
+#   MDB_PG_POOLER_ADDR
+#                    the pooler's fixed address, set by gen-compose. Under mTLS
+#                    it gets its own rule, first: clientcert=verify-ca plus
+#                    scram. The pooler logs in as every application role, so a
+#                    CN-equals-role check cannot hold for it; its certificate
+#                    must still come from the toolkit CA, and each role's
+#                    password is still checked. PostgreSQL's map= option, which
+#                    could otherwise relax the CN match, is not allowed with
+#                    scram-sha-256.
+apply_tls_hba() {
+    local hba="$1"
+    [[ -f "$hba" ]] || return 0
+    is_true "${MDB_TLS_ENFORCE:-false}" || return 0
+    sed -i 's/^host\([[:space:]]\)/hostssl\1/' "$hba"
+    is_true "${MDB_MTLS:-false}" || return 0
+    sed -i 's/^hostssl\(.*\)scram-sha-256$/hostssl\1scram-sha-256 clientcert=verify-full/' "$hba"
+    if [[ -n "${MDB_PG_POOLER_ADDR:-}" ]]; then
+        # Before the first hostssl rule: pg_hba is first-match.
+        awk -v addr="$MDB_PG_POOLER_ADDR" '
+            !done && /^hostssl[[:space:]]/ {
+                print "# The pooler: a toolkit-CA certificate (its CN is not a role) plus the role password."
+                printf "hostssl all             all             %-23s scram-sha-256 clientcert=verify-ca\n", addr
+                done = 1
+            }
+            { print }' "$hba" > "$hba.mdb" && cat "$hba.mdb" > "$hba" && rm -f "$hba.mdb"
+    fi
+}
+
 # The ident map lets root -- which is what `docker exec` runs as -- act as the
 # postgres role over the socket. Peer still verifies a real OS identity, which
 # trust did not do at all; this narrows it to a named user rather than anyone.

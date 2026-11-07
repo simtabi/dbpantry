@@ -340,13 +340,24 @@ services:
     environment:
       # The exporter reads the password from a file rather than taking it in
       # the connection string, so no credential appears in `docker inspect`.
-      DATA_SOURCE_URI: "pg:5432/${MDB_PG_DEFAULT_DB:-postgres}?sslmode=disable"
+      # require, not disable: PostgreSQL's TLS is always on, and under the
+      # prod profile pg_hba is hostssl-only, so a plaintext exporter was refused
+      # with "no pg_hba.conf entry ... no encryption" (design.md D-75).
+      DATA_SOURCE_URI: "pg:5432/${MDB_PG_DEFAULT_DB:-postgres}?sslmode=require"
       DATA_SOURCE_USER: postgres
       DATA_SOURCE_PASS_FILE: /run/secrets/pg_superuser_password.txt
     volumes:
       - ./secrets:/run/secrets:ro
     networks: [mdb]
     logging: *default-logging
+    # Healthy when it serves metrics. The image is busybox-based, so wget is
+    # there (design.md D-75).
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:9187/metrics"]
+      interval: 15s
+      timeout: 5s
+      retries: 4
+      start_period: 15s
 
   mysqld-exporter:
     profiles: [metrics]
@@ -365,6 +376,12 @@ services:
       - ./secrets:/run/secrets:ro
     networks: [mdb]
     logging: *default-logging
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:9104/metrics"]
+      interval: 15s
+      timeout: 5s
+      retries: 4
+      start_period: 15s
 
 networks:
   mdb:

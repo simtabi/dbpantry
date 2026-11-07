@@ -1,0 +1,72 @@
+#!/usr/bin/env bash
+#
+# Put the prod overlay into an env file's COMPOSE_FILE (design.md D-73).
+#
+# compose.prod.yml removes engine ports, enforces TLS and sets limits -- but
+# only when Compose reads it, and nothing ever told it to: COMPOSE_FILE named
+# the base files alone, so `make up PROFILES=...,prod` booted none of it.
+# `scripts/init --prod` now writes it for new installs. An existing install is
+# never changed silently: check-env refuses a prod boot without the overlay and
+# names this command, which is idempotent and edits only COMPOSE_FILE.
+#
+# Usage: scripts/prod-overlay [ENV_FILE]       (default .env)
+#        scripts/prod-overlay --check [ENV_FILE]
+#          exit 0 if the overlay is in place, 1 if not; changes nothing.
+
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# shellcheck source=env-lib.sh
+. "$ROOT/scripts/env-lib.sh"
+
+OVERLAY=(compose.prod.yml compose.prod.engines.yml)
+
+check=0
+if [[ "${1:-}" == "--check" ]]; then check=1; shift; fi
+file="${1:-$ROOT/.env}"
+[[ -f "$file" ]] || { printf 'prod-overlay: %s does not exist\n' "$file" >&2; exit 2; }
+
+current="$(mdb_env_get COMPOSE_FILE "$file")"
+[[ -n "$current" ]] || { printf 'prod-overlay: %s has no COMPOSE_FILE\n' "$file" >&2; exit 2; }
+
+missing=()
+for f in "${OVERLAY[@]}"; do
+    case ":$current:" in *":$f:"*) ;; *) missing+=("$f") ;; esac
+done
+
+if (( check )); then
+    (( ${#missing[@]} == 0 ))
+    exit
+fi
+
+if (( ${#missing[@]} == 0 )); then
+    printf 'prod-overlay: %s already applies the prod overlay\n' "${file#"$ROOT"/}"
+    exit 0
+fi
+
+# Inserted after compose.ha.yml (the overlay hardens the HA pooler defined
+# there) and before anything else, so a runtime file appended after it --
+# compose.apple.yml sizes VMs -- still has the last word on what it sets.
+new=""
+IFS=':' read -r -a parts <<< "$current"
+placed=0
+for p in "${parts[@]}"; do
+    new="${new:+$new:}$p"
+    if [[ "$p" == compose.ha.yml ]]; then
+        for f in "${missing[@]}"; do new="$new:$f"; done
+        placed=1
+    fi
+done
+if (( ! placed )); then
+    for f in "${missing[@]}"; do new="$new:$f"; done
+fi
+
+# Only the COMPOSE_FILE line changes: every other line, comment and blank is
+# copied through untouched. The LAST assignment is the one Compose and
+# mdb_env_get honour, so that is the one rewritten.
+last="$(grep -n '^COMPOSE_FILE=' "$file" | tail -1 | cut -d: -f1)"
+tmp="$(mktemp "${file}.XXXXXX")"
+awk -v n="$last" -v v="COMPOSE_FILE=$new" 'NR==n {print v; next} {print}' "$file" > "$tmp"
+chmod --reference="$file" "$tmp" 2>/dev/null || chmod "$(stat -f '%Lp' "$file" 2>/dev/null || echo 600)" "$tmp"
+mv "$tmp" "$file"
+printf 'prod-overlay: %s COMPOSE_FILE now includes %s\n' "${file#"$ROOT"/}" "${missing[*]}"
