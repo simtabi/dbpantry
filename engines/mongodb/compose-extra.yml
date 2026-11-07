@@ -2,7 +2,9 @@
     # no credential is involved (design.md D-75). mongosh ships in the image.
     healthcheck:
       test: ["CMD", "mongosh", "--quiet", "--norc", "--eval", "quit(db.adminCommand('ping').ok ? 0 : 1)"]
-      interval: 10s
-      timeout: 5s
-      retries: 12
-      start_period: 30s
+      # mongosh is a Node program and takes seconds to start on a busy runner;
+      # a 5s timeout failed every probe of a healthy server in CI (check 64).
+      interval: 15s
+      timeout: 30s
+      retries: 10
+      start_period: 60s

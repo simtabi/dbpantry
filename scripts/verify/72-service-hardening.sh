@@ -112,6 +112,14 @@ print("\n".join(bad))
 PY
 )" || vfail "could not judge the render"
 
+# The pgBouncer bootstrap must fit the capabilities Compose leaves it
+# (DAC_OVERRIDE, SETUID, SETGID, CHOWN). `install -o OWNER -m MODE` chowns and
+# then chmods a file root no longer owns, which needs FOWNER: it exited the
+# Compose pooler before pgBouncer started while every docker-run test passed.
+if grep -vE '^[[:space:]]*#' images/pgbouncer/bootstrap.sh | grep -qE 'install[[:space:]].*-o[[:space:]]'; then
+    vfail "images/pgbouncer/bootstrap.sh uses install -o, which needs FOWNER the Compose pooler does not have; install -m, then chown last"
+fi
+
 head="$(head -1 <<< "$out")"; rest="$(tail -n +2 <<< "$out")"
 read -r services exceptions <<< "${head#\#}"
 (( services >= 25 )) || vfail "the full render has $services service(s), expected at least 25; the profiles or files are wrong"

@@ -28,17 +28,27 @@ export DB_PASSWORD
 # lands on the /etc/pgbouncer tmpfs, so the key never reaches the container's
 # writable layer. entrypoint.sh decides what to do with it; finding none is
 # fatal only under MDB_TLS_ENFORCE.
+#
+# Every file is written as root with its mode already set, and the tree is
+# handed to postgres once, last. Under Compose the pooler keeps only
+# DAC_OVERRIDE, SETUID, SETGID and CHOWN. `install -o postgres -m ...` changes
+# the owner and THEN the mode, and changing the mode of a file root no longer
+# owns needs FOWNER: under Compose it failed with "cannot change permissions",
+# and passed wherever Docker's default capabilities applied. Check 72 refuses
+# `install -o` here.
 TLS_DIR="${TLS_DIR:-/etc/pgbouncer/tls}"
 export TLS_DIR
+staged=0
 for candidate in /certs/pg /certs; do
     if [ -r "$candidate/server.crt" ] && [ -r "$candidate/server.key" ]; then
-        install -d -o postgres -g postgres -m 0700 "$TLS_DIR"
-        install -o postgres -g postgres -m 0600 "$candidate/server.key" "$TLS_DIR/server.key"
-        install -o postgres -g postgres -m 0644 "$candidate/server.crt" "$TLS_DIR/server.crt"
+        install -d -m 0700 "$TLS_DIR"
+        install -m 0600 "$candidate/server.key" "$TLS_DIR/server.key"
+        install -m 0644 "$candidate/server.crt" "$TLS_DIR/server.crt"
         if [ -r /certs/ca.crt ]; then
-            install -o postgres -g postgres -m 0644 /certs/ca.crt "$TLS_DIR/ca.crt"
+            install -m 0644 /certs/ca.crt "$TLS_DIR/ca.crt"
         fi
         echo "pgbouncer: serving TLS with the certificate from $candidate" >&2
+        staged=1
         break
     fi
 done
@@ -46,9 +56,15 @@ done
 # The pooler's own CLIENT certificate, presented to PostgreSQL under mTLS
 # (design.md D-74). Issued by `make certs` as certs/pooler/client.{crt,key}.
 if [ -r /certs/pooler/client.crt ] && [ -r /certs/pooler/client.key ]; then
-    install -d -o postgres -g postgres -m 0700 "$TLS_DIR"
-    install -o postgres -g postgres -m 0600 /certs/pooler/client.key "$TLS_DIR/pooler-client.key"
-    install -o postgres -g postgres -m 0644 /certs/pooler/client.crt "$TLS_DIR/pooler-client.crt"
+    install -d -m 0700 "$TLS_DIR"
+    install -m 0600 /certs/pooler/client.key "$TLS_DIR/pooler-client.key"
+    install -m 0644 /certs/pooler/client.crt "$TLS_DIR/pooler-client.crt"
+    staged=1
+fi
+
+# Ownership last: a chown needs CHOWN and nothing else.
+if [ "$staged" -eq 1 ]; then
+    chown -R postgres:postgres "$TLS_DIR"
 fi
 
 # The read above happens as ROOT, and the drop to postgres happens here, at
