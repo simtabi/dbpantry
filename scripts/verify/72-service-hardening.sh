@@ -68,6 +68,8 @@ EXEMPT = {
         "pgadmin":        "upstream image; a probe is unverified without a daemon to try it",
         "caddy":          "prod disables the admin API and redirects :80 to TLS, so a probe needs design",
         "mysql-pooler":   "ProxySQL upstream image; a probe through its admin port is unverified",
+        "mongodb":        "a mongosh ping probe kept the fixture's MongoDB unhealthy in CI on both "
+                          "arches with no diagnostic (2026-11-07, check 64); upstream image",
         "mariadb-pooler": "ProxySQL upstream image; a probe through its admin port is unverified",
     },
     "secrets": {
