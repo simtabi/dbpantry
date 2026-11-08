@@ -1,15 +1,33 @@
 name: Release
 
-# The contract is docs/guides/release.md: a tag `vX.Y.Z` is the only thing that
-# publishes, and nothing is published from a branch, a pull request or by hand.
-# Pushing the tag is the release decision; this workflow only carries it out.
+# The contract is docs/guides/release.md. Pushing a tag publishes nothing: this
+# workflow runs only when dispatched by hand on a `vX.Y.Z` tag that is already on
+# GitHub, with an explicit confirmation, and only for a version the owner has
+# approved. The command, run from any directory:
+#
+#   gh workflow run release.yml --repo simtabi/dbpantry --ref vX.Y.Z -f confirm=release-go
+#
+# It publishes for real: every image to ghcr.io/simtabi and the GitHub release.
+# Nothing is published from a branch, a pull request or a tag push.
+# src/internal/release's TestReleaseRunsOnlyOnAConfirmedDispatch fails if this
+# gains an automatic trigger or loses the confirmation.
 on:
-  push:
-    tags:
-      - 'v[0-9]+.[0-9]+.[0-9]+'
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: Type release-go to publish for the tag this run is dispatched on
+        required: true
+        type: string
 
 permissions:
   contents: read
+
+# Our own Go module is fetched from git, never through proxy.golang.org or
+# sum.golang.org, so a release build never feeds a version into the public
+# cache (make verify builds the dbpantry binary).
+env:
+  GOPRIVATE: github.com/simtabi/*
+  GONOSUMDB: github.com/simtabi/*
 
 # Two runs for one tag would race to push the same manifests. A release is
 # never cancelled half-way: a partly pushed release is worse than a slow one.
@@ -33,6 +51,27 @@ jobs:
       version: ${{ steps.release.outputs.version }}
       images: ${{ steps.matrix.outputs.images }}
     steps:
+      # The release gate, before anything is checked out or built. Every other
+      # job needs this one, so a refusal here publishes nothing. The ref must be
+      # a version tag: dispatched on a branch, github.ref_name below would be the
+      # branch name and the tag checks would be checking the wrong thing.
+      - name: Refuse without confirm=release-go on a vX.Y.Z tag
+        env:
+          CONFIRM: ${{ inputs.confirm }}
+        run: |
+          set -euo pipefail
+          if [ "$CONFIRM" != "release-go" ]; then
+            echo "::error::refusing to publish: dispatch with -f confirm=release-go"
+            exit 1
+          fi
+          case "$GITHUB_REF" in
+            refs/tags/v[0-9]*) ;;
+            *)
+              echo "::error::refusing to publish: dispatch on a vX.Y.Z tag with --ref, not ${GITHUB_REF}"
+              exit 1
+              ;;
+          esac
+
       # GitHub's own actions float on their major tag, per the Simtabi action
       # rule: a commit pin is for actions whose tag a third party controls.
       # Everything third-party here is a checksum-verified binary instead.
@@ -49,7 +88,7 @@ jobs:
           TAG: ${{ github.ref_name }}
         run: |
           set -euo pipefail
-          # The trigger's glob is looser than semver; this is the real test.
+          # The gate's glob is looser than semver; this is the real test.
           [[ "$TAG" =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+)$ ]] \
             || { echo "::error::tag $TAG is not vX.Y.Z"; exit 1; }
           echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
