@@ -24,6 +24,11 @@ image, replacing Cassandra's vulnerable vendored JARs rather than waiving them.
   `MDB_EXTRA_SANS`, then restart `pg-pooler`.
 
 ### Changed
+- **Pushing a `vX.Y.Z` tag no longer publishes anything.** `release.yml` runs only from a
+  `workflow_dispatch` on a version tag already on GitHub, with `-f confirm=release-go`, and its first
+  step refuses anything else before a checkout or build:
+  `gh workflow run release.yml --repo simtabi/dbpantry --ref vX.Y.Z -f confirm=release-go`.
+  What a release publishes is unchanged (docs/guides/release.md, design.md D-76).
 - **`make dbpantry` writes `build/<os>/dbpantry`** (`build/macos/dbpantry`, `build/linux/dbpantry`),
   the org's build layout: one folder per OS and nothing else in `build/`. It wrote `build/dbpantry`
   before; delete that file if you built one. Check 67 fails on anything else in `build/`, and the

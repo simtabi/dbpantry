@@ -4,12 +4,13 @@ How a version of dbpantry ships, and what a consumer gets.
 
 > **Status:** [`release.yml`](../../.github/workflows/release.yml) implements this
 > contract. It has not run yet: v0.1.0 was released by hand, with no images, so
-> the next tag is the first that publishes anything. Until then the images exist
-> only where `make build` built them.
+> the first owner-approved dispatch is the first that publishes anything. Until
+> then the images exist only where `make build` built them.
 
 ## What ships
 
-A release is one git tag, `vX.Y.Z`, that produces:
+A release is one git tag, `vX.Y.Z`, plus one confirmed dispatch of the release
+workflow on that tag. Together they produce:
 
 | Artefact | Where |
 |---|---|
@@ -69,16 +70,40 @@ git tag -a v1.4.0 -m "..."
 git push origin v1.4.0
 ```
 
-The tag drives everything. Nothing is published from a branch.
+**Pushing a tag publishes nothing.** It names the version and fixes the commit;
+no workflow starts. Nothing is published from a branch, a pull request or a tag
+push.
+
+## Publishing
+
+A release runs only when dispatched by hand, with this exact command, from any
+directory:
+
+```bash
+gh workflow run release.yml --repo simtabi/dbpantry --ref vX.Y.Z -f confirm=release-go
+```
+
+- `vX.Y.Z` must be a tag **already on GitHub** (see [Tagging](#tagging)). The
+  run is dispatched on that tag, so the workflow reads the version and the
+  commit from it.
+- The command **publishes for real**: every image to `ghcr.io/simtabi` and the
+  GitHub release. Run it only for a version the owner has approved.
+- Without `-f confirm=release-go`, or dispatched on anything but a `vX.Y.Z` tag,
+  the workflow's first step refuses before anything is checked out or built.
+
+`src/internal/release`'s `TestReleaseRunsOnlyOnAConfirmedDispatch` fails if
+`release.yml` gains a `push`, `schedule`, `pull_request` or `release` trigger,
+loses the required `confirm` input, or its first step stops refusing.
 
 ## The workflow
 
-`release.yml` runs on a `vX.Y.Z` tag and nothing else. Its jobs run in this
-order, and each refuses as early as it can:
+`release.yml` runs only on a confirmed `workflow_dispatch` (see
+[Publishing](#publishing)). Its jobs run in this order, and each refuses as
+early as it can:
 
 | Job | What it does | Refuses when |
 |---|---|---|
-| resolve release | reads the version from the tag and the images from the engine descriptors | the tag is not on `main`, `CHANGELOG.md` has no section for it, or MongoDB is in the matrix |
+| resolve release | refuses first unless `confirm` is `release-go` on a `vX.Y.Z` tag, then reads the version from the tag and the images from the engine descriptors | the dispatch is unconfirmed or not on a version tag, the tag is not on `main`, `CHANGELOG.md` has no section for it, or MongoDB is in the matrix |
 | scan | builds every image on both architectures and runs the Trivy gate | any image fails to build or has a fixable HIGH or CRITICAL finding |
 | verify | runs `make verify` on amd64 and arm64 | any check fails |
 | publish | builds again, scans again, pushes each architecture, and attaches its SBOM and build provenance | the second scan fails |
@@ -145,6 +170,9 @@ Then confirm, by hand:
    release will carry.
 2. Merge it, once CI is green.
 3. Tag the merge commit on `main` and push the tag (see [Tagging](#tagging)).
+   This publishes nothing.
+4. Once the owner approves the version, dispatch the release with the command in
+   [Publishing](#publishing).
 
 The first publish creates each `dbpantry-*` package on GHCR, and GHCR creates a
 package private. The owner sets each one public once, in the package settings;
