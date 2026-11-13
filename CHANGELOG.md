@@ -7,10 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-The first release published by CI: every engine image and the cli image on GHCR,
-for amd64 and arm64, each with an SBOM and build provenance. It also renames the
-project to dbpantry and fixes the findings that failed the Trivy gate on every
-image, replacing Cassandra's vulnerable vendored JARs rather than waiving them.
+The first release published by CI: the GitHub release, with the source tarball
+and its provenance, once every engine image and the cli image has built and passed
+the Trivy gate on amd64 and arm64. Container images are no longer published. It
+also renames the project to dbpantry and fixes the findings that failed the Trivy
+gate on every image, replacing Cassandra's vulnerable vendored JARs rather than
+waiving them.
 
 ### Upgrade
 
@@ -24,11 +26,16 @@ image, replacing Cassandra's vulnerable vendored JARs rather than waiving them.
   `MDB_EXTRA_SANS`, then restart `pg-pooler`.
 
 ### Changed
-- **Pushing a `vX.Y.Z` tag no longer publishes anything.** `release.yml` runs only from a
-  `workflow_dispatch` on a version tag already on GitHub, with `-f confirm=release-go`, and its first
-  step refuses anything else before a checkout or build:
-  `gh workflow run release.yml --repo simtabi/dbpantry --ref vX.Y.Z -f confirm=release-go`.
-  What a release publishes is unchanged (docs/guides/release.md, design.md D-76).
+- **Container images are no longer published.** A release publishes the GitHub release only, with
+  the notes and the source tarball (owner, 2026-11-13). The `ghcr.io/simtabi/dbpantry-*` images are
+  frozen: no new tag is pushed and nothing is deleted from ghcr.io. Build the images with
+  `make build`. The Kubernetes backend and the Helm chart still name `ghcr.io/simtabi` as their
+  registry, so push your own build there or point `global.imageRegistry` at your own registry
+  (design.md D-77).
+- **A release runs on a pushed `vX.Y.Z` tag, or on request for a tag already on GitHub:**
+  `gh workflow run release.yml --repo simtabi/dbpantry -f tag=vX.Y.Z`. This replaces the dispatch
+  gated on `-f confirm=release-go` (D-76). Every job checks out the tag, and the first step refuses
+  anything but a version tag that exists on GitHub (docs/guides/release.md, design.md D-77).
 - **`make dbpantry` writes `build/<os>/dbpantry`** (`build/macos/dbpantry`, `build/linux/dbpantry`),
   the org's build layout: one folder per OS and nothing else in `build/`. It wrote `build/dbpantry`
   before; delete that file if you built one. Check 67 fails on anything else in `build/`, and the

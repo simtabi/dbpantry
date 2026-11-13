@@ -24,11 +24,12 @@ minor release, announced in `CHANGELOG.md`.
 
 ## Verifying what you run
 
-Every published image carries a build-provenance attestation and an SBOM
-generated in CI.
+Container images are no longer published; `make build` builds them from
+digest-pinned bases, and CI scans every one before a release. Each release's
+source tarball carries a build-provenance attestation:
 
 ```bash
-gh attestation verify oci://ghcr.io/simtabi/dbpantry-pg:17 --owner simtabi
+gh attestation verify dbpantry-X.Y.Z.tar.gz --repo simtabi/dbpantry
 ```
 
 Images are pinned by digest throughout this repository. If a digest in

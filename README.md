@@ -90,9 +90,9 @@ The descriptors are also published as a versioned JSON manifest by the `dbpantry
 ## <a name="documentation"></a>Documentation
 
 The documentation lives in [`docs/`](docs/), indexed below. Engine images are not
-published yet: the release workflow publishes them only when dispatched by hand
-for an approved version (a tag push publishes nothing), and until then
-`make build` builds them locally (see [Release](docs/guides/release.md)).
+published: `make build` builds them locally, and the `ghcr.io/simtabi/dbpantry-*`
+images are frozen. A release is the GitHub release, made by pushing a `vX.Y.Z`
+tag (see [Release](docs/guides/release.md)).
 
 ### Guides — `docs/guides/`
 
