@@ -1,21 +1,28 @@
 name: Release
 
-# The contract is docs/guides/release.md. Pushing a tag publishes nothing: this
-# workflow runs only when dispatched by hand on a `vX.Y.Z` tag that is already on
-# GitHub, with an explicit confirmation, and only for a version the owner has
-# approved. The command, run from any directory:
+# The contract is docs/guides/release.md. A release runs in two ways, and no other:
 #
-#   gh workflow run release.yml --repo simtabi/dbpantry --ref vX.Y.Z -f confirm=release-go
+#   git push origin vX.Y.Z                                               releases vX.Y.Z
+#   gh workflow run release.yml --repo simtabi/dbpantry -f tag=vX.Y.Z     the same, for a tag already pushed
 #
-# It publishes for real: every image to ghcr.io/simtabi and the GitHub release.
-# Nothing is published from a branch, a pull request or a tag push.
-# src/internal/release's TestReleaseRunsOnlyOnAConfirmedDispatch fails if this
-# gains an automatic trigger or loses the confirmation.
+# Push a version tag only for final code: tags are final, and a pushed tag releases.
+# A release publishes the GitHub release only: the notes and the source tarball, with
+# its checksum and provenance. Container images are no longer published (owner,
+# 2026-11-13: GitHub release only); the images on ghcr.io/simtabi are frozen. Every
+# image is still built and scanned, and `make verify` still runs, before the release.
+# src/internal/release's TestReleaseRunsOnAVersionTagOrOnRequest fails if this gains
+# any other trigger, stops gating or checking out the tag, or publishes an image.
+#
+# dbpantry builds no release binaries, so it keeps its own jobs rather than calling
+# simtabi/.github's shared go-release.yml, which runs GoReleaser.
 on:
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'
   workflow_dispatch:
     inputs:
-      confirm:
-        description: Type release-go to publish for the tag this run is dispatched on
+      tag:
+        description: An existing vX.Y.Z tag to release
         required: true
         type: string
 
@@ -29,10 +36,10 @@ env:
   GOPRIVATE: github.com/simtabi/*
   GONOSUMDB: github.com/simtabi/*
 
-# Two runs for one tag would race to push the same manifests. A release is
-# never cancelled half-way: a partly pushed release is worse than a slow one.
+# One run per tag, never cancelled: two runs must not publish the same release,
+# and a partly published release is worse than a slow one.
 concurrency:
-  group: release-${{ github.ref }}
+  group: release-${{ inputs.tag || github.ref_name }}
   cancel-in-progress: false
 
 jobs:
@@ -40,43 +47,44 @@ jobs:
   # What is being released, and whether it may be.
   #
   # Everything that can refuse cheaply refuses here, before a single image is
-  # built: a tag that is not on main, a version with no CHANGELOG section, or a
-  # matrix that would publish MongoDB.
+  # built: a tag that is not a version on GitHub, a tag that is not on main, a
+  # version with no CHANGELOG section, or a matrix that includes MongoDB.
   # ---------------------------------------------------------------------------
   prepare:
     name: resolve release
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    env:
+      TAG: ${{ inputs.tag || github.ref_name }}
     outputs:
+      tag: ${{ steps.release.outputs.tag }}
       version: ${{ steps.release.outputs.version }}
       images: ${{ steps.matrix.outputs.images }}
     steps:
       # The release gate, before anything is checked out or built. Every other
-      # job needs this one, so a refusal here publishes nothing. The ref must be
-      # a version tag: dispatched on a branch, github.ref_name below would be the
-      # branch name and the tag checks would be checking the wrong thing.
-      - name: Refuse without confirm=release-go on a vX.Y.Z tag
+      # job needs this one, so a refusal here publishes nothing. The tag comes
+      # from the pushed ref or the dispatch's tag input, and it must be a version
+      # tag already on GitHub: every later job checks out that tag, never a branch.
+      - name: Refuse anything but a vX.Y.Z tag on GitHub
         env:
-          CONFIRM: ${{ inputs.confirm }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          if [ "$CONFIRM" != "release-go" ]; then
-            echo "::error::refusing to publish: dispatch with -f confirm=release-go"
+          if ! [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "::error::refusing to publish: '${TAG}' is not a vX.Y.Z tag"
             exit 1
           fi
-          case "$GITHUB_REF" in
-            refs/tags/v[0-9]*) ;;
-            *)
-              echo "::error::refusing to publish: dispatch on a vX.Y.Z tag with --ref, not ${GITHUB_REF}"
-              exit 1
-              ;;
-          esac
+          if ! gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${TAG}" --silent; then
+            echo "::error::refusing to publish: ${TAG} is not a tag on ${GITHUB_REPOSITORY}; push it first"
+            exit 1
+          fi
 
       # GitHub's own actions float on their major tag, per the Simtabi action
       # rule: a commit pin is for actions whose tag a third party controls.
       # Everything third-party here is a checksum-verified binary instead.
       - uses: actions/checkout@v7
         with:
+          ref: refs/tags/${{ inputs.tag || github.ref_name }}
           # Full history: the tag must be checked against main below.
           fetch-depth: 0
           # No step in this job pushes, so the token is not kept in .git/config.
@@ -84,22 +92,24 @@ jobs:
 
       - id: release
         name: Resolve the version from the tag
-        env:
-          TAG: ${{ github.ref_name }}
         run: |
           set -euo pipefail
-          # The gate's glob is looser than semver; this is the real test.
+          # The gate admits a pre-release suffix; a dbpantry release is a final
+          # version only, so this is the real test.
           [[ "$TAG" =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+)$ ]] \
             || { echo "::error::tag $TAG is not vX.Y.Z"; exit 1; }
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
           echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
 
       # "Nothing is published from a branch": a tag pushed on a feature branch
       # would otherwise release code that main never reviewed.
+      # HEAD is the tag's commit (checked out above). GITHUB_SHA is not: on a
+      # dispatch it is the branch the run was started from.
       - name: Refuse a tag that is not on main
         run: |
           set -euo pipefail
-          git merge-base --is-ancestor "$GITHUB_SHA" origin/main \
-            || { echo "::error::$GITHUB_REF_NAME points at a commit that is not on main"; exit 1; }
+          git merge-base --is-ancestor HEAD origin/main \
+            || { echo "::error::$TAG points at a commit that is not on main"; exit 1; }
 
       # The release body is that version's CHANGELOG section. Checked here, so a
       # missing section fails in seconds rather than after an hour of builds.
@@ -108,16 +118,16 @@ jobs:
           VERSION: ${{ steps.release.outputs.version }}
         run: scripts/release-notes "$VERSION" > /dev/null
 
-      # The same descriptor-derived matrix ci.yml builds, plus the cli image.
-      # MongoDB is referenced, never derived (docs/guides/licensing.md), so ci-matrix
-      # leaves it out; this step fails rather than trusts that.
+      # The same descriptor-derived matrix ci.yml builds, plus the cli image, for
+      # the scan gate. MongoDB is referenced, never derived (docs/guides/licensing.md),
+      # so ci-matrix leaves it out; this step fails rather than trusts that.
       - id: matrix
-        name: Resolve the images to publish
+        name: Resolve the images to scan
         run: |
           set -euo pipefail
           images="$(scripts/ci-matrix versions | jq -c '. + [{"engine":"cli","version":"dev"}]')"
           if jq -e 'any(.[]; .engine == "mongodb")' <<<"$images" >/dev/null; then
-            echo "::error::the matrix would publish MongoDB, which is SSPL-licensed and never published"
+            echo "::error::the matrix includes MongoDB, which is SSPL-licensed and never derived"
             exit 1
           fi
           echo "images=$images" >> "$GITHUB_OUTPUT"
@@ -126,10 +136,9 @@ jobs:
   # ---------------------------------------------------------------------------
   # Gate 1: every image builds and passes the Trivy gate on both architectures.
   #
-  # Nothing pushes until every image has passed, so a finding in one engine
-  # cannot leave the others half-published under this version. publish rebuilds
-  # and scans again rather than carrying images across jobs; the second scan is
-  # what guards the image that is actually pushed.
+  # Images are no longer published, but they are the toolkit's product and every
+  # user builds them with `make build`, so a release still refuses a tag whose
+  # images do not build or carry a fixable HIGH or CRITICAL finding.
   # ---------------------------------------------------------------------------
   scan:
     name: scan ${{ matrix.entry.engine }} ${{ matrix.entry.version }} (${{ matrix.arch }})
@@ -152,6 +161,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
+          ref: refs/tags/${{ needs.prepare.outputs.tag }}
           persist-credentials: false
 
       - name: Build ${{ matrix.entry.engine }} ${{ matrix.entry.version }}
@@ -224,6 +234,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
+          ref: refs/tags/${{ needs.prepare.outputs.tag }}
           persist-credentials: false
 
       # Same pinned version as lint.yml; see the note there.
@@ -262,187 +273,8 @@ jobs:
           done
 
   # ---------------------------------------------------------------------------
-  # Publish: build, scan again, push one image per architecture, and attach its
-  # SBOM and build provenance to it.
-  #
-  # Each architecture is pushed under its own tag (`<tag>-amd64`, `-arm64`);
-  # the manifest job joins them under the tags people pull. Docker login and
-  # SBOM generation use the CLI and a checksum-verified syft binary, not
-  # third-party actions, for the same reason trivy is installed that way.
-  # ---------------------------------------------------------------------------
-  publish:
-    name: publish ${{ matrix.entry.engine }} ${{ matrix.entry.version }} (${{ matrix.arch }})
-    needs: [prepare, scan, verify]
-    runs-on: ${{ matrix.runner }}
-    timeout-minutes: 60
-    permissions:
-      contents: read
-      packages: write          # push to ghcr.io/simtabi
-      id-token: write          # sign the attestations (Sigstore)
-      attestations: write      # store them
-      artifact-metadata: write # the storage record for a pushed attestation
-    strategy:
-      fail-fast: true
-      matrix:
-        entry: ${{ fromJSON(needs.prepare.outputs.images) }}
-        arch: [amd64, arm64]
-        include:
-          - arch: amd64
-            runner: ubuntu-latest
-          - arch: arm64
-            runner: ubuntu-24.04-arm
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          persist-credentials: false
-
-      - name: Build ${{ matrix.entry.engine }} ${{ matrix.entry.version }}
-        env:
-          ENGINE: ${{ matrix.entry.engine }}
-          VERSION: ${{ matrix.entry.version }}
-        run: |
-          set -euo pipefail
-          cp .env.example .env
-          if [ "$ENGINE" != "cli" ]; then
-            upper="$(printf '%s' "$ENGINE" | tr '[:lower:]-' '[:upper:]_')"
-            sed -i "s/^MDB_${upper}_VERSION=.*/MDB_${upper}_VERSION=${VERSION}/" .env
-          fi
-          scripts/build "$ENGINE"
-
-      - name: Install trivy and syft
-        env:
-          TRIVY_VERSION: 0.73.0
-          SYFT_VERSION: 1.55.0
-        run: |
-          set -euo pipefail
-          case "$(uname -m)" in
-            x86_64)  t_arch=64bit; s_arch=amd64 ;;
-            aarch64) t_arch=ARM64; s_arch=arm64 ;;
-            *) echo "unsupported architecture: $(uname -m)" >&2; exit 1 ;;
-          esac
-          base="https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}"
-          tarball="trivy_${TRIVY_VERSION}_Linux-${t_arch}.tar.gz"
-          curl -fsSL -o "$tarball" "${base}/${tarball}"
-          curl -fsSL -o trivy-checksums.txt "${base}/trivy_${TRIVY_VERSION}_checksums.txt"
-          grep " ${tarball}\$" trivy-checksums.txt | sha256sum -c -
-          tar -xzf "$tarball" trivy
-          sudo mv trivy /usr/local/bin/
-
-          base="https://github.com/anchore/syft/releases/download/v${SYFT_VERSION}"
-          tarball="syft_${SYFT_VERSION}_linux_${s_arch}.tar.gz"
-          curl -fsSL -o "$tarball" "${base}/${tarball}"
-          curl -fsSL -o syft-checksums.txt "${base}/syft_${SYFT_VERSION}_checksums.txt"
-          grep " ${tarball}\$" syft-checksums.txt | sha256sum -c -
-          tar -xzf "$tarball" syft
-          sudo mv syft /usr/local/bin/
-          trivy --version
-          syft version
-
-      - name: Scan the image about to be pushed
-        env:
-          ENGINE: ${{ matrix.entry.engine }}
-          VERSION: ${{ matrix.entry.version }}
-        run: |
-          trivy image --severity HIGH,CRITICAL --ignore-unfixed \
-            --ignorefile .trivyignore.yaml --exit-code 1 --format table \
-            "ghcr.io/simtabi/dbpantry-${ENGINE}:${VERSION}"
-
-      - id: push
-        name: Push ${{ matrix.entry.engine }} ${{ matrix.entry.version }} (${{ matrix.arch }})
-        env:
-          ENGINE: ${{ matrix.entry.engine }}
-          VERSION: ${{ matrix.entry.version }}
-          RELEASE: ${{ needs.prepare.outputs.version }}
-          ARCH: ${{ matrix.arch }}
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          repo="ghcr.io/simtabi/dbpantry-${ENGINE}"
-          # An engine's immutable tag is <major>-<release> (17-0.1.1); the cli
-          # image has no database version, so its tag is the release itself.
-          if [ "$ENGINE" = "cli" ]; then immutable="$RELEASE"; else immutable="${VERSION}-${RELEASE}"; fi
-          printf '%s' "$GH_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
-          docker tag "${repo}:${VERSION}" "${repo}:${immutable}-${ARCH}"
-          # The digest is read from what the registry acknowledged, not from
-          # RepoDigests, whose meaning differs under the containerd image store.
-          docker push "${repo}:${immutable}-${ARCH}" | tee push.log
-          digest="$(grep -oE 'digest: sha256:[0-9a-f]{64}' push.log | tail -1 | cut -d' ' -f2)"
-          [ -n "$digest" ] || { echo "::error::no digest in the push output"; exit 1; }
-          echo "pushed ${repo}:${immutable}-${ARCH} @ ${digest}"
-          echo "repo=$repo" >> "$GITHUB_OUTPUT"
-          echo "digest=$digest" >> "$GITHUB_OUTPUT"
-          syft scan "docker:${repo}:${immutable}-${ARCH}" -o "spdx-json=sbom.spdx.json"
-
-      - name: Attach the SBOM
-        uses: actions/attest@v4
-        with:
-          subject-name: ${{ steps.push.outputs.repo }}
-          subject-digest: ${{ steps.push.outputs.digest }}
-          sbom-path: sbom.spdx.json
-          push-to-registry: true
-
-      - name: Attach the build provenance
-        uses: actions/attest@v4
-        with:
-          subject-name: ${{ steps.push.outputs.repo }}
-          subject-digest: ${{ steps.push.outputs.digest }}
-          push-to-registry: true
-
-  # ---------------------------------------------------------------------------
-  # Join the two architectures under the tags people pull.
-  #
-  # Engines get `<major>` (17), which follows the newest release, and
-  # `<major>-<release>` (17-0.1.1), which never moves. The cli image gets
-  # `<release>`. `latest` appears nowhere (CLAUDE.md).
-  # ---------------------------------------------------------------------------
-  manifest:
-    name: manifest ${{ matrix.entry.engine }} ${{ matrix.entry.version }}
-    needs: [prepare, publish]
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    permissions:
-      contents: read
-      packages: write
-      id-token: write
-      attestations: write
-      artifact-metadata: write
-    strategy:
-      fail-fast: false
-      matrix:
-        entry: ${{ fromJSON(needs.prepare.outputs.images) }}
-    steps:
-      - id: create
-        name: Create the multi-architecture manifest
-        env:
-          ENGINE: ${{ matrix.entry.engine }}
-          VERSION: ${{ matrix.entry.version }}
-          RELEASE: ${{ needs.prepare.outputs.version }}
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          repo="ghcr.io/simtabi/dbpantry-${ENGINE}"
-          if [ "$ENGINE" = "cli" ]; then
-            immutable="$RELEASE"; tags=(-t "${repo}:${RELEASE}")
-          else
-            immutable="${VERSION}-${RELEASE}"; tags=(-t "${repo}:${immutable}" -t "${repo}:${VERSION}")
-          fi
-          printf '%s' "$GH_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
-          docker buildx imagetools create "${tags[@]}" \
-            "${repo}:${immutable}-amd64" "${repo}:${immutable}-arm64"
-          digest="$(docker buildx imagetools inspect "${repo}:${immutable}" --format '{{json .Manifest}}' | jq -r .digest)"
-          echo "published ${repo}:${immutable} @ ${digest}"
-          echo "repo=$repo" >> "$GITHUB_OUTPUT"
-          echo "digest=$digest" >> "$GITHUB_OUTPUT"
-
-      - name: Attach the build provenance to the manifest
-        uses: actions/attest@v4
-        with:
-          subject-name: ${{ steps.create.outputs.repo }}
-          subject-digest: ${{ steps.create.outputs.digest }}
-          push-to-registry: true
-
-  # ---------------------------------------------------------------------------
-  # The GitHub release, last: it announces images that already exist.
+  # The GitHub release, last: only once every image has built and passed the
+  # scan, and `make verify` has passed on both architectures.
   #
   # The body is the version's CHANGELOG section with the contributors since
   # the previous tag appended (docs/guides/release.md), and the source tarball is
@@ -450,7 +282,7 @@ jobs:
   # ---------------------------------------------------------------------------
   release:
     name: GitHub release
-    needs: [prepare, manifest]
+    needs: [prepare, scan, verify]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -461,13 +293,14 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
+          ref: refs/tags/${{ needs.prepare.outputs.tag }}
           fetch-depth: 0
           persist-credentials: false
 
       - name: Write the release notes and the source tarball
         env:
           VERSION: ${{ needs.prepare.outputs.version }}
-          TAG: ${{ github.ref_name }}
+          TAG: ${{ needs.prepare.outputs.tag }}
         run: |
           set -euo pipefail
           scripts/release-notes "$VERSION" > notes.md
@@ -490,7 +323,7 @@ jobs:
       - name: Create the release
         env:
           VERSION: ${{ needs.prepare.outputs.version }}
-          TAG: ${{ github.ref_name }}
+          TAG: ${{ needs.prepare.outputs.tag }}
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release create "$TAG" --verify-tag --title "$TAG" --notes-file notes.md \
