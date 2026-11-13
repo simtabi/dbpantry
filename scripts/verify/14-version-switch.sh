@@ -15,7 +15,7 @@ need_runtime
 # 17 -> 18 are the two maintained majors (design.md D-57). 18 also moved the
 # data mount one level up, to /var/lib/postgresql, so each side mounts its own.
 
-prefix="${MDB_IMAGE_PREFIX:-ghcr.io/simtabi}"
+prefix="$(mdb_image_prefix)"
 old_img="$prefix/dbpantry-pg:17"
 new_img="$prefix/dbpantry-pg:18"
 

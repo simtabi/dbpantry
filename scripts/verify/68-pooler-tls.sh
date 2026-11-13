@@ -43,6 +43,7 @@ need_image "$img"
 
 pooler_img="$(grep -oE "^MDB_ENGINE_POOLER_IMAGE='[^']+'" engines/postgres/engine.conf \
               | sed "s/^MDB_ENGINE_POOLER_IMAGE='//; s/'$//")"
+pooler_img="$(mdb_image_ref "$pooler_img")"
 [[ -n "$pooler_img" ]] || vfail "engines/postgres/engine.conf declares no pooler image"
 need_image "$pooler_img"
 

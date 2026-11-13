@@ -42,7 +42,8 @@ x-patroni: &patroni
     dockerfile: patroni/Dockerfile
     args:
       ENGINE_VERSION: ${MDB_PG_VERSION:-17}
-  image: ghcr.io/simtabi/dbpantry-patroni:${MDB_PG_VERSION:-17}
+      IMAGE_PREFIX: ${MDB_IMAGE_PREFIX:-localhost}
+  image: ${MDB_IMAGE_PREFIX:-localhost}/dbpantry-patroni:${MDB_PG_VERSION:-17}
   profiles: [ha]
   restart: unless-stopped
   networks: [mdb]
@@ -210,7 +211,7 @@ services:
   # ---------------------------------------------------------------------------
   pgbouncer:
     profiles: [ha-pooler]
-    image: ghcr.io/simtabi/dbpantry-pgbouncer:dev
+    image: ${MDB_IMAGE_PREFIX:-localhost}/dbpantry-pgbouncer:dev
     restart: unless-stopped
     depends_on:
       haproxy: {condition: service_healthy}

@@ -83,16 +83,17 @@ withdraw.
 
 ## Verifying what you run
 
-Every published image carries an accurate
-`org.opencontainers.image.licenses` label for its own contents, plus a build
-provenance attestation:
+Every image `make build` produces carries an accurate
+`org.opencontainers.image.licenses` label for its own contents:
 
 ```bash
-docker inspect ghcr.io/simtabi/dbpantry-pg:17 \
+docker inspect localhost/dbpantry-pg:17 \
   --format '{{ index .Config.Labels "org.opencontainers.image.licenses" }}'
-
-gh attestation verify oci://ghcr.io/simtabi/dbpantry-pg:17 --owner simtabi
 ```
+
+The images are no longer published, so there is no registry attestation to
+verify; the frozen `ghcr.io/simtabi/dbpantry-*` images are described in
+[Release](release.md).
 
 ---
 

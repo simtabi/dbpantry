@@ -182,7 +182,7 @@ jobs:
             --ignorefile .trivyignore.yaml \
             --exit-code "$code" \
             --format table \
-            "ghcr.io/simtabi/dbpantry-${ENGINE}:${VERSION}"
+            "localhost/dbpantry-${ENGINE}:${VERSION}"
 
       - name: Report unfixed findings (never fails)
         if: always()
@@ -191,7 +191,7 @@ jobs:
           VERSION: ${{ matrix.entry.version }}
         run: |
           trivy image --severity HIGH,CRITICAL --exit-code 0 --format table \
-            "ghcr.io/simtabi/dbpantry-${ENGINE}:${VERSION}" || true
+            "localhost/dbpantry-${ENGINE}:${VERSION}" || true
 
   # ---------------------------------------------------------------------------
   # When the scheduled build fails, say so where people look (design.md D-71).

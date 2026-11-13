@@ -90,3 +90,34 @@ mdb_env_needs_quotes() {
 }
 
 export -f _mdb_env_unsafe mdb_env_unquote mdb_env_get mdb_env_quote mdb_env_needs_quotes 2>/dev/null || true
+
+# The images dbpantry builds are named <prefix>/dbpantry-<component>:<tag>.
+# The prefix is MDB_IMAGE_PREFIX, or localhost when it is unset (design.md
+# D-78): a fully qualified local name, so Docker, Podman and nerdctl resolve it
+# the same way (check 49), it never falls back to a remote registry, and kind or
+# minikube can load it. Set MDB_IMAGE_PREFIX to your own registry (for example
+# registry.example.com/team) to build, run and deploy under that name instead.
+# Compose files, the Helm chart, the Makefile and the patroni Dockerfile carry
+# the same default; check 73 fails if any of them names another.
+MDB_IMAGE_PREFIX_DEFAULT=localhost
+
+# The prefix in force, without a trailing slash.
+mdb_image_prefix() {
+    local p="${MDB_IMAGE_PREFIX:-$MDB_IMAGE_PREFIX_DEFAULT}"
+    printf '%s\n' "${p%/}"
+}
+
+# The full name of one of our images: mdb_image pg 17 -> localhost/dbpantry-pg:17
+mdb_image() {
+    printf '%s/dbpantry-%s:%s\n' "$(mdb_image_prefix)" "$1" "$2"
+}
+
+# A reference written with the default prefix (an engine descriptor's
+# localhost/dbpantry-pgbouncer:dev) under the prefix in force. Any other
+# reference, such as an upstream image, is returned unchanged.
+mdb_image_ref() {
+    case "$1" in
+        "$MDB_IMAGE_PREFIX_DEFAULT"/dbpantry-*) printf '%s/%s\n' "$(mdb_image_prefix)" "${1#"$MDB_IMAGE_PREFIX_DEFAULT"/}" ;;
+        *) printf '%s\n' "$1" ;;
+    esac
+}

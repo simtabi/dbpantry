@@ -209,7 +209,7 @@ jobs:
         run: |
           trivy image --severity HIGH,CRITICAL --ignore-unfixed \
             --ignorefile .trivyignore.yaml --exit-code 1 --format table \
-            "ghcr.io/simtabi/dbpantry-${ENGINE}:${VERSION}"
+            "localhost/dbpantry-${ENGINE}:${VERSION}"
 
   # ---------------------------------------------------------------------------
   # Gate 2: the acceptance harness, on both architectures.

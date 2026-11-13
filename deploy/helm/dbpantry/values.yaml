@@ -6,9 +6,13 @@
 # engines you want and create the Secret named in global.secretName first.
 
 global:
-  # Registry and repository prefix for the dbpantry images. The tag is each
-  # engine's version (engines.<name>.tag).
-  imageRegistry: ghcr.io/simtabi
+  # Registry and repository prefix for the dbpantry images, which are named
+  # <imageRegistry>/dbpantry-<engine>:<tag> (the tag is engines.<name>.tag).
+  # localhost is the name `make build` gives them, so a kind or minikube
+  # cluster runs images loaded into it (docs/guides/kubernetes.md). Set it to
+  # your own registry (registry.example.com/team) after pushing them there.
+  # No dbpantry image is published to any public registry.
+  imageRegistry: localhost
   imagePullPolicy: IfNotPresent
   imagePullSecrets: []
   # "" uses the cluster's default StorageClass.

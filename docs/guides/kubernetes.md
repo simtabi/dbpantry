@@ -18,6 +18,7 @@ kind 0.33 (all five engines on kind; PG and MySQL on both).
 | kubectl | within one minor version of the cluster | on PATH |
 | Helm | 3.x or 4.x | on PATH; tested with 4.3.1 |
 | kind | 0.20 or later | only for kind clusters, to load the local images |
+| minikube | any | only for minikube clusters; load the images with `minikube image load` (see [Images](#images)) |
 | A StorageClass | any `ReadWriteOnce` class | the cluster's default is used unless `MDB_K8S_STORAGE_CLASS` names one |
 
 ## Quick start
@@ -28,7 +29,7 @@ MDB_BACKEND=kubernetes
 MDB_K8S_CONTEXT=orbstack          # required: `kubectl config get-contexts`
 MDB_PROFILES="pg,mysql"
 
-make build    # local images (skip on a real cluster that pulls from GHCR)
+make build    # the images, as localhost/dbpantry-*; a real cluster needs them pushed (see Images)
 make up       # secrets, certs and overrides, then helm upgrade --install --wait
 make psql
 make backup   # dumps stream through kubectl exec into backups/, as on Compose
@@ -46,6 +47,7 @@ development database to production.
 | `MDB_K8S_STORAGE_CLASS` | the cluster's default | StorageClass of every volume |
 | `MDB_K8S_VALUES` | none | extra values files, colon-separated, applied last |
 | `MDB_K8S_LOAD_IMAGES` | `auto` | copy local images into the cluster: `auto` on `kind-*` contexts only |
+| `MDB_IMAGE_PREFIX` | `localhost` | the name prefix the images are built and run under; set it to your own registry (environment variable, see [Images](#images)) |
 | `MDB_K8S_CNPG_READY_TIMEOUT` | `MDB_WAIT_TIMEOUT`, else `600` | seconds `make up` waits for a CloudNativePG Cluster's instances to be ready |
 
 ## What `make up` does
@@ -63,9 +65,10 @@ development database to production.
    `dbpantry-overrides-<engine>`. It uses `kubectl apply`, so running it again
    after `make rotate-secrets` updates them.
 3. On a kind context, `kind load docker-image` for each locally built engine
-   image. OrbStack and Docker Desktop share Docker's image store already; a
-   real cluster pulls from the registry, so push your images there or use the
-   published ones on GHCR.
+   image, under the same prefix the chart runs (`global.imageRegistry`, from
+   `MDB_IMAGE_PREFIX`). OrbStack and Docker Desktop share Docker's image store
+   already; minikube and a real cluster need the images loaded or pushed first
+   (see [Images](#images)).
 4. `helm upgrade --install --wait` with that values file and any
    `MDB_K8S_VALUES`.
 5. With a CloudNativePG Cluster, waits until `.status.readyInstances` reaches
@@ -78,6 +81,55 @@ PersistentVolumeClaims stay (`persistentVolumeClaimRetentionPolicy: Retain`),
 so `make up` brings the same data back. Only `make destroy` deletes them, with
 the same typed confirmation as on Compose, and it keeps the `pitr-*` recovery
 volumes unless you add `--include-recovery`.
+
+## Images
+
+No dbpantry image is published to a public registry: the cluster runs the
+images `make build` built, named `<prefix>/dbpantry-<engine>:<version>`. The
+prefix is `MDB_IMAGE_PREFIX`, `localhost` by default, and `make up` hands it to
+the chart as `global.imageRegistry`, so the chart runs exactly what was built.
+`imagePullPolicy` is `IfNotPresent`, so an image already in the cluster's store
+is used as it is. The old `ghcr.io/simtabi/dbpantry-*` images are frozen
+([Release](release.md)), and nothing falls back to them.
+
+Build the images first, on the same architecture as the cluster's nodes:
+
+```bash
+make build                       # every enabled engine, plus pgbouncer and patroni
+```
+
+**kind** loads them for you: on a `kind-*` context `make up` runs
+`kind load docker-image` for each image it is about to deploy
+(`MDB_K8S_LOAD_IMAGES=auto`). To load one by hand:
+
+```bash
+kind load docker-image localhost/dbpantry-pg:17 --name kind   # the cluster of context kind-kind
+```
+
+**minikube** shares no image store with your Docker, so load them before
+`make up`:
+
+```bash
+minikube image load localhost/dbpantry-pg:17
+minikube image load localhost/dbpantry-patroni:17     # with the ha profile
+```
+
+**Any other cluster** pulls from a registry, so build under your registry's
+name, push, and deploy with the same prefix. `MDB_IMAGE_PREFIX` is read from
+the environment, not from `.env`:
+
+```bash
+export MDB_IMAGE_PREFIX=registry.example.com/team
+make build
+docker push registry.example.com/team/dbpantry-pg:17
+make up
+```
+
+`make up` then renders `global.imageRegistry: registry.example.com/team`, and
+every dbpantry image in the release carries that prefix. Add the pull secret
+with `global.imagePullSecrets` in a values file named by `MDB_K8S_VALUES`.
+Installing the chart by hand works the same way:
+`helm install dbpantry deploy/helm/dbpantry --set global.imageRegistry=registry.example.com/team ...`.
 
 ## What gets deployed
 
@@ -215,7 +267,8 @@ The Services are `ClusterIP`. Set `service.type: LoadBalancer` in an
 |---|---|
 | `needs MDB_K8S_CONTEXT` | set it in `.env`; see `kubectl config get-contexts` |
 | Helm says `TLS handshake timeout` while kubectl works | the API server name resolves to an IPv6 address that does not answer, and Helm does not fall back to IPv4. Seen with OrbStack's `k8s.orb.local`. Point a kubeconfig context at `https://127.0.0.1:26443` with `tls-server-name: k8s.orb.local` |
-| `ErrImagePull` on kind | build the images first, or set `MDB_K8S_LOAD_IMAGES=true` |
+| `ErrImagePull` / `ErrImageNeverPull` on kind or minikube | the image is not in the cluster's store: `make build`, then load it (kind: `make up` does, or `MDB_K8S_LOAD_IMAGES=true`; minikube: `minikube image load`). See [Images](#images) |
+| `ErrImagePull` on another cluster | `global.imageRegistry` is `localhost`, which no cluster can pull from: push the images and set `MDB_IMAGE_PREFIX` (see [Images](#images)) |
 | `another operation (install/upgrade/rollback) is in progress` | an interrupted `make up` left the release `pending-upgrade`. Run `helm --kube-context <ctx> -n <ns> history <release>`, then `helm ... rollback <release> <last deployed revision>`, and run `make up` again |
 | CloudNativePG: `conflict with "kubectl-annotate" ... cnpg.io/hibernation` | a Cluster hibernated by an older dbpantry. Run `kubectl annotate clusters.postgresql.cnpg.io <release>-pg cnpg.io/hibernation-`, then `make up` (current versions do this themselves) |
 | HA: a replica logs `no pg_hba.conf entry for replication` | a dbpantry-patroni image from before D-65; rebuild or pull it and delete the pod |

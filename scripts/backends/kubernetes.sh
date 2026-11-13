@@ -289,16 +289,19 @@ _mdb_be_kubernetes_image_load() {
     esac
 }
 
-# The images the release will run that are built here (MongoDB's is upstream).
+# The images the release will run that are built here (MongoDB's is upstream),
+# under the prefix they were built with: the global.imageRegistry helm-values
+# rendered from MDB_IMAGE_PREFIX, the same name the chart then runs.
 _mdb_k8s_local_images() {
     local values="$1"
-    awk '
+    awk -v prefix="$(mdb_image_prefix)" '
+        /^  imageRegistry: / { prefix = $2; gsub(/"/, "", prefix) }
         /^  [a-z]+:$/ { eng = $1; sub(/:/, "", eng); en = 0; ha = 0; tag = "" }
         /^    enabled: true$/ { en = 1 }
         /^      enabled: true$/ { ha = 1 }
         /^    tag: / { tag = $2; gsub(/"/, "", tag) }
-        /^    env:$/ && en && tag != "" { print "ghcr.io/simtabi/dbpantry-" eng ":" tag }
-        /^      provider: "?patroni"?$/ && en && ha && tag != "" { print "ghcr.io/simtabi/dbpantry-patroni:" tag }
+        /^    env:$/ && en && tag != "" { print prefix "/dbpantry-" eng ":" tag }
+        /^      provider: "?patroni"?$/ && en && ha && tag != "" { print prefix "/dbpantry-patroni:" tag }
     ' "$values"
 }
 

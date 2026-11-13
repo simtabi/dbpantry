@@ -23,6 +23,10 @@ env_project := $(call env_get,COMPOSE_PROJECT_NAME)
 COMPOSE_PROJECT_NAME ?= $(or $(env_project),mdb)
 export COMPOSE_PROJECT_NAME
 ENV_FILE_PROD ?= .env.prod
+# The prefix our images are built and run under: MDB_IMAGE_PREFIX from the
+# environment, else the one default in scripts/env-lib.sh (localhost). Set but
+# empty counts as unset, as it does for the scripts.
+MDB_IMAGE_PREFIX := $(or $(MDB_IMAGE_PREFIX),$(shell bash -c '. scripts/env-lib.sh && mdb_image_prefix' 2>/dev/null))
 # Every container call goes through scripts/runtime, which picks Docker, Podman
 # or nerdctl (CONTAINER_RUNTIME=auto|docker|podman|nerdctl; design.md D-60).
 RUNTIME  := scripts/runtime
@@ -187,7 +191,7 @@ shell: ## Open the cli image (tools with no server required)
 		--network $(COMPOSE_PROJECT_NAME)_net \
 		-v "$(CURDIR)/certs:/certs:ro" \
 		-v "$(CURDIR)/backups:/work/backups" \
-		ghcr.io/simtabi/dbpantry-cli:dev
+		$(MDB_IMAGE_PREFIX)/dbpantry-cli:dev
 
 .PHONY: new-project
 new-project: ## Provision DB + roles + extensions, print the Laravel .env block

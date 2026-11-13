@@ -19,7 +19,7 @@ on stays where it is.
 | `engines/<engine>/engine.conf` + `compose-*.yml`, `engines/_family/*.sh` | `scripts/gen-compose`, `scripts/engine-lib.sh` | `compose.engines.yml`, `compose.proxy.yml`, `config/caddy/layer4.caddy` (generated) |
 | `config/caddy/*.tmpl` | `scripts/render-config` → `scripts/env-render` | `config/caddy/Caddyfile`, `config/caddy/servers.json` (generated) |
 | `config/haproxy/haproxy.cfg`, `config/proxysql/bootstrap.sh` | compose (bind mounts) | HA front door, ProxySQL pooler |
-| `images/<name>/`, `images/_shared/`, `images/bases.tsv` | `scripts/build`, compose `build:` | `ghcr.io/simtabi/dbpantry-*` images |
+| `images/<name>/`, `images/_shared/`, `images/bases.tsv` | `scripts/build`, compose `build:` | `localhost/dbpantry-*` images (`MDB_IMAGE_PREFIX`) |
 | `docker-compose.yml` + `compose.*.yml` | `docker compose` via `COMPOSE_FILE` | running stack, named volumes |
 | running stack | `scripts/backup`, `scripts/pitr`, `scripts/transfer` | `backups/` (gitignored) |
 | `scripts/certs` | — | `certs/` (gitignored) |

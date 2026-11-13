@@ -17,7 +17,7 @@ cd "$MDB_ROOT" || exit 1
 # PG 18's move of the data mount to /var/lib/postgresql, which `make upgrade`
 # has to get right on each side.
 
-prefix="${MDB_IMAGE_PREFIX:-ghcr.io/simtabi}"
+prefix="$(mdb_image_prefix)"
 old_img="$prefix/dbpantry-pg:17"
 new_img="$prefix/dbpantry-pg:18"
 need_image "$old_img"

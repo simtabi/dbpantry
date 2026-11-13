@@ -140,7 +140,8 @@ make verify CHECKS=08,15,22,28
 ```
 
 Podman keeps its own image store, separate from Docker's, so the engine images
-have to be built (or pulled from GHCR) again under Podman.
+have to be built again under Podman (`make build`). Their `localhost/` prefix is
+the name Podman gives local builds anyway.
 
 If `docker-compose` fails pulls with `unauthorized: incorrect username or
 password` for docker.io images, it is sending stale Docker Hub credentials from
