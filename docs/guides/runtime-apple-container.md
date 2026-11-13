@@ -72,7 +72,7 @@ because its BuildKit builder otherwise keeps the result in the build cache), or
 copy an image across:
 
 ```bash
-docker save -o /tmp/pg17.tar ghcr.io/simtabi/dbpantry-pg:17          # on the other engine
+docker save -o /tmp/pg17.tar localhost/dbpantry-pg:17          # on the other engine
 DOCKER_HOST=unix:///opt/homebrew/var/run/socktainer/.socktainer/container.sock \
     docker load -i /tmp/pg17.tar
 ```

@@ -47,7 +47,7 @@ MDB_ENGINE_DUMP_GLOBALS='pg_dumpall --globals-only'
 MDB_ENGINE_RESTORE='pg_restore --no-owner'
 
 MDB_ENGINE_POOLING=external
-MDB_ENGINE_POOLER_IMAGE=ghcr.io/simtabi/dbpantry-pgbouncer:dev
+MDB_ENGINE_POOLER_IMAGE=localhost/dbpantry-pgbouncer:dev
 MDB_ENGINE_POOLING_REQUIRED_IN_PROD=true
 
 MDB_ENGINE_LICENSE=PostgreSQL

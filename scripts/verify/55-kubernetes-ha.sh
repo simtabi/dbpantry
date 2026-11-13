@@ -95,7 +95,7 @@ ha=(--set engines.pg.enabled=true --set engines.pg.ha.enabled=true)
 helm template r "$chart" "${ha[@]}" >"$tmp/patroni.yaml" 2>"$tmp/err" || vfail "helm template (patroni): $(cat "$tmp/err")"
 n="$(grep -c '^kind: StatefulSet' "$tmp/patroni.yaml")"
 [[ "$n" == 1 ]] || vfail "HA should replace the standalone StatefulSet; rendered $n"
-grep -q 'image: ghcr.io/simtabi/dbpantry-patroni:17' "$tmp/patroni.yaml" || vfail "the HA StatefulSet does not run dbpantry-patroni"
+grep -q 'image: localhost/dbpantry-patroni:17' "$tmp/patroni.yaml" || vfail "the HA StatefulSet does not run dbpantry-patroni"
 grep -q '^kind: ClusterRole' "$tmp/patroni.yaml" && vfail "Patroni was given cluster-wide rights"
 grep -q '^kind: Role$' "$tmp/patroni.yaml" || vfail "Patroni has no Role for its DCS"
 awk '/^kind: Service$/{s=1} s&&/^  name: pg$/{n=1} n&&/role: primary/{print "ok"; exit}' "$tmp/patroni.yaml" | grep -q ok \

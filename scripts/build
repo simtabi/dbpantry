@@ -22,7 +22,7 @@ cd "$ROOT" || exit 1
 ENV_FILE="${MDB_ENV_FILE:-$ROOT/.env}"
 [[ -f "$ENV_FILE" ]] || ENV_FILE="$ROOT/.env.example"
 
-PREFIX="${MDB_IMAGE_PREFIX:-ghcr.io/simtabi}"
+PREFIX="$(mdb_image_prefix)"
 
 get() { mdb_env_get "$1" "$ENV_FILE"; }
 

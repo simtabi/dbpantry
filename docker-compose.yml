@@ -119,7 +119,7 @@ services:
     build:
       context: ./images
       dockerfile: caddy/Dockerfile
-    image: ghcr.io/simtabi/dbpantry-caddy:dev
+    image: ${MDB_IMAGE_PREFIX:-localhost}/dbpantry-caddy:dev
     restart: unless-stopped
     <<: *hardening
     # Binding 80/443 needs this one capability back; everything else stays
@@ -159,7 +159,7 @@ services:
   # ---------------------------------------------------------------------------
   backup-pg:
     profiles: [backup]
-    image: ghcr.io/simtabi/dbpantry-pg:${MDB_PG_VERSION:-17}
+    image: ${MDB_IMAGE_PREFIX:-localhost}/dbpantry-pg:${MDB_PG_VERSION:-17}
     restart: unless-stopped
     <<: *hardening
     entrypoint: ["/mdb/scripts/backup", "--engine", "pg", "--schedule"]
@@ -213,7 +213,7 @@ services:
 
   backup-mysql:
     profiles: [backup]
-    image: ghcr.io/simtabi/dbpantry-mysql:${MDB_MYSQL_VERSION:-8.4}
+    image: ${MDB_IMAGE_PREFIX:-localhost}/dbpantry-mysql:${MDB_MYSQL_VERSION:-8.4}
     restart: unless-stopped
     <<: *hardening
     entrypoint: ["/mdb/scripts/backup", "--engine", "mysql", "--schedule"]
@@ -266,7 +266,7 @@ services:
 
   backup-mariadb:
     profiles: [backup]
-    image: ghcr.io/simtabi/dbpantry-mariadb:${MDB_MARIADB_VERSION:-11.8}
+    image: ${MDB_IMAGE_PREFIX:-localhost}/dbpantry-mariadb:${MDB_MARIADB_VERSION:-11.8}
     restart: unless-stopped
     <<: *hardening
     entrypoint: ["/mdb/scripts/backup", "--engine", "mariadb", "--schedule"]

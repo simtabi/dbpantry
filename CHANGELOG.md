@@ -16,6 +16,11 @@ waiving them.
 
 ### Upgrade
 
+- **Images are now named `localhost/dbpantry-*`.** Images you built before keep their old
+  `ghcr.io/simtabi/dbpantry-*` names, which nothing runs any more. Run `make build` once; the next
+  `make up` recreates the containers on the new names. Volumes and data are untouched. To build,
+  run and deploy under your own registry instead, export `MDB_IMAGE_PREFIX` (for example
+  `registry.example.com/team`) before `make build` and `make up` (design.md D-78).
 - **Prod: PostgreSQL's own port stops being published.** With the prod overlay applied (see Changed), a prod
   stack under `MDB_PUBLISH=direct` publishes the pooler, `pg-pooler` on `MDB_PORT_BASE + 100` (54100 by
   default), and no engine port: 54000 and the other engines' ports go away. Point applications at 54100 with
@@ -29,9 +34,20 @@ waiving them.
 - **Container images are no longer published.** A release publishes the GitHub release only, with
   the notes and the source tarball (owner, 2026-11-13). The `ghcr.io/simtabi/dbpantry-*` images are
   frozen: no new tag is pushed and nothing is deleted from ghcr.io. Build the images with
-  `make build`. The Kubernetes backend and the Helm chart still name `ghcr.io/simtabi` as their
-  registry, so push your own build there or point `global.imageRegistry` at your own registry
-  (design.md D-77).
+  `make build` (design.md D-77).
+- **Images are built, run and deployed as `localhost/dbpantry-<component>:<tag>`,** and nothing
+  falls back to a remote registry. One default, `MDB_IMAGE_PREFIX=localhost` in
+  `scripts/env-lib.sh`, replaces every hard-coded registry: Compose, the generated engine and pooler
+  services, the patroni build, the Makefile, `scripts/{build,upgrade,verify-backups,transfer,scan}`,
+  the verify checks and the CI scan steps. The Helm chart's `global.imageRegistry` defaults to
+  `localhost`, `make up` on Kubernetes passes it the prefix the images were built under, and kind
+  loading follows it; `imagePullPolicy` stays `IfNotPresent`. Setting `MDB_IMAGE_PREFIX` (or
+  `global.imageRegistry` when installing the chart by hand) prefixes every image. The Kubernetes
+  guide shows `kind load docker-image`, `minikube image load` and pushing to your own registry.
+  Check 73 fails if any default names a remote registry or a set prefix stops reaching every image,
+  and check 49 now resolves every `${VAR:-default}` in an image reference. Checks 42 and 72 recognise
+  our images as `localhost/dbpantry-*`, and `make init-prod` resolves the caddy image the way Compose
+  does (`mdb_compose_ref`) before running it (design.md D-78).
 - **A release runs on a pushed `vX.Y.Z` tag, or on request for a tag already on GitHub:**
   `gh workflow run release.yml --repo simtabi/dbpantry -f tag=vX.Y.Z`. This replaces the dispatch
   gated on `-f confirm=release-go` (D-76). Every job checks out the tag, and the first step refuses

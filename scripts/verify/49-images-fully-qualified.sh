@@ -36,8 +36,15 @@ judge() {
 # image: lines, including the defaults inside ${VAR:-default}.
 while IFS=: read -r file _ rest; do
     ref="$(printf '%s' "$rest" | sed -E 's/^[[:space:]]*image:[[:space:]]*//; s/^"//; s/"$//')"
-    # shellcheck disable=SC2016  # a literal ${, not an expansion
-    while [[ "$ref" == '${'*':-'* ]]; do ref="${ref#*:-}"; ref="${ref%\}}"; done
+    # Every ${VAR:-default} is replaced by its default, innermost first, so a
+    # nested ${MDB_X_IMAGE:-${MDB_X_BASE_IMAGE:-docker.io/...}} and a prefixed
+    # ${MDB_IMAGE_PREFIX:-localhost}/dbpantry-pg:${MDB_PG_VERSION:-17} are both
+    # judged by the name they resolve to when nothing is set.
+    prev=""
+    while [[ "$ref" != "$prev" ]]; do
+        prev="$ref"
+        ref="$(printf '%s' "$ref" | sed -E 's/\$\{[A-Za-z_][A-Za-z0-9_]*:-([^${}]*)\}/\1/g')"
+    done
     judge "$file" "$ref"
 done < <(grep -nE '^[[:space:]]*image:' docker-compose.yml compose.*.yml 2>/dev/null)
 

@@ -12,7 +12,7 @@
 # bundle rather than left to race Patroni for the same data directory.
 
 ARG ENGINE_VERSION=17
-ARG IMAGE_PREFIX=ghcr.io/simtabi
+ARG IMAGE_PREFIX=localhost
 FROM ${IMAGE_PREFIX}/dbpantry-pg:${ENGINE_VERSION}
 
 # Pinned. Patroni's behaviour on failover is the whole point of this image, so

@@ -16,6 +16,7 @@
 #   MDB_<ENGINE>_MEM_LIMIT / _CPU_LIMIT  memory and cpu (requests and limits)
 #   MDB_PG_SHM                   the size of PostgreSQL's /dev/shm
 #   MDB_K8S_STORAGE_CLASS        global.storageClass
+#   MDB_IMAGE_PREFIX             global.imageRegistry (default localhost)
 #   the ha profile               PostgreSQL HA (engines.pg.ha): Patroni, or
 #                                CloudNativePG with MDB_K8S_HA_PROVIDER=cnpg;
 #                                MDB_HA_CLUSTER_NAME, MDB_PG_SYNC_MODE,
@@ -165,6 +166,9 @@ render() {
     printf '# Rendered by scripts/helm-values from %s. Do not edit: change .env.\n' "$(basename "$ENV_FILE")"
     sc="$(setting MDB_K8S_STORAGE_CLASS)"
     printf 'global:\n'
+    # The prefix the images were built under (MDB_IMAGE_PREFIX, default
+    # localhost), so the chart runs exactly what `make build` produced.
+    printf '  imageRegistry: %s\n' "$(q "$(mdb_image_prefix)")"
     printf '  storageClass: %s\n' "$(q "$sc")"
     printf 'engines:\n'
     for eng in $ENGINES; do

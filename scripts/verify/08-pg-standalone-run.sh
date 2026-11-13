@@ -7,8 +7,9 @@ source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
 need_runtime
 
-# SPEC section 18: "docker run ghcr.io/simtabi/dbpantry-pg with only a
-# password env yields a fully configured server, no compose required."
+# SPEC section 18: "docker run <prefix>/dbpantry-pg with only a password env
+# yields a fully configured server, no compose required." The image is the
+# local build, localhost/dbpantry-pg (image_name, MDB_IMAGE_PREFIX).
 # This is the check that keeps layer 2 of the architecture honest.
 
 img="$(image_name pg)"

@@ -19,8 +19,10 @@ cd "$MDB_ROOT" || exit 1
 
 need_file "$MDB_ROOT/docs/reference/image-provenance.md"
 
-# Namespaces belonging to the projects whose software they package.
-UPSTREAM='^(pgvector/pgvector|dpage/pgadmin4|proxysql/proxysql|prom/[a-z-]+|aquasec/trivy|ghcr\.io/ferretdb/[a-z-]+|quay\.io/coreos/etcd|quay\.io/prometheuscommunity/[a-z-]+|ghcr\.io/simtabi/[a-z-]+)$'
+# Namespaces belonging to the projects whose software they package, and our own
+# images, which every descriptor names under the default prefix (localhost/,
+# design.md D-78).
+UPSTREAM='^(pgvector/pgvector|dpage/pgadmin4|proxysql/proxysql|prom/[a-z-]+|aquasec/trivy|ghcr\.io/ferretdb/[a-z-]+|quay\.io/coreos/etcd|quay\.io/prometheuscommunity/[a-z-]+|localhost/dbpantry-[a-z-]+)$'
 
 violations=0
 checked=0

@@ -146,7 +146,7 @@ for engine in $(engine_list); do
         image_line="\${MDB_${upper}_IMAGE:-\${MDB_${upper}_BASE_IMAGE:-${pinned}}}"
         build_block=""
     else
-        image_line="ghcr.io/simtabi/dbpantry-${MDB_ENGINE_NAME}:\${MDB_${upper}_VERSION:-${MDB_ENGINE_DEFAULT_VERSION}}"
+        image_line="\${MDB_IMAGE_PREFIX:-${MDB_IMAGE_PREFIX_DEFAULT}}/dbpantry-${MDB_ENGINE_NAME}:\${MDB_${upper}_VERSION:-${MDB_ENGINE_DEFAULT_VERSION}}"
         # BASE_IMAGE is passed so a compose build of a non-default version
         # starts from that version's base rather than the Dockerfile's default.
         build_block="    build:
@@ -254,7 +254,11 @@ for engine in $(engine_list); do
             # project over the dangling depends_on. scripts/profiles expands
             # `pooler` into the ones that match the selected engines.
             printf '    profiles: [%s-pooler]\n' "$MDB_ENGINE_NAME"
-            printf '    image: %s\n' "$MDB_ENGINE_POOLER_IMAGE"
+            # Our own pooler image follows MDB_IMAGE_PREFIX as the engines do.
+            case "$MDB_ENGINE_POOLER_IMAGE" in
+                "$MDB_IMAGE_PREFIX_DEFAULT"/dbpantry-*) printf '    image: ${MDB_IMAGE_PREFIX:-%s}/%s\n' "$MDB_IMAGE_PREFIX_DEFAULT" "${MDB_ENGINE_POOLER_IMAGE#"$MDB_IMAGE_PREFIX_DEFAULT"/}" ;;
+                *) printf '    image: %s\n' "$MDB_ENGINE_POOLER_IMAGE" ;;
+            esac
             printf '    restart: unless-stopped\n'
             printf '    depends_on: [%s]\n' "$MDB_ENGINE_NAME"
             printf '    security_opt:\n      - no-new-privileges:true\n'

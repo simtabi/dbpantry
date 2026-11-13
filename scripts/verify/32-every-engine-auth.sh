@@ -44,7 +44,7 @@ for engine in $(engine_list); do
     fi
 
     ver="$(engine_version "$engine")"
-    img="${MDB_IMAGE_PREFIX:-ghcr.io/simtabi}/dbpantry-${engine}:${ver}"
+    img="$(mdb_image "$engine" "$ver")"
 
     # A referenced engine is not published by us, so it runs the pinned
     # upstream image (SPEC section 22.5).

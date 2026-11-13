@@ -125,14 +125,14 @@ engine_selected() {
 image_exists() { mdb_ctr image inspect "$1" >/dev/null 2>&1; }
 
 # Fully-qualified name for one of our engine images.
-#   image_name pg      -> ghcr.io/simtabi/dbpantry-pg:17
-#   image_name mariadb -> ghcr.io/simtabi/dbpantry-mariadb:11.8
+#   image_name pg      -> localhost/dbpantry-pg:17
+#   image_name mariadb -> localhost/dbpantry-mariadb:11.8
+# (under MDB_IMAGE_PREFIX when it is set; see mdb_image in scripts/env-lib.sh)
 image_name() {
-    local engine="$1" prefix ver
-    prefix="${MDB_IMAGE_PREFIX:-ghcr.io/simtabi}"
+    local engine="$1" ver
     ver="$(engine_version "$engine")"
     [[ -n "$ver" ]] || vfail "unknown engine: $engine"
-    printf '%s/dbpantry-%s:%s\n' "$prefix" "$engine" "$ver"
+    mdb_image "$engine" "$ver"
 }
 
 # The configured version for an engine: MDB_<ENGINE>_VERSION if set, otherwise
