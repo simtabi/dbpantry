@@ -95,7 +95,10 @@ for d in /usr/bin /bin; do
     for f in "$d"/*; do
         n="${f##*/}"
         case "$n" in docker*|podman*|nerdctl*|container|socktainer|incus*|kubectl|lima*|colima) continue ;; esac
-        [[ -e "$tools/$n" ]] || ln -s "$f" "$tools/$n"
+        # -L as well as -e: a dangling symlink in /usr/bin (grub-ntldr-img on the
+        # 2026-11 ubuntu-latest image) fails -e, so /bin, which is /usr/bin there,
+        # would link the same name twice and ln would stop the check.
+        [[ -e "$tools/$n" || -L "$tools/$n" ]] || ln -s "$f" "$tools/$n"
     done
 done
 
