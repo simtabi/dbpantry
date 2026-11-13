@@ -49,10 +49,13 @@ for df in images/*/Dockerfile; do
     grep -q '^HEALTHCHECK' "$df" && built_health+="$(basename "$(dirname "$df")") "
 done
 
-out="$(python3 - "$s/all.json" "$built_health" <<'PY'
+out="$(python3 - "$s/all.json" "$built_health" "$(mdb_image_prefix)" <<'PY'
 import json, re, sys
 svc = json.load(open(sys.argv[1]))["services"]
 built = set(sys.argv[2].split())
+# Our images are <prefix>/dbpantry-<name>, the prefix Compose resolved them under
+# (MDB_IMAGE_PREFIX, default localhost; design.md D-78).
+ours = re.compile(re.escape(sys.argv[3]) + r"/dbpantry-([a-z0-9-]+):")
 
 # rule -> {service: reason}. Each is a measured gap with its reason; the check
 # fails if one stops being a gap.
@@ -93,7 +96,7 @@ for name, d in sorted(svc.items()):
         gap("privileges", name, f"{name}: missing no-new-privileges or cap_drop ALL")
     hc = d.get("healthcheck") or {}
     image = str(d.get("image", ""))
-    m = re.match(r"ghcr\.io/simtabi/dbpantry-([a-z0-9-]+):", image)
+    m = ours.match(image)
     health_ok = (hc and not hc.get("disable")) or (m and m.group(1) in built)
     if not health_ok:
         gap("health", name, f"{name}: no healthcheck in Compose or in its image")

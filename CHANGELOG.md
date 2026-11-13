@@ -45,7 +45,9 @@ waiving them.
   `global.imageRegistry` when installing the chart by hand) prefixes every image. The Kubernetes
   guide shows `kind load docker-image`, `minikube image load` and pushing to your own registry.
   Check 73 fails if any default names a remote registry or a set prefix stops reaching every image,
-  and check 49 now resolves every `${VAR:-default}` in an image reference (design.md D-78).
+  and check 49 now resolves every `${VAR:-default}` in an image reference. Checks 42 and 72 recognise
+  our images as `localhost/dbpantry-*`, and `make init-prod` resolves the caddy image the way Compose
+  does (`mdb_compose_ref`) before running it (design.md D-78).
 - **A release runs on a pushed `vX.Y.Z` tag, or on request for a tag already on GitHub:**
   `gh workflow run release.yml --repo simtabi/dbpantry -f tag=vX.Y.Z`. This replaces the dispatch
   gated on `-f confirm=release-go` (D-76). Every job checks out the tag, and the first step refuses

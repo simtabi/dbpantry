@@ -121,3 +121,19 @@ mdb_image_ref() {
         *) printf '%s\n' "$1" ;;
     esac
 }
+
+# Resolve a Compose-style reference the way Compose does: every ${VAR:-default}
+# becomes VAR from the environment, or the default when it is unset or empty,
+# innermost first. For a script that reads an image: line out of a Compose file
+# and runs it directly, so ${MDB_IMAGE_PREFIX:-localhost}/dbpantry-caddy:dev
+# becomes localhost/dbpantry-caddy:dev (or the prefix in force).
+mdb_compose_ref() {
+    # shellcheck disable=SC2016  # a pattern for a literal ${...}, not an expansion
+    local ref="$1" re='\$\{([A-Za-z_][A-Za-z0-9_]*):-([^${}]*)\}' name fallback val
+    while [[ "$ref" =~ $re ]]; do
+        name="${BASH_REMATCH[1]}"; fallback="${BASH_REMATCH[2]}"
+        val="${!name:-$fallback}"
+        ref="${ref/"${BASH_REMATCH[0]}"/$val}"
+    done
+    printf '%s\n' "$ref"
+}

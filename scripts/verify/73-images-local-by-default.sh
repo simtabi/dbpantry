@@ -90,7 +90,9 @@ frozen_lines() {
 listed=0
 while IFS= read -r -d '' f; do
     [[ "$f" == scripts/verify/73-images-local-by-default.sh ]] && continue
-    n="$(grep -c 'ghcr.io/simtabi' "$f" || true)"
+    # Escaped too: a regex allowlist spells it ghcr\.io/simtabi, which is how
+    # checks 42 and 72 kept the old name past the first version of this check.
+    n="$(grep -cE 'ghcr\\?\.io/simtabi' "$f" || true)"
     want="$(frozen_lines "$f")"
     (( want > 0 )) && listed=$(( listed + 1 ))
     (( n == want )) && continue
@@ -99,6 +101,19 @@ while IFS= read -r -d '' f; do
 done < <(git ls-files -z)
 (( listed == 9 )) || vfail "found $listed of the 9 files allowed to describe the frozen images: an entry names a missing file"
 vinfo "$scanned tracked file(s): no remote registry for our images; ghcr.io/simtabi only where the frozen images are described"
+
+# A script that runs an image named on a Compose image: line must resolve it the
+# way Compose does first (mdb_compose_ref): the line reads
+# ${MDB_IMAGE_PREFIX:-localhost}/dbpantry-..., which is not an image name.
+# scripts/init's caddy lookup handed that string to `run` and failed
+# `make init-prod` (check 26) in the first version of this change.
+readers=0
+while IFS= read -r line; do
+    readers=$(( readers + 1 ))
+    [[ "$line" == *mdb_compose_ref* ]] \
+        || vfail "a script reads a Compose image: line without mdb_compose_ref: $line"
+done < <(grep -rnE "(awk|grep|sed).*image:" scripts --exclude-dir=verify | grep -vE '^[^:]+:[0-9]+:[[:space:]]*#')
+vinfo "$readers script(s) read a Compose image: line, each resolving it with mdb_compose_ref"
 
 # --- 3. a set prefix names every image -----------------------------------------------
 lib_out() { (. scripts/env-lib.sh && "$@"); }
@@ -110,6 +125,13 @@ lib_out() { (. scripts/env-lib.sh && "$@"); }
     || vfail "mdb_image_ref does not move the descriptor's pooler image to MDB_IMAGE_PREFIX"
 [[ "$(MDB_IMAGE_PREFIX="$remote" lib_out mdb_image_ref docker.io/library/mongo:7.0)" == docker.io/library/mongo:7.0 ]] \
     || vfail "mdb_image_ref rewrote an upstream image"
+# shellcheck disable=SC2016  # literal Compose references
+{
+    [[ "$(MDB_IMAGE_PREFIX='' lib_out mdb_compose_ref '${MDB_IMAGE_PREFIX:-localhost}/dbpantry-caddy:dev')" == "$def/dbpantry-caddy:dev" ]] \
+        || vfail "mdb_compose_ref does not resolve the Compose default prefix"
+    [[ "$(MDB_IMAGE_PREFIX="$remote" lib_out mdb_compose_ref '${MDB_IMAGE_PREFIX:-localhost}/dbpantry-caddy:dev')" == "$remote/dbpantry-caddy:dev" ]] \
+        || vfail "mdb_compose_ref ignores MDB_IMAGE_PREFIX"
+}
 
 # The Makefile's own use (make shell).
 grep -qE "[[:space:]]$def/dbpantry-cli:dev" < <(MDB_IMAGE_PREFIX='' make -s -n shell 2>/dev/null) \
@@ -131,7 +153,11 @@ k8s_images() {
 tmp="$(mktemp -d "${TMPDIR:-/tmp}/mdb-images.XXXXXX")"
 add_cleanup "rm -rf '$tmp'"
 for prefix in "$def" "$remote"; do
-    MDB_IMAGE_PREFIX="$( [[ "$prefix" == "$def" ]] || printf '%s' "$prefix")" MDB_PROFILES=pg,mysql,ha \
+    # COMPOSE_PROFILES as well as MDB_PROFILES: helm-values ranks it first, and
+    # `make verify` exports the checkout's own (pg,ui), which enabled only pg in
+    # CI while a direct run of this check enabled all three.
+    MDB_IMAGE_PREFIX="$( [[ "$prefix" == "$def" ]] || printf '%s' "$prefix")" \
+        COMPOSE_PROFILES=pg,mysql,ha MDB_PROFILES=pg,mysql,ha \
         scripts/helm-values -o "$tmp/values.yaml" 2>/dev/null || vfail "scripts/helm-values failed"
     grep -qx "  imageRegistry: \"$prefix\"" "$tmp/values.yaml" \
         || vfail "helm-values does not render global.imageRegistry \"$prefix\""

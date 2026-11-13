@@ -133,8 +133,10 @@ if (( PROD )); then
     # to be /image: caddy:/, which stopped matching the moment the image became
     # one we build -- and the only symptom was "could not compute the UI
     # password hash (is the container runtime running? scripts/runtime info)", which blames Docker.
-    caddy_image="$(awk '/^  caddy:/{f=1} f && /^[[:space:]]+image:/{print $2; exit}' \
-        "$ROOT/docker-compose.yml")"
+    # The line is Compose syntax, ${MDB_IMAGE_PREFIX:-localhost}/dbpantry-caddy:dev,
+    # so it is resolved as Compose resolves it before it is run directly.
+    caddy_image="$(mdb_compose_ref "$(awk '/^  caddy:/{f=1} f && /^[[:space:]]+image:/{print $2; exit}' \
+        "$ROOT/docker-compose.yml")")"
     ui_hash="$(mdb_ctr run --rm "$caddy_image" caddy hash-password --plaintext "$ui_password" 2>/dev/null || true)"
     if [[ -z "$ui_hash" ]]; then
         printf '  could not compute the UI password hash (is docker running?)\n' >&2
