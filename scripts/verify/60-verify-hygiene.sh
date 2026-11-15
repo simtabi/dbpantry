@@ -151,3 +151,79 @@ got="$(cd "$MDB_ROOT" && bash -c '. scripts/env-lib.sh; mdb_backup_dir "$PWD" .e
 grep -qF -- '-u MDB_BACKUP_DIR -u MDB_UPGRADE_DIR' "$MDB_ROOT/scripts/verify/lib.sh" \
     || vfail "scratch_run does not unset MDB_BACKUP_DIR and MDB_UPGRADE_DIR (a scratch stack would write the check's directory)"
 vinfo "every check gets a private MDB_BACKUP_DIR and MDB_UPGRADE_DIR; scripts resolve to it"
+
+# --- a check stops only what it started ----------------------------------------
+#
+# `make down` stops every service of the project, so on the operator's project
+# it stopped the operator's whole stack, including services the check never
+# started: checks 15, 18, 24, 25, 26, 28 and 35 did this on every run (26 never
+# even started a stack). A check that brings a stack up and down does it in a
+# stack of its own: scratch_stack (`scratch_run make down`), or a project of
+# its own (use_test_project, then `make down` downs only that project).
+
+# down_scan FILE: one line per whole-stack down outside the check's own stack.
+down_scan() {
+    awk -v f="$1" '
+        /^[[:space:]]*#/ { next }
+        /use_test_project/ { own = 1 }
+        {
+            line = $0
+            if (line ~ /scratch_run/) next
+            # A message that mentions make down is not a call to it.
+            gsub(/(vfail|vinfo) +"[^"]*"/, "", line)
+            if (line ~ /(^|[^A-Za-z0-9_])make( +-[A-Za-z]+)* +down([^A-Za-z0-9_-]|$)/ ||
+                line ~ /mdb_compose[^#]* down([^A-Za-z0-9_-]|$)/ ||
+                line ~ /(scripts\/runtime|\$\(RUNTIME\)|\$RUNTIME) +down([^A-Za-z0-9_-]|$)/) {
+                if (!own) printf "%s:%d: stops the operator project (%s)\n", f, NR, line
+            }
+        }' "$1"
+}
+
+# Exemptions, each a ceiling with a reason (measured 2026-11-15):
+#   27: stops the operator's stack before the HA boot, because that stack holds
+#       the ports HAProxy publishes; from then on it runs in use_test_project.
+down_exempt() {
+    case "$1" in
+        27-ha-failover.sh) echo 1 ;;
+        *) echo 0 ;;
+    esac
+}
+
+dscanned=0
+dbad=""
+for f in [0-9][0-9]-*.sh; do
+    [[ "$f" == "$(basename "${BASH_SOURCE[0]}")" ]] && continue
+    dscanned=$(( dscanned + 1 ))
+    found="$(down_scan "$f")"
+    n="$(printf '%s' "$found" | grep -c . || true)"
+    allowed="$(down_exempt "$f")"
+    if (( allowed > 0 )); then
+        (( n == allowed )) || dbad+="$f is exempt for $allowed whole-stack down(s) but has $n (update the exemption with a reason, or remove the new one): ${found:-none}"$'\n'
+    elif [[ -n "$found" ]]; then
+        dbad+="$found"$'\n'
+    fi
+done
+[[ -z "$dbad" ]] || vfail "a check stops services it did not start:
+$dbad"
+(( dscanned >= 50 )) || vfail "scanned only $dscanned checks for whole-stack downs; expected at least 50"
+vinfo "$dscanned checks scanned: each stops only the stack it started"
+
+cat > "$t/96-planted-down.sh" <<'PLANT'
+add_cleanup 'make down'
+make down >/dev/null 2>&1 || true
+mdb_compose --profile '*' down
+add_cleanup "make -s down >/dev/null 2>&1 || true"
+PLANT
+cat > "$t/95-clean-down.sh" <<'CLEAN'
+# make down in a comment is fine
+scratch_run make down >/dev/null 2>&1
+out="$(scratch_run "$DBPANTRY_BIN" fixture down 2>&1)"
+make downgrade-notes
+use_test_project
+add_cleanup 'make down'
+CLEAN
+planted="$(down_scan "$t/96-planted-down.sh")"
+[[ "$(printf '%s\n' "$planted" | grep -c 'stops the operator project')" == 4 ]] \
+    || vfail "the down scan missed a planted whole-stack down: [$planted]"
+[[ -z "$(down_scan "$t/95-clean-down.sh")" ]] || vfail "the down scan flagged a clean check: $(down_scan "$t/95-clean-down.sh")"
+vinfo "the down scan flags each planted whole-stack down and passes a check's own stack"
