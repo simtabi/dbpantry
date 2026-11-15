@@ -171,3 +171,62 @@ vinfo "the HA pooler's environment matches pg-pooler's apart from its upstream"
 leak="$(cd "$s" && COMPOSE_PROFILES=pg,pg-pooler MDB_ENV_FILE="$s/.env" scripts/helm-values 2>/dev/null | grep -c '_POOLER_ADDR' || true)"
 [[ "$leak" == 0 ]] || vfail "helm-values carries $leak Compose pooler address(es) into the chart"
 vinfo "no Compose pooler address reaches the Helm values"
+
+# --- the backup sidecars mount MDB_BACKUP_DIR ----------------------------------
+#
+# scripts/backup, restore and verify-backups resolve MDB_BACKUP_DIR (the
+# environment, then .env, then backups/, relative to the checkout). The backup
+# sidecars mounted ./backups whatever it said, so a configured directory got
+# the manual dumps and never the scheduled ones, and retention pruned one tree
+# while the other grew. Each case renders the backup profile and reads where
+# every sidecar's /backups comes from.
+# backup_source NAME ENV_LINE ENV_VALUE -> one "service source" line per sidecar
+backup_source() {
+    local name="$1" line="$2" val="$3"
+    local -a args=() envset=()
+    grep -v '^MDB_BACKUP_DIR=' "$MDB_ROOT/.env.example" > "$s/.env"
+    [[ -n "$line" ]] && printf '\n%s\n' "$line" >> "$s/.env"
+    printf 'COMPOSE_FILE=%s\n' "$base_files" >> "$s/.env"
+    ( cd "$s" && MDB_ENV_FILE="$s/.env" scripts/gen-compose >/dev/null ) || vfail "$name: gen-compose failed"
+    local f
+    for f in ${base_files//:/ }; do args+=(-f "$s/$f"); done
+    [[ -z "$val" ]] || envset=(MDB_BACKUP_DIR="$val")
+    # shellcheck disable=SC2016  # expanded by the inner bash
+    ( cd "$s" && env -u COMPOSE_FILE -u COMPOSE_PROFILES -u MDB_BACKUP_DIR COMPOSE_PROJECT_NAME=mdbrender ${envset[@]+"${envset[@]}"} bash -c '. scripts/runtime-lib.sh && mdb_compose "$@"' mdb_compose \
+            --project-directory "$s" --env-file "$s/.env" "${args[@]}" \
+            --profile pg --profile mysql --profile mariadb --profile backup \
+            config --format json > "$s/out/backup-$name.json" 2> "$s/out/backup-$name.err" ) \
+        || { sed 's/^/      /' "$s/out/backup-$name.err" >&2; vfail "backup-$name: compose config failed"; }
+    python3 - "$s/out/backup-$name.json" <<'PY'
+import json, sys
+svc = json.load(open(sys.argv[1]))["services"]
+for name in sorted(n for n in svc if n.startswith("backup-")):
+    src = [v.get("source") for v in svc[name].get("volumes") or [] if v.get("target") == "/backups"]
+    print(name, " ".join(str(x) for x in src) or "none")
+PY
+}
+
+bcases=0
+backup_case() {  # NAME ENV_LINE ENV_VALUE EXPECTED
+    local out want n
+    out="$(backup_source "$1" "$2" "$3")"
+    n="$(printf '%s\n' "$out" | grep -c '^backup-' || true)"
+    (( n == 3 )) || vfail "backup-$1: expected 3 backup sidecars, rendered $n: $out"
+    want="$(printf 'backup-%s %s\n' mariadb "$4" mysql "$4" pg "$4")"
+    [[ "$out" == "$want" ]] || vfail "backup-$1: the sidecars mount
+$out
+       but scripts/backup writes to $4"
+    bcases=$(( bcases + 1 ))
+}
+backup_case unset    ''                                ''            "$s/backups"
+backup_case example  'MDB_BACKUP_DIR=backups'          ''            "$s/backups"
+backup_case relative 'MDB_BACKUP_DIR=dumps/nightly'    ''            "$s/dumps/nightly"
+backup_case dotted   'MDB_BACKUP_DIR=./dumps'          ''            "$s/dumps"
+backup_case absolute "MDB_BACKUP_DIR=$s/abs-dumps"     ''            "$s/abs-dumps"
+backup_case environ  'MDB_BACKUP_DIR=dumps/nightly'    "$s/env-dumps" "$s/env-dumps"
+(( bcases == 6 )) || vfail "rendered $bcases backup case(s), expected 6"
+# The same answer scripts/backup gives, for the relative case.
+# shellcheck disable=SC2016  # expanded by the inner bash
+got="$(cd "$s" && env -u MDB_BACKUP_DIR bash -c '. scripts/env-lib.sh; mdb_backup_dir "$PWD" "$PWD/.env"')"
+[[ "$got" == "$s/dumps/nightly" ]] || vfail "scripts resolve MDB_BACKUP_DIR to $got, the sidecars to $s/dumps/nightly"
+vinfo "$bcases MDB_BACKUP_DIR settings: every backup sidecar mounts the directory scripts/backup writes to"
