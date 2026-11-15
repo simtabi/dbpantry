@@ -209,6 +209,12 @@ waiving them.
   exist and is not a known generated file.
 
 ### Fixed
+- **Verify checks stop only what they started.** Checks 15, 18, 24, 25, 28 and 35 booted the operator's
+  Compose project and ran `make down` on it, stopping every service there, including ones the check never
+  started; check 26 ran `make down` without starting anything. Each now runs in a stack of its own
+  (`scratch_stack`, with a new `scratch_call` helper for runtime functions), and 26 no longer stops a stack.
+  Check 60 fails any check that runs a whole-stack down outside its own stack; check 27's pre-boot
+  `make down` (its stack needs the ports the operator's holds) is its one exemption.
 - **The prod overlay's `pgbouncer` service is now the HA pooler** (design.md D-72). It had no credential and
   pointed at `pg`, so wherever the overlay applied it restarted forever beside `pg-pooler`. It is defined in
   `compose.ha.yml` in front of HAProxy's write port (`make up PROFILES=ha,pooler`), and the overlay entry only

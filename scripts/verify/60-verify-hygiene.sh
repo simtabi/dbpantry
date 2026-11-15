@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# verify: checks clean up the volumes they create, count only their own project, wait adaptively, and never reach the operator's volumes or backups/
+# verify: checks clean up the volumes they create, count only their own project, wait adaptively, and never reach the operator's volumes, backups/ or running stack
 # tags: fast structure
 # phase: 1
 

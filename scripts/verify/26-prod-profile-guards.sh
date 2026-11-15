@@ -17,7 +17,8 @@ need_file "$MDB_ROOT/compose.prod.yml"
 
 tmp="$(mktemp -d)"
 add_cleanup "rm -rf '$tmp'"
-add_cleanup 'make down'
+# No `make down` at exit: this check boots no stack (init-prod's helper
+# container runs with --rm), and a `make down` here stopped the operator's.
 
 make init-prod ENV_FILE="$tmp/.env.prod" >/dev/null 2>&1 \
     || vfail "make init-prod failed"
