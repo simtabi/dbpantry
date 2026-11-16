@@ -31,7 +31,9 @@ waiving them.
   `MDB_EXTRA_SANS`, then restart `pg-pooler`.
 
 ### Changed
-- **Container images are no longer published.** A release publishes the GitHub release only, with
+-- **`scripts/exposure-notice` lists every engine the stack can run** from the descriptors, not `pg` and
+  `mysql` only (refactor plan §14.2).
+ **Container images are no longer published.** A release publishes the GitHub release only, with
   the notes and the source tarball (owner, 2026-11-13). The `ghcr.io/simtabi/dbpantry-*` images are
   frozen: no new tag is pushed and nothing is deleted from ghcr.io. Build the images with
   `make build` (design.md D-77).
