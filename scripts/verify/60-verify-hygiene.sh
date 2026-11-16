@@ -173,7 +173,11 @@ down_scan() {
             gsub(/(vfail|vinfo) +"[^"]*"/, "", line)
             if (line ~ /(^|[^A-Za-z0-9_])make( +-[A-Za-z]+)* +down([^A-Za-z0-9_-]|$)/ ||
                 line ~ /mdb_compose[^#]* down([^A-Za-z0-9_-]|$)/ ||
-                line ~ /(scripts\/runtime|\$\(RUNTIME\)|\$RUNTIME) +down([^A-Za-z0-9_-]|$)/) {
+                line ~ /(scripts\/runtime|\$\(RUNTIME\)|\$RUNTIME) +down([^A-Za-z0-9_-]|$)/ ||
+                # The binary that every make target runs since phase 2 (D-80).
+                # `fixture down` stops the fixture project only.
+                (line ~ /(DBPANTRY_BIN|(^|[^A-Za-z0-9_.-])dbpantry)[^#]* down([^A-Za-z0-9_-]|$)/ &&
+                 line !~ /fixture +down/)) {
                 if (!own) printf "%s:%d: stops the operator project (%s)\n", f, NR, line
             }
         }' "$1"
@@ -213,17 +217,21 @@ add_cleanup 'make down'
 make down >/dev/null 2>&1 || true
 mdb_compose --profile '*' down
 add_cleanup "make -s down >/dev/null 2>&1 || true"
+"$DBPANTRY_BIN" --root "$MDB_ROOT" down
+build/linux/dbpantry down >/dev/null
 PLANT
 cat > "$t/95-clean-down.sh" <<'CLEAN'
 # make down in a comment is fine
 scratch_run make down >/dev/null 2>&1
 out="$(scratch_run "$DBPANTRY_BIN" fixture down 2>&1)"
 make downgrade-notes
+"$DBPANTRY_BIN" --root "$MDB_ROOT" fixture down
+"$DBPANTRY_BIN" --root "$MDB_ROOT" manifest -o downstream
 use_test_project
 add_cleanup 'make down'
 CLEAN
 planted="$(down_scan "$t/96-planted-down.sh")"
-[[ "$(printf '%s\n' "$planted" | grep -c 'stops the operator project')" == 4 ]] \
+[[ "$(printf '%s\n' "$planted" | grep -c 'stops the operator project')" == 6 ]] \
     || vfail "the down scan missed a planted whole-stack down: [$planted]"
 [[ -z "$(down_scan "$t/95-clean-down.sh")" ]] || vfail "the down scan flagged a clean check: $(down_scan "$t/95-clean-down.sh")"
 vinfo "the down scan flags each planted whole-stack down and passes a check's own stack"

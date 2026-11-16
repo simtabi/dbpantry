@@ -247,7 +247,8 @@ waiving them.
   Compose project and ran `make down` on it, stopping every service there, including ones the check never
   started; check 26 ran `make down` without starting anything. Each now runs in a stack of its own
   (`scratch_stack`, with a new `scratch_call` helper for runtime functions), and 26 no longer stops a stack.
-  Check 60 fails any check that runs a whole-stack down outside its own stack; check 27's pre-boot
+  Check 60 fails any check that runs a whole-stack down outside its own stack (through make, Compose, the
+  runtime or the `dbpantry` binary); check 27's pre-boot
   `make down` (its stack needs the ports the operator's holds) is its one exemption.
 - **`make logs` works on Incus.** It passed Compose's `--tail=100`, which incus-compose (1.3.5) refuses
   because its `logs` takes only `-f` and service names. The Incus backend now drops Compose-only log options
