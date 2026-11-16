@@ -209,6 +209,12 @@ waiving them.
   exist and is not a known generated file.
 
 ### Fixed
+- **The backup sidecars honour `MDB_BACKUP_DIR`.** `backup-pg`, `backup-mysql` and `backup-mariadb` bound
+  `./backups` whatever `MDB_BACKUP_DIR` said, while `make backup`, `restore` and `verify-backups` used it, so
+  scheduled and manual dumps went to different trees and each was pruned on its own. The sidecars now bind
+  `${MDB_BACKUP_DIR:-./backups}` (long form, so the `.env.example` spelling `backups` is a path, not a named
+  volume); the default is unchanged. Check 71 renders six settings against what `scripts/backup` resolves,
+  and check 47 now reads long-form bind sources.
 - **Verify checks stop only what they started.** Checks 15, 18, 24, 25, 28 and 35 booted the operator's
   Compose project and ran `make down` on it, stopping every service there, including ones the check never
   started; check 26 ran `make down` without starting anything. Each now runs in a stack of its own

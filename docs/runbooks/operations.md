@@ -195,6 +195,11 @@ MDB_BACKUP_RETAIN_MONTHLY=6
 MDB_BACKUP_NOTIFY_URL=https://...
 ```
 
+`MDB_BACKUP_DIR` is relative to the checkout or absolute. `make backup`, `restore`, `verify-backups` and
+the scheduled sidecars (`PROFILES=...,backup`) all use it, so they write and prune one directory; an
+`MDB_BACKUP_DIR` in the environment wins over `.env` for all of them. Create a custom directory before
+`make up`: one that is missing is created by the container engine, which on Linux makes it root's.
+
 Each backup run, scheduled or `make backup-all`, prunes dumps
 (`<engine>_<db>_<timestamp>.*`) older than `MDB_BACKUP_RETAIN_DAILY` days. Other
 files in the directory are left alone. That includes the backup checks in
