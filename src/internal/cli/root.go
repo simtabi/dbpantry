@@ -23,31 +23,29 @@ var (
 	commit  = "none"
 )
 
-// Exit codes. 0 and 1 keep the meaning the scripts give them (refactor plan
-// §6.1); 2 is a usage error.
-const (
-	ExitOK    = 0
-	ExitError = 1
-	ExitUsage = 2
-)
-
-// usageError marks an error as the caller's, for exit code 2.
-type usageError struct{ error }
-
-func usagef(format string, a ...any) error { return usageError{fmt.Errorf(format, a...)} }
-
 // app is what every command shares.
 type app struct {
 	rootFlag string
+	stdin    io.Reader
 	stdout   io.Writer
 	stderr   io.Writer
 	environ  func() []string
 	log      *slog.Logger
+
+	// Global flags (refactor plan §7).
+	dryRun  bool
+	noInput bool
+	noColor bool
+	// profiles is a wrapped command's --profiles, when it has one.
+	profiles string
+	// jsonErrors is set by a command run with -o json: its failure is
+	// reported as a JSON object on stderr.
+	jsonErrors bool
 }
 
 // Execute runs the command line and returns the process exit code.
 func Execute(ctx context.Context, args []string, stdout, stderr io.Writer, environ func() []string) int {
-	a := &app{stdout: stdout, stderr: stderr, environ: environ}
+	a := &app{stdin: os.Stdin, stdout: stdout, stderr: stderr, environ: environ}
 	a.log = slog.New(slog.NewTextHandler(stderr, &slog.HandlerOptions{Level: slog.LevelInfo}))
 	cmd := a.rootCmd() //nolint:contextcheck // cobra hands ctx to every command through ExecuteContext
 	cmd.SetArgs(args)
@@ -57,39 +55,126 @@ func Execute(ctx context.Context, args []string, stdout, stderr io.Writer, envir
 	if err == nil {
 		return ExitOK
 	}
-	_, _ = fmt.Fprintf(stderr, "dbpantry: %v\n", err)
-	var ue usageError
-	if errors.As(err, &ue) {
-		return ExitUsage
+	var se statusError
+	if errors.As(err, &se) {
+		// The script has already said why; its status is the answer.
+		return se.code
 	}
-	return ExitError
+	return writeError(stderr, err, a.jsonErrors)
 }
 
 func (a *app) rootCmd() *cobra.Command {
 	root := &cobra.Command{
-		Use:           "dbpantry",
-		Short:         "The dbpantry database toolkit",
-		Long:          "dbpantry runs and describes the toolkit's database engines. Phase 1 of the Go port: the engine manifest, endpoints and test fixtures. Everything else is still `make` (docs/reference/manifest.md).",
+		Use:   "dbpantry",
+		Short: "The dbpantry database toolkit",
+		Long: `dbpantry runs and describes the toolkit's database engines.
+
+Every make target is an alias for one of these commands (docs/reference/cli.md).
+Most still run the script the make target ran before, unchanged; the Go port
+replaces them one bounded context at a time (refactor plan, phase 2).`,
 		SilenceUsage:  true,
 		SilenceErrors: true,
 	}
 	root.SetFlagErrorFunc(func(_ *cobra.Command, err error) error { return usageError{err} })
 	root.PersistentFlags().StringVar(&a.rootFlag, "root", "",
 		"the dbpantry checkout (default: $DBPANTRY_DIR, else the nearest directory above the current one holding engines/ and scripts/engine-lib.sh, else the nearest one above the binary)")
-	root.AddCommand(a.versionCmd(), a.manifestCmd(), a.endpointsCmd(), a.fixtureCmd())
+	pf := root.PersistentFlags()
+	pf.BoolVar(&a.dryRun, "dry-run", false, "print the scripts a command would run, and run nothing")
+	pf.BoolVar(&a.noInput, "no-input", false, "never prompt: a command that needs a typed confirmation without --confirm exits 7")
+	pf.BoolVar(&a.noColor, "no-color", false, "no colour in output (also NO_COLOR)")
+
+	// The tree, declared one command at a time (TestTreeIsDeclared).
+	root.AddCommand(
+		// Setup
+		a.initCmd(), a.versionCmd(), a.selfUpdateCmd(),
+		// Config
+		a.configCmd(),
+		// Engines
+		a.manifestCmd(),
+		// Stack
+		a.upCmd(), a.downCmd(), a.statusCmd(), a.logsCmd(), a.endpointsCmd(), a.forwardCmd(), a.destroyCmd(),
+		// Fixtures
+		a.fixtureCmd(),
+		// Runtime
+		a.runtimeCmd(),
+		// Shells
+		a.shellCmd(), a.toolsCmd(),
+		// Projects
+		a.projectCmd(),
+		// Data
+		a.backupCmd(), a.restoreCmd(), a.pitrCmd(), a.dataCmd(), a.upgradeCmd(),
+		// Topology
+		a.haCmd(), a.poolerCmd(),
+		// Security
+		a.certsCmd(), a.secretsCmd(), a.imagesCmd(),
+		// Development
+		a.verifyCmd(), a.devCmd(),
+	)
+	strictArgs(root)
 	return root
 }
 
+// strictArgs makes every argument error a usage error (exit 64). A group
+// (a command with subcommands and nothing of its own to run) prints its help
+// when called bare and refuses an unknown subcommand, where cobra would
+// print the help and exit 0, so a mistyped command can never look like a
+// success.
+func strictArgs(c *cobra.Command) {
+	if c.HasSubCommands() && c.RunE == nil && c.Run == nil {
+		c.Args = cobra.ArbitraryArgs
+		c.RunE = func(c *cobra.Command, args []string) error {
+			if len(args) > 0 {
+				return usagef("unknown command %q for %q", args[0], c.CommandPath())
+			}
+			return c.Help()
+		}
+	}
+	if v := c.Args; v != nil {
+		c.Args = func(c *cobra.Command, args []string) error {
+			if err := v(c, args); err != nil {
+				var ue usageError
+				if errors.As(err, &ue) {
+					return err
+				}
+				return usageError{err}
+			}
+			return nil
+		}
+	}
+	for _, sub := range c.Commands() {
+		strictArgs(sub)
+	}
+}
+
 func (a *app) versionCmd() *cobra.Command {
-	return &cobra.Command{
+	var output string
+	var asJSON bool
+	cmd := &cobra.Command{
 		Use:   "version",
 		Short: "Print the version",
 		Args:  cobra.NoArgs,
 		RunE: func(*cobra.Command, []string) error {
-			_, err := fmt.Fprintf(a.stdout, "dbpantry %s (%s)\n", version, commit)
-			return err
+			if asJSON {
+				output = "json"
+			}
+			if err := a.output(output, "plain", "json", "yaml"); err != nil {
+				return err
+			}
+			switch output {
+			case "json":
+				return writeJSON(a.stdout, map[string]string{"version": version, "commit": commit})
+			case "yaml":
+				_, err := fmt.Fprintf(a.stdout, "version: %q\ncommit: %q\n", version, commit)
+				return err
+			default:
+				_, err := fmt.Fprintf(a.stdout, "dbpantry %s (%s)\n", version, commit)
+				return err
+			}
 		},
 	}
+	cmd.Flags().StringVarP(&output, "output", "o", "plain", "output format: plain, json or yaml")
+	cmd.Flags().BoolVar(&asJSON, "json", false, "the same as -o json")
+	return cmd
 }
 
 func (a *app) env(key string) string {

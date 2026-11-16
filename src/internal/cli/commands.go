@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -103,6 +102,9 @@ Superusers cannot authenticate through either pooler, so admin work uses the
 direct endpoint ("superuser": false on every pooled one).`,
 		Args: cobra.NoArgs,
 		RunE: func(*cobra.Command, []string) error {
+			if err := a.output(output, "table", "json"); err != nil {
+				return err
+			}
 			m, root, err := a.manifest()
 			if err != nil {
 				return err
@@ -115,16 +117,10 @@ direct endpoint ("superuser": false on every pooled one).`,
 			if err != nil {
 				return err
 			}
-			switch output {
-			case "json":
-				enc := json.NewEncoder(a.stdout)
-				enc.SetIndent("", "  ")
-				return enc.Encode(doc)
-			case "table":
-				return writeEndpointsTable(a, doc)
-			default:
-				return usagef("unknown output %q (want json or table)", output)
+			if output == "json" {
+				return writeJSON(a.stdout, doc)
 			}
+			return writeEndpointsTable(a, doc)
 		},
 	}
 	cmd.Flags().StringVarP(&output, "output", "o", "table", "output format: table or json")
@@ -147,8 +143,9 @@ func writeEndpointsTable(a *app, doc endpoint.Document) error {
 				pooled += fmt.Sprintf(" / %s:%d", p.Address, p.Port)
 			}
 		}
+		// Every value is sanitised before it reaches the terminal (N19).
 		_, _ = fmt.Fprintf(tw, "%s\t%t\t%s:%d\t%s\t%s\t%ds\n",
-			e.Engine, e.Enabled, e.Direct.Network.Host, e.Direct.Network.Port, pub, pooled, e.BootBudget)
+			sanitize(e.Engine), e.Enabled, sanitize(e.Direct.Network.Host), e.Direct.Network.Port, sanitize(pub), sanitize(pooled), e.BootBudget)
 	}
 	return tw.Flush()
 }
