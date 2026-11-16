@@ -66,3 +66,13 @@ if [[ -n "$errors" ]]; then
 fi
 
 vinfo "$rows replaced JAR(s) across $(wc -l <<< "$series_built" | tr -d ' ') Cassandra series, each pinned by sha256"
+
+# The JAR downloads retry as mdb-fetch does. replace-jars.sh had --retry 3, and
+# Maven Central's HTTP 429s outlasted it on 2026-11-16, failing a CI build.
+policy="$(grep -oE -- '--(retry|connect-timeout|max-time)[a-z-]*( [0-9]+)?' "$MDB_ROOT/images/_shared/supply/fetch.sh" | sort)"
+(( $(grep -c . <<< "$policy") >= 3 )) || vfail "could not read mdb-fetch's retry policy from images/_shared/supply/fetch.sh"
+jars_policy="$(grep -oE -- '--(retry|connect-timeout|max-time)[a-z-]*( [0-9]+)?' "$MDB_ROOT/images/cassandra/replace-jars.sh" | sort)"
+[[ "$jars_policy" == "$policy" ]] || vfail "replace-jars.sh does not retry as mdb-fetch does:
+       mdb-fetch:    $(tr '\n' ' ' <<< "$policy")
+       replace-jars: $(tr '\n' ' ' <<< "$jars_policy")"
+vinfo "JAR downloads retry as mdb-fetch does ($(tr '\n' ' ' <<< "$policy"))"

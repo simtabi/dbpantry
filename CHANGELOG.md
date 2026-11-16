@@ -237,6 +237,9 @@ waiving them.
   `build/`, which is gitignored and no build step touches. Check 70's scratch repository read the operator's global
   git config, where git 2.5x runs hooks declared as `hook.<name>.command` whatever `core.hooksPath` says, so a
   global commit hook could refuse its commits; it now reads no global or system config.
+- **The Cassandra image build survives Maven Central rate limits.** `replace-jars.sh` downloaded with `--retry 3`,
+  about 7 seconds of backoff, and HTTP 429 outlasted it in CI. It now retries as `mdb-fetch` does (`--retry 6
+  --retry-all-errors`, with connect and total timeouts), and check 45 fails when the two policies differ.
 - **`design.md` matches the compose files.** Sections 2 and 3 still showed the step 1 plan (etcd `v3.6.6`,
   HAProxy `3.2-alpine`, Caddy `2.10.2`, an `nfrastack/db-backup` service) and had no rows for MongoDB,
   Cassandra, the poolers or Patroni. They now list what the compose files run, `MDB_BACKUP_DIR` is in the
