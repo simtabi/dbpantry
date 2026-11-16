@@ -1,0 +1,64 @@
+# The feature-parity ledger (refactor plan §5): every make target, the dbpantry
+# command it runs, what proves it, and the phase that ports its logic to Go.
+# Read by scripts/verify/74-parity-ledger.sh and src/internal/cli's
+# TestLedgerCoversTheTree. Columns, tab-separated:
+#   make target ('-' for a command with no make target)
+#   command (its path below dbpantry; the recipe runs `$(DBPANTRY) <command>`)
+#   proved by (comma-separated: NN is scripts/verify/NN-*.sh; go:Name is a Go test)
+#   port (the refactor plan phase that moves the logic into Go)
+#   note
+make_target	command	proved_by	port	note
+runtime	runtime info	48,53	4
+-	runtime name	48	4
+-	runtime backend	52	4
+init	init	06,41	3
+init-prod	init	26	3	init --prod
+prod-overlay	config prod-overlay	26	3	not in the plan's §7; config is its home (D-73)
+check-env	config validate	06,26	3
+render	config render	47	3
+certs	certs init	12,20	3
+certs-renew	certs renew	12,68	3
+rotate-secrets	secrets rotate	57	3	then pooler sync for mirroring poolers (N8)
+build	images build	07,43,45	4
+scan	images scan	38	4
+up	up	15,52	4
+down	down	15,52	4
+status	status	52	4
+logs	logs	52	4
+-	forward	54	4	the Kubernetes backend's port-forward (D-64)
+destroy	destroy	41	4
+test-profile	up	25	4	up --profile test
+psql	shell	19,55	4	the client command stays in the make target until phase 4
+mysql	shell	19	4
+mariadb	shell	19	4
+mongo	shell	32	4
+cassandra	shell	32	4
+shell	tools	07,73	4
+new-project	project new	13,28,34,36	4	then pooler sync for a mirroring pooler (N8)
+-	pooler sync	35,go:TestCommandsRunTheirScripts	4	N8: restart a pooler that mirrors credentials at start
+backup	backup run	21,59	6
+backup-all	backup run	22	6	backup run --all
+verify-backups	backup verify	22	6
+restore	restore	21,56	6
+pitr-info	pitr info	37,40	6
+pitr-backup	pitr backup	37,40	6
+pitr-restore	pitr restore	37,40	6
+import	data import	go:TestCommandsRunTheirScripts	6	no verify check moves data in yet; the plan's round-trip test is phase 6
+export	data export	go:TestCommandsRunTheirScripts	6	as import
+upgrade	upgrade	29,14	6
+ha-status	ha status	27	4
+ha-failover	ha failover	27	4
+ha-reinit	ha reinit	27	4
+verify	verify	go:TestCommandsRunTheirScripts	2	the harness runs itself: every check
+verify-fast	verify	go:TestCommandsRunTheirScripts	2	verify --fast
+verify-structure	verify	go:TestCommandsRunTheirScripts	2	verify --structure
+lint	dev lint	04	2
+-	dev release-notes	go:TestCommandsRunTheirScripts	2	release.yml runs the script directly
+self-update	self-update	go:TestCommandsRunTheirScripts	9
+manifest	manifest	62	1
+-	manifest check-helm	65	1
+endpoints	endpoints	go:TestEndpointsAndFixtureDryRun	1
+fixture-up	fixture up	64,66	1
+fixture-down	fixture down	64	1
+-	version	go:TestVersionFormats	2
+-	completion	go:TestTreeIsPinned	2	cobra's own

@@ -126,6 +126,7 @@ Looked up to check the contract, the evidence, or a fact.
 
 - [Specification](docs/reference/spec.md) — the build contract
 - [Acceptance](docs/reference/acceptance.md) — every criterion mapped to the check that proves it
+- [Command line](docs/reference/cli.md) — every `dbpantry` command, the make target it serves, flags and exit codes
 - [Engine manifest](docs/reference/manifest.md) — the `dbpantry` binary: manifest, endpoints, fixtures
 - [Image provenance](docs/reference/image-provenance.md) — every image, its publisher, and why
 - [Design](design.md) — pinned versions, capacity table, decision log

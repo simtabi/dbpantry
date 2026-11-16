@@ -44,7 +44,17 @@ case "$publish" in
     none)
         printf '\n  No host ports are published (MDB_PUBLISH=none).\n'
         printf '  Applications join the %s_net network and connect by service name:\n\n' "$project"
-        printf '      host=pg  port=5432        host=mysql  port=3306\n\n'
+        # Every engine the descriptors declare and the repository can run,
+        # not a list written here (refactor plan §14.2): it printed pg and
+        # mysql only, whatever the stack ran.
+        # shellcheck source=engine-lib.sh
+        . "$ROOT/scripts/engine-lib.sh"
+        for engine in $(engine_list); do
+            engine_load "$engine" || continue
+            engine_implemented || continue
+            printf '      host=%-10s port=%s\n' "$MDB_ENGINE_NAME" "$MDB_ENGINE_PORT"
+        done
+        printf '\n'
         printf '  For a GUI client that cannot join the compose network, set\n'
         printf '  MDB_PUBLISH=direct (or proxy) in .env and re-run make up.\n'
         printf '  Shells work either way: make psql, make mysql, make mongo.\n\n'

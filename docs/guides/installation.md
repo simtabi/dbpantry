@@ -11,6 +11,7 @@ What you need before `make up`, and what to do when the usual things go wrong.
 | Disk | 20 GB | Images are large; PostgreSQL alone with extensions is ~1 GB per major |
 | `make` | any | Preinstalled on macOS and Linux; on Windows see [windows.md](../runbooks/windows.md) |
 | `bash` | 3.2 | macOS ships 3.2 from 2007 and every script here supports it |
+| Go | the version in `src/go.mod` (1.27) | Every make target runs the `dbpantry` binary, which `make` builds from `src/` on first use ([Command line](../reference/cli.md)) |
 
 Check the first one:
 

@@ -38,7 +38,7 @@ directory above the binary (so `build/macos/dbpantry` finds its own checkout). `
 | `dbpantry fixture up --profiles pg,mysql` | `make fixture-up PROFILES=pg,mysql` | boots disposable engines on tmpfs |
 | `dbpantry fixture down` | `make fixture-down` | stops them |
 
-Exit codes: 0 success, 1 failure, 2 a usage error (an unknown flag, output or profile).
+Exit codes: 0 success, 1 failure, 64 a usage error (an unknown flag, output or profile); the full table is in [the command line reference](cli.md#exit-codes). Phase 1 used 2 for a usage error.
 
 ## The manifest
 
@@ -120,7 +120,7 @@ for health. `fixture down` stops that stack. `--dry-run` prints the commands.
 - Data lives on tmpfs (the test overlay), so a fixture holds no volume and loses its data on
   stop. Check 66 proves that from the Compose config; check 64 proves it on a running stack.
 - Only engine profiles and `pooler` are accepted. `ui`, `backup`, `metrics`, `prod` and `ha` start
-  services with volumes of their own, and are refused with exit code 2.
+  services with volumes of their own, and are refused with exit code 64.
 - FerretDB is refused until its image exists: it has a descriptor and no Compose service.
 - Fixtures run on the Compose backend only.
 
