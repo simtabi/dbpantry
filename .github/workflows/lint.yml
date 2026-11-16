@@ -48,6 +48,13 @@ jobs:
           sudo install -m 0755 "shellcheck-${SHELLCHECK_VERSION}/shellcheck" /usr/local/bin/shellcheck
           shellcheck --version
 
+      # make lint and make verify-structure run the dbpantry binary, which
+      # make builds from src/ (refactor plan phase 2).
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: src/go.mod
+          cache-dependency-path: src/go.sum
+
       - name: Lint every shell script
         run: make lint
 
@@ -69,6 +76,13 @@ jobs:
 
       # The harness must be well-formed even while the features it checks do
       # not exist yet. This is the gate that stays green through every phase.
+      # make lint and make verify-structure run the dbpantry binary, which
+      # make builds from src/ (refactor plan phase 2).
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: src/go.mod
+          cache-dependency-path: src/go.sum
+
       - name: Validate the verify harness
         run: make verify-structure
 

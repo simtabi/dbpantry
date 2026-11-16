@@ -251,6 +251,13 @@ jobs:
       - name: Confirm docker is available
         run: docker info
 
+      # Every make target runs the dbpantry binary, which make builds from
+      # src/ (refactor plan phase 2), so verify needs the module's Go.
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: src/go.mod
+          cache-dependency-path: src/go.sum
+
       - name: Harness structure
         run: make verify-structure
 

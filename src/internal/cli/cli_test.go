@@ -42,7 +42,7 @@ func TestManifestJSON(t *testing.T) {
 	}
 }
 
-func TestUsageErrorsExit2(t *testing.T) {
+func TestUsageErrorsExit64(t *testing.T) {
 	for _, args := range [][]string{
 		{"manifest", "-o", "xml"},
 		{"manifest", "--matrix", "bogus"},

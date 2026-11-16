@@ -16,6 +16,9 @@ waiving them.
 
 ### Upgrade
 
+- **Every make target now needs Go.** Each one runs the `dbpantry` binary, which `make` builds from `src/`
+  the first time a target needs it after a Go file changes. Install the Go named in `src/go.mod` (1.27)
+  before `make init`. What each target does is unchanged (docs/reference/cli.md, design.md D-80).
 - **Images are now named `localhost/dbpantry-*`.** Images you built before keep their old
   `ghcr.io/simtabi/dbpantry-*` names, which nothing runs any more. Run `make build` once; the next
   `make up` recreates the containers on the new names. Volumes and data are untouched. To build,
@@ -31,7 +34,17 @@ waiving them.
   `MDB_EXTRA_SANS`, then restart `pg-pooler`.
 
 ### Changed
-- **Container images are no longer published.** A release publishes the GitHub release only, with
+-- **The make targets run the `dbpantry` binary** (refactor plan phase 2, design.md D-80). Every target
+  except `help`, `dbpantry` and the `go-*` targets now runs a `dbpantry` command, which runs the script the
+  target used to run, with the same arguments, and exits with that script's status. Check 74 holds each
+  target to the command `docs/reference/parity.tsv` names. `make test-profile` is `dbpantry up --profile test`,
+  `make shell` is `dbpantry tools`, and the engine shells pass their client to `dbpantry shell SERVICE --`.
+- **`dbpantry` usage errors exit 64, not 2**, following the exit-code table dbpantry shares with mesobia.
+  A typed confirmation refused under `--no-input` exits 7. An unknown subcommand is now a usage error
+  rather than the parent's help with exit 0.
+- **`scripts/exposure-notice` lists every engine the stack can run** from the descriptors, not `pg` and
+  `mysql` only (refactor plan §14.2).
+ **Container images are no longer published.** A release publishes the GitHub release only, with
   the notes and the source tarball (owner, 2026-11-13). The `ghcr.io/simtabi/dbpantry-*` images are
   frozen: no new tag is pushed and nothing is deleted from ghcr.io. Build the images with
   `make build` (design.md D-77).
@@ -118,7 +131,18 @@ waiving them.
   D-52 to D-57, which sat after the end of the document, are back in the decision log.
 
 ### Added
-- **Mutual TLS through the pooler** (design.md D-74). Under `MDB_MTLS=true` pgBouncer requires a toolkit-CA client
+-- **The `dbpantry` command tree for every existing feature** (refactor plan phase 2): `init`, `config
+  validate|render|prod-overlay`, `up`, `down`, `status`, `logs`, `forward`, `destroy`, `runtime`, `shell`,
+  `tools`, `project new`, `backup run|verify`, `restore`, `pitr`, `data import|export`, `upgrade`, `ha`,
+  `certs`, `secrets rotate`, `images build|scan`, `verify`, `dev lint|release-notes`, `self-update`, beside
+  phase 1's `manifest`, `endpoints` and `fixture`. Global `--dry-run`, `--no-input`, `--no-color`; per-command
+  `-o` from one set of formats, with JSON errors carrying a stable code; `--confirm=<name>` answers a typed
+  confirmation. The tree is declared one command at a time and pinned by `TestTreeIsPinned` and
+  `TestTreeIsDeclared`. Reference: docs/reference/cli.md; ledger: docs/reference/parity.tsv.
+- **`dbpantry pooler sync ENGINE`** restarts a pooler that copies credentials when it starts (ProxySQL), so
+  users created or rotated afterwards can log in through it. `project new` and `secrets rotate` run it
+  (refactor plan §14, N8).
+ **Mutual TLS through the pooler** (design.md D-74). Under `MDB_MTLS=true` pgBouncer requires a toolkit-CA client
   certificate (`client_tls_sslmode = verify-full`), presents its own (`certs/pooler/client.crt`) to PostgreSQL and
   verifies PostgreSQL's by name, and PostgreSQL admits the pooler from its fixed address with `clientcert=verify-ca`
   while every other client keeps `verify-full`. `scripts/certs --client NAME` issues role certificates,
