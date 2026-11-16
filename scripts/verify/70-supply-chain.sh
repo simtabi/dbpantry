@@ -133,6 +133,10 @@ grep -q 'scripts/ci-scan-gate' .github/workflows/ci.yml || vfail "ci.yml does no
 grep -q -- '--exit-code "$code"' .github/workflows/ci.yml || vfail "ci.yml's trivy step does not take its exit code from the gate"
 
 r="$t/repo"; mkdir -p "$r/images/x" "$r/docs" "$r/scripts"
+# The scratch repository reads no global or system git config: git 2.5x runs the
+# hooks named there (hook.<name>.command) whatever core.hooksPath says, so an
+# operator's global commit hook could refuse these commits.
+export GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1
 cp scripts/ci-scan-gate "$r/scripts/"
 gate() {
     ( cd "$r" && GITHUB_OUTPUT="" EVENT="$1" BASE_SHA="${2:-}" scripts/ci-scan-gate 2>/dev/null ) \

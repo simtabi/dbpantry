@@ -29,6 +29,9 @@ layout_problems() {
             archives)
                 [[ -d "$entry" ]] || printf '%s: expected a directory\n' "$name"
                 continue ;;
+            # Finder writes one into any folder it shows; it is gitignored and
+            # no build step reads or writes it.
+            .DS_Store) continue ;;
         esac
         if [[ -d "$entry" && " $OS_DIRS " == *" $name "* ]]; then
             while IFS= read -r sub; do
@@ -50,6 +53,7 @@ add_cleanup "rm -rf '$work'"
 mkdir -p "$work/good/linux" "$work/good/macos" "$work/good/archives"
 : > "$work/good/targets.txt"; : > "$work/good/checksums.txt"
 : > "$work/good/linux/dbpantry_linux_amd64"; : > "$work/good/macos/dbpantry"
+: > "$work/good/.DS_Store"   # opened in Finder: still conforming
 [[ -z "$(layout_problems "$work/good")" ]] \
     || vfail "self-test: a conforming layout was refused: $(layout_problems "$work/good")"
 for bad in stray-file dist darwin nested; do
@@ -62,7 +66,7 @@ for bad in stray-file dist darwin nested; do
     esac
     [[ -n "$(layout_problems "$work/bad")" ]] || vfail "self-test: a layout with a $bad defect was accepted"
 done
-vinfo "self-test: a conforming build/ passes; a stray file, dist/, darwin/ and a nested folder are each refused"
+vinfo "self-test: a conforming build/ passes (with a Finder .DS_Store); a stray file, dist/, darwin/ and a nested folder are each refused"
 
 if [[ ! -d build ]]; then
     vinfo "no build/ directory: nothing built here yet"

@@ -233,6 +233,10 @@ waiving them.
   exist and is not a known generated file.
 
 ### Fixed
+- **Checks 67 and 70 pass on a developer's Mac.** Check 67 refused the `.DS_Store` Finder writes into
+  `build/`, which is gitignored and no build step touches. Check 70's scratch repository read the operator's global
+  git config, where git 2.5x runs hooks declared as `hook.<name>.command` whatever `core.hooksPath` says, so a
+  global commit hook could refuse its commits; it now reads no global or system config.
 - **`make logs` works on Incus.** It passed Compose's `--tail=100`, which incus-compose (1.3.5) refuses
   because its `logs` takes only `-f` and service names. The Incus backend now drops Compose-only log options
   with a note and shows the whole log. It also sends follow as `--follow`: a bare `-f` was read as `--file`,
