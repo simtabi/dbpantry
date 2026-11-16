@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# verify: every supported profile combination renders, runs one authenticating pooler per upstream, and the prod overlay publishes only poolers and the front door
+# verify: every supported profile combination renders, runs one authenticating pooler per upstream, the prod overlay publishes only poolers and the front door, backup sidecars mount MDB_BACKUP_DIR, and design.md names every service and image
 # tags: structure prod pooling
 # phase: 6
 
@@ -230,3 +230,49 @@ backup_case environ  'MDB_BACKUP_DIR=dumps/nightly'    "$s/env-dumps" "$s/env-du
 got="$(cd "$s" && env -u MDB_BACKUP_DIR bash -c '. scripts/env-lib.sh; mdb_backup_dir "$PWD" "$PWD/.env"')"
 [[ "$got" == "$s/dumps/nightly" ]] || vfail "scripts resolve MDB_BACKUP_DIR to $got, the sidecars to $s/dumps/nightly"
 vinfo "$bcases MDB_BACKUP_DIR settings: every backup sidecar mounts the directory scripts/backup writes to"
+
+# --- design.md's service map is the rendered stack ------------------------------
+#
+# design.md section 2 lists every service and its image. It drifted from the
+# compose files for months (etcd, HAProxy and Caddy on the step 1 plan, one
+# db-backup service where three sidecars run, no MongoDB, Cassandra, ProxySQL
+# or Patroni rows) and nothing noticed. Every service of the broadest render
+# must have a row whose first `code` in the image cell is its image (`<ver>`
+# stands for a version variable, `<engine>` for an engine name), and
+# every row whose profile is not "—" (not a Compose service) must be rendered.
+render everything pg,mysql,mariadb,mongodb,cassandra,pooler,ui,backup,metrics,ha none false "$base_files"
+map_drift="$(python3 - "$s/out/everything.json" "$MDB_ROOT/design.md" <<'PY'
+import json, re, sys
+svc = json.load(open(sys.argv[1]))["services"]
+text = open(sys.argv[2]).read()
+sec = text.split("\n## 2.", 1)[1].split("\n## ", 1)[0]
+rows = {}
+for line in sec.splitlines():
+    cells = [c.strip() for c in line.strip().strip("|").split("|")]
+    if len(cells) < 3 or not cells[0].startswith("`"):
+        continue
+    names = re.findall(r"`([^`]+)`", cells[0])
+    first = re.search(r"`([^`]+)`", cells[1])
+    image = first.group(1) if first else cells[1]
+    for n in names:
+        rows[n] = (image, cells[2])
+bad = []
+for name, d in svc.items():
+    if name not in rows:
+        bad.append(f"{name}: rendered, but design.md section 2 has no row for it")
+        continue
+    got = str(d.get("image", "")).split("@")[0]
+    want = rows[name][0]
+    pat = "^" + re.escape(want).replace(re.escape("<ver>"), "[^:/@]+").replace(re.escape("<engine>"), "[a-z]+") + "$"
+    if not re.match(pat, got):
+        bad.append(f"{name}: design.md says {want}, the compose files run {got}")
+for name, (image, prof) in rows.items():
+    if not prof.startswith("—") and name not in svc:
+        bad.append(f"{name}: in design.md section 2 (profile {prof}), but no compose file defines it")
+print("\n".join(bad))
+PY
+)"
+[[ -z "$map_drift" ]] || { printf '      %s\n' "$map_drift" >&2; vfail "design.md section 2 disagrees with the compose files (listed above)"; }
+nsvc="$(python3 -c 'import json,sys; print(len(json.load(open(sys.argv[1]))["services"]))' "$s/out/everything.json")"
+(( nsvc >= 25 )) || vfail "the broadest render has $nsvc services; expected at least 25 (measured 2026-11-16)"
+vinfo "design.md section 2 names all $nsvc rendered services with the images they run"
