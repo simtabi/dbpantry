@@ -45,7 +45,11 @@ while IFS=$'\t' read -r s old coord sha || [[ -n "$s" ]]; do
         die "$jar is already in $lib; the base image no longer matches jars.tsv"
     fi
 
-    curl -fsSL --retry 3 -o "$tmp/$jar" "$repo/${group//.//}/$artifact/$version/$jar" \
+    # The retry policy of images/_shared/supply/fetch.sh: Maven Central answers
+    # a burst with HTTP 429, and three retries (about 7 seconds of backoff)
+    # failed a CI build on 2026-11-16; curl also waits out a Retry-After header.
+    curl -fsSL --retry 6 --retry-all-errors --connect-timeout 30 --max-time 900 \
+        -o "$tmp/$jar" "$repo/${group//.//}/$artifact/$version/$jar" \
         || die "download failed: $coord"
     echo "$sha  $tmp/$jar" | sha256sum -c --quiet - \
         || die "sha256 mismatch for $coord; refusing to install it"
