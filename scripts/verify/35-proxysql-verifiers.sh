@@ -51,7 +51,14 @@ scratch_call mdb_compose restart "${engine}-pooler" >/dev/null 2>&1
 # In a SUBSHELL, because wait_ready exits through vfail on timeout and would
 # take the whole check with it before the log dump below ever ran. The subshell
 # contains the exit; its FAIL line still prints, and the dump follows it.
-pooler_mirrored() { scratch_call mdb_compose logs "${engine}-pooler" 2>/dev/null | grep -q 'mirrored'; }
+# The log is read whole, then searched: `logs | grep -q` under the harness's
+# pipefail fails whenever grep exits on its match before logs has finished
+# writing (SIGPIPE), which on a slower runner is most of the time.
+pooler_mirrored() {
+    local log
+    log="$(scratch_call mdb_compose logs "${engine}-pooler" 2>/dev/null)" || return 1
+    [[ "$log" == *mirrored* ]]
+}
 if ! ( wait_ready 120 "the pooler to finish mirroring" pooler_mirrored ); then
     # The timeout names a wait, not a cause. The pooler's own log distinguishes
     # every distinct failure this can be: still waiting for the upstream (the
