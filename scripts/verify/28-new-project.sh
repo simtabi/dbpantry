@@ -6,7 +6,6 @@
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
 need_runtime
-cd "$MDB_ROOT" || exit 1
 
 # SPEC section 18: "Two projects per engine, isolated roles, cross-access
 # denied." Check 13 proves that for the env-triplet path used at first init.
@@ -19,24 +18,15 @@ need_file "$MDB_ROOT/scripts/new-project"
 a="mdbchk_alpha"
 b="mdbchk_beta"
 
-add_cleanup "mdb_compose exec -T pg psql -U postgres -q -c 'DROP DATABASE IF EXISTS $a;' >/dev/null 2>&1"
-add_cleanup "mdb_compose exec -T pg psql -U postgres -q -c 'DROP DATABASE IF EXISTS $b;' >/dev/null 2>&1"
-add_cleanup "mdb_compose exec -T pg psql -U postgres -q -c 'DROP ROLE IF EXISTS ${a}_user;' >/dev/null 2>&1"
-add_cleanup "mdb_compose exec -T pg psql -U postgres -q -c 'DROP ROLE IF EXISTS ${a}_user_readonly;' >/dev/null 2>&1"
-add_cleanup "mdb_compose exec -T pg psql -U postgres -q -c 'DROP ROLE IF EXISTS ${b}_user;' >/dev/null 2>&1"
-add_cleanup "mdb_compose exec -T pg psql -U postgres -q -c 'DROP ROLE IF EXISTS ${b}_user_readonly;' >/dev/null 2>&1"
-# new-project writes a readonly companion secret beside each app secret; both
-# go, or every run leaks two more files into secrets/.
-add_cleanup "rm -f secrets/pg_${a}_user_password.txt secrets/pg_${a}_user_readonly_password.txt secrets/pg_${b}_user_password.txt secrets/pg_${b}_user_readonly_password.txt"
-add_cleanup "make down"
+# In a stack of its own (scratch_stack): its databases, roles and secrets go
+# with the scratch tree. It used to provision in the operator's project, undo
+# that by hand at exit, and then `make down` the operator's whole stack.
+scratch_stack "pg"
+scratch_up || vfail "make up failed"
+wait_for 120 "pg to report healthy" scratch_healthy pg
 
-mdb_up PROFILES=pg || vfail "make up failed"
-# shellcheck disable=SC2016  # evaluated by the subshell, not here
-wait_for 120 "pg to report healthy" bash -c \
-    'mdb_service_healthy pg'
-
-out="$(make new-project NAME="$a" 2>&1)" || { printf '%s\n' "$out" >&2; vfail "make new-project failed"; }
-make new-project NAME="$b" >/dev/null 2>&1 || vfail "make new-project failed for the second project"
+out="$(scratch_run make new-project NAME="$a" 2>&1)" || { printf '%s\n' "$out" >&2; vfail "make new-project failed"; }
+scratch_run make new-project NAME="$b" >/dev/null 2>&1 || vfail "make new-project failed for the second project"
 vinfo "provisioned two projects"
 
 # The printed block has to be usable, not merely printed. A paste-ready block
@@ -49,29 +39,29 @@ printf '%s' "$out" | grep -q "^DB_DATABASE=${a}$" \
     || vfail "the printed block names the wrong database"
 vinfo "printed a complete, paste-ready Laravel block"
 
-pw="$(cat "secrets/pg_${a}_user_password.txt")"
+pw="$(cat "$SCRATCH_DIR/secrets/pg_${a}_user_password.txt")"
 
 # The credentials must actually work.
-mdb_compose exec -T -e PGPASSWORD="$pw" pg \
+scratch_exec pg env PGPASSWORD="$pw" \
     psql -U "${a}_user" -d "$a" -tAc "SELECT 1" >/dev/null 2>&1 \
     || vfail "the printed credentials cannot connect to their own database"
 vinfo "credentials connect to their own database"
 
 # ...and must not reach the other project.
-if mdb_compose exec -T -e PGPASSWORD="$pw" pg \
+if scratch_exec pg env PGPASSWORD="$pw" \
     psql -U "${a}_user" -d "$b" -tAc "SELECT 1" >/dev/null 2>&1; then
     vfail "${a}_user reached database $b; new-project does not isolate"
 fi
 vinfo "denied on the other project's database"
 
 # No app role may hold superuser (SPEC section 9).
-super="$(mdb_compose exec -T pg psql -U postgres -tAc \
+super="$(scratch_exec pg psql -U postgres -tAc \
     "SELECT rolsuper FROM pg_roles WHERE rolname='${a}_user'" 2>/dev/null | tr -d ' \r')"
 [[ "$super" == "f" ]] || vfail "${a}_user holds superuser"
 vinfo "app role holds no superuser"
 
 # The readonly companion exists (SPEC section 8).
-ro="$(mdb_compose exec -T pg psql -U postgres -tAc \
+ro="$(scratch_exec pg psql -U postgres -tAc \
     "SELECT 1 FROM pg_roles WHERE rolname='${a}_user_readonly'" 2>/dev/null | tr -d ' \r')"
 [[ "$ro" == "1" ]] || vfail "no readonly companion role was created"
 vinfo "readonly companion role created"

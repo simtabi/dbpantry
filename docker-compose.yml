@@ -177,8 +177,9 @@ services:
     # no engine image needs an extra package.
     #
     # It deliberately does NOT assert that /backups is writable, though that is
-    # the failure worth catching. ./backups is created on the host by make init
-    # as the invoking user, and these containers run hardened under the engine's
+    # the failure worth catching. The backup directory (MDB_BACKUP_DIR,
+    # ./backups by default, which ships in the checkout) belongs to the invoking
+    # user on the host, and these containers run hardened under the engine's
     # own uid, so writability depends on host uid mapping and differs between a
     # laptop and a CI runner -- a healthcheck that fails there is reporting the
     # environment, not the container. Enforcing it belongs in scripts/backup,
@@ -205,7 +206,15 @@ services:
       # was disabled: nothing ever asked whether it was running.
       - ./engines:/mdb/engines:ro
       - ./secrets:/run/secrets:ro
-      - ./backups:/backups
+      # MDB_BACKUP_DIR, as scripts/backup resolves it on the host: relative to
+      # this directory, ./backups by default. The long form because a short-form
+      # source without ./ (the .env.example value is `backups`) is read as a named
+      # volume; check 71 renders each spelling.
+      - type: bind
+        source: ${MDB_BACKUP_DIR:-./backups}
+        target: /backups
+        bind:
+          create_host_path: true
       - ./.env:/mdb/.env:ro
     working_dir: /mdb
     networks: [mdb]
@@ -231,8 +240,9 @@ services:
     # no engine image needs an extra package.
     #
     # It deliberately does NOT assert that /backups is writable, though that is
-    # the failure worth catching. ./backups is created on the host by make init
-    # as the invoking user, and these containers run hardened under the engine's
+    # the failure worth catching. The backup directory (MDB_BACKUP_DIR,
+    # ./backups by default, which ships in the checkout) belongs to the invoking
+    # user on the host, and these containers run hardened under the engine's
     # own uid, so writability depends on host uid mapping and differs between a
     # laptop and a CI runner -- a healthcheck that fails there is reporting the
     # environment, not the container. Enforcing it belongs in scripts/backup,
@@ -258,7 +268,15 @@ services:
       # was disabled: nothing ever asked whether it was running.
       - ./engines:/mdb/engines:ro
       - ./secrets:/run/secrets:ro
-      - ./backups:/backups
+      # MDB_BACKUP_DIR, as scripts/backup resolves it on the host: relative to
+      # this directory, ./backups by default. The long form because a short-form
+      # source without ./ (the .env.example value is `backups`) is read as a named
+      # volume; check 71 renders each spelling.
+      - type: bind
+        source: ${MDB_BACKUP_DIR:-./backups}
+        target: /backups
+        bind:
+          create_host_path: true
       - ./.env:/mdb/.env:ro
     working_dir: /mdb
     networks: [mdb]
@@ -284,8 +302,9 @@ services:
     # no engine image needs an extra package.
     #
     # It deliberately does NOT assert that /backups is writable, though that is
-    # the failure worth catching. ./backups is created on the host by make init
-    # as the invoking user, and these containers run hardened under the engine's
+    # the failure worth catching. The backup directory (MDB_BACKUP_DIR,
+    # ./backups by default, which ships in the checkout) belongs to the invoking
+    # user on the host, and these containers run hardened under the engine's
     # own uid, so writability depends on host uid mapping and differs between a
     # laptop and a CI runner -- a healthcheck that fails there is reporting the
     # environment, not the container. Enforcing it belongs in scripts/backup,
@@ -311,7 +330,15 @@ services:
       # was disabled: nothing ever asked whether it was running.
       - ./engines:/mdb/engines:ro
       - ./secrets:/run/secrets:ro
-      - ./backups:/backups
+      # MDB_BACKUP_DIR, as scripts/backup resolves it on the host: relative to
+      # this directory, ./backups by default. The long form because a short-form
+      # source without ./ (the .env.example value is `backups`) is read as a named
+      # volume; check 71 renders each spelling.
+      - type: bind
+        source: ${MDB_BACKUP_DIR:-./backups}
+        target: /backups
+        bind:
+          create_host_path: true
       - ./.env:/mdb/.env:ro
     working_dir: /mdb
     networks: [mdb]

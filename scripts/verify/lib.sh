@@ -522,6 +522,16 @@ scratch_healthy() {
     scratch_run bash -c '. scripts/backend-lib.sh && for s in "$@"; do mdb_svc_healthy "$s" || exit 1; done' scratch_healthy "$@"
 }
 
+# Any runtime or backend library function, run in the scratch stack:
+#   scratch_call mdb_service_running adminer
+#   scratch_call mdb_compose logs --tail 20 caddy
+#   scratch_call mdb_project_volumes
+# Stack execs still go through scratch_exec (mdb_svc_exec, check 52).
+scratch_call() {
+    # shellcheck disable=SC2016  # expanded by the inner bash
+    scratch_run bash -c '. scripts/backend-lib.sh && "$@"' scratch_call "$@"
+}
+
 scratch_stack_cleanup() {
     local sdir="$1" proj="$2" v
     [[ "$proj" == mdbscratch* && -d "$sdir" && "$sdir" != "$MDB_ROOT" && "$sdir" == */mdb-scratch.* ]] || return 0
