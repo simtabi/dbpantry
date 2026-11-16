@@ -47,7 +47,7 @@ so a green `make verify` is the criteria being met rather than a proxy for it.
 | No Dockerfile passes a dnf-only flag to microdnf | `43-microdnf-flags` |
 | Go dependency floors are one file every image reads, never inline, compared by semver | `69-go-floors` |
 | Images take distribution updates whole, download only through a verified, retried helper; CI gates findings where caused | `70-supply-chain` |
-| Every profile combination renders with one authenticating pooler per upstream; prod publishes only poolers and the front door | `71-compose-profiles-render` |
+| Every profile combination renders with one authenticating pooler per upstream; prod publishes only poolers and the front door; the backup sidecars mount `MDB_BACKUP_DIR` as `scripts/backup` resolves it; `design.md` section 2 names every rendered service and its image | `71-compose-profiles-render` |
 | Every service drops privileges, has a health signal, is limited under prod and takes secrets as files; exceptions must stay needed | `72-service-hardening` |
 | Our images are named `localhost/` by default, nothing names a remote registry for them, and a set `MDB_IMAGE_PREFIX` or `global.imageRegistry` reaches every one | `73-images-local-by-default` |
 | No leftover old product name outside its history | `44-no-old-name` |

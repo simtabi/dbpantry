@@ -209,6 +209,10 @@ waiving them.
   exist and is not a known generated file.
 
 ### Fixed
+- **`design.md` matches the compose files.** Sections 2 and 3 still showed the step 1 plan (etcd `v3.6.6`,
+  HAProxy `3.2-alpine`, Caddy `2.10.2`, an `nfrastack/db-backup` service) and had no rows for MongoDB,
+  Cassandra, the poolers or Patroni. They now list what the compose files run, `MDB_BACKUP_DIR` is in the
+  variable reference, and check 71 fails when the service map and the rendered stack disagree (design.md D-79).
 - **The backup sidecars honour `MDB_BACKUP_DIR`.** `backup-pg`, `backup-mysql` and `backup-mariadb` bound
   `./backups` whatever `MDB_BACKUP_DIR` said, while `make backup`, `restore` and `verify-backups` used it, so
   scheduled and manual dumps went to different trees and each was pruned on its own. The sidecars now bind
