@@ -34,7 +34,10 @@ command -v python3 >/dev/null 2>&1 || vfail "python3 is required to read the ren
 
 # A scratch copy: gen-compose writes compose.engines.yml and friends into the
 # tree it runs from, and each case needs its own MDB_PUBLISH.
-s="$(mktemp -d "${TMPDIR:-/tmp}/mdb-render.XXXXXX")"; add_cleanup "rm -rf '$s'"
+# macOS's TMPDIR ends in a slash; Compose normalises the doubled slash away and
+# scripts/backup does not, so strip it or the backup cases compare T// with T/.
+tmpbase="${TMPDIR:-/tmp}"
+s="$(mktemp -d "${tmpbase%/}/mdb-render.XXXXXX")"; add_cleanup "rm -rf '$s'"
 rsync -a --exclude /.git --exclude /backups --exclude /secrets --exclude /certs \
     --exclude /build --exclude /.env --exclude /.env.prod "$MDB_ROOT/" "$s/" \
     || vfail "could not copy the checkout"
@@ -240,8 +243,16 @@ vinfo "$bcases MDB_BACKUP_DIR settings: every backup sidecar mounts the director
 # must have a row whose first `code` in the image cell is its image (`<ver>`
 # stands for a version variable, `<engine>` for an engine name), and
 # every row whose profile is not "—" (not a Compose service) must be rendered.
-render everything pg,mysql,mariadb,mongodb,cassandra,pooler,ui,backup,metrics,ha none false "$base_files"
-map_drift="$(python3 - "$s/out/everything.json" "$MDB_ROOT/design.md" <<'PY'
+#
+# design.md documents the default image names (localhost/...), so this render
+# pins MDB_IMAGE_PREFIX to its default: a user's registry override changes what
+# runs, not what design.md should say.
+design_render() {  # NAME
+    MDB_IMAGE_PREFIX=localhost render "$1" pg,mysql,mariadb,mongodb,cassandra,pooler,ui,backup,metrics,ha none false "$base_files"
+}
+# design_drift RENDERED_JSON DESIGN_MD -> prints one line per disagreement
+design_drift() {
+    python3 - "$1" "$2" <<'PY'
 import json, re, sys
 svc = json.load(open(sys.argv[1]))["services"]
 text = open(sys.argv[2]).read()
@@ -271,8 +282,21 @@ for name, (image, prof) in rows.items():
         bad.append(f"{name}: in design.md section 2 (profile {prof}), but no compose file defines it")
 print("\n".join(bad))
 PY
-)"
+}
+design_render everything
+map_drift="$(design_drift "$s/out/everything.json" "$MDB_ROOT/design.md")"
 [[ -z "$map_drift" ]] || { printf '      %s\n' "$map_drift" >&2; vfail "design.md section 2 disagrees with the compose files (listed above)"; }
 nsvc="$(python3 -c 'import json,sys; print(len(json.load(open(sys.argv[1]))["services"]))' "$s/out/everything.json")"
 (( nsvc >= 25 )) || vfail "the broadest render has $nsvc services; expected at least 25 (measured 2026-11-16)"
-vinfo "design.md section 2 names all $nsvc rendered services with the images they run"
+# A registry override in the caller's environment is not drift.
+MDB_IMAGE_PREFIX=registry.example.test/team design_render override
+drift="$(design_drift "$s/out/override.json" "$MDB_ROOT/design.md")"
+[[ -z "$drift" ]] || vfail "MDB_IMAGE_PREFIX=registry.example.test/team was read as design.md drift: $drift"
+# Negative control: a real disagreement is still reported.
+# shellcheck disable=SC2016  # backticks are design.md's code marks, not a substitution
+sed 's#`localhost/dbpantry-pg:<ver>`#`localhost/dbpantry-postgres:<ver>`#' "$MDB_ROOT/design.md" > "$s/design-drifted.md"
+cmp -s "$MDB_ROOT/design.md" "$s/design-drifted.md" && vfail "the negative control did not change design.md's pg row"
+drift="$(design_drift "$s/out/everything.json" "$s/design-drifted.md")"
+[[ "$drift" == *"pg: design.md says localhost/dbpantry-postgres:<ver>"* ]] \
+    || vfail "a renamed pg image in design.md was not reported: [$drift]"
+vinfo "design.md section 2 names all $nsvc rendered services with the images they run (a prefix override is not drift; a renamed image is)"
