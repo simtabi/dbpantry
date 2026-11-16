@@ -219,7 +219,7 @@ $out
     bcases=$(( bcases + 1 ))
 }
 backup_case unset    ''                                ''            "$s/backups"
-backup_case example  'MDB_BACKUP_DIR=backups'          ''            "$s/backups"
+backup_case example  "$(grep -m1 '^MDB_BACKUP_DIR=' "$MDB_ROOT/.env.example")" '' "$s/backups"
 backup_case relative 'MDB_BACKUP_DIR=dumps/nightly'    ''            "$s/dumps/nightly"
 backup_case dotted   'MDB_BACKUP_DIR=./dumps'          ''            "$s/dumps"
 backup_case absolute "MDB_BACKUP_DIR=$s/abs-dumps"     ''            "$s/abs-dumps"
