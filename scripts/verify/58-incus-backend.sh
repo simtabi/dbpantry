@@ -122,6 +122,21 @@ for v in vol-pg-pitr mdbverify_pg_pitr; do
 done
 bash -c "$recovery"$'\n''is_recovery_volume "$1"' _ vol-pg-data && vfail "destroy treats vol-pg-data as a recovery volume"
 
+# incus-compose logs has -f and nothing else (1.3.5): `make logs` passes
+# `-f --tail=100`, which failed on the live host on 2026-11-16. Follow is sent as
+# --follow, because a bare -f reads as --file and drops the stack's files.
+got="$(inc "$P" 'mdb_be_logs -f --tail=100')"
+grep -qx "incus-compose -f $tmp/root/compose.yml --profile \* logs --follow" "$log" \
+    || vfail "logs -f --tail=100 does not reach incus-compose as logs --follow with the stack's files: $(cat "$log")"
+[[ "$got" == *"has no --tail=100"* ]] || vfail "dropping --tail=100 is not reported: [$got]"
+inc "$P" 'mdb_be_logs --tail 50 --since 1h -t pg' >/dev/null
+grep -qx "incus-compose -f $tmp/root/compose.yml --profile \* logs pg" "$log" \
+    || vfail "a Compose-only option or its value reached incus-compose logs: $(cat "$log")"
+got="$(inc "$P" 'mdb_be_logs --follow pg')"
+grep -qx "incus-compose -f $tmp/root/compose.yml --profile \* logs --follow pg" "$log" \
+    || vfail "logs --follow SERVICE is not passed as it is: $(cat "$log")"
+[[ -z "$got" ]] || vfail "a supported logs call printed a note: [$got]"
+
 inc "$P" 'mdb_be_down' >/dev/null
 grep -q "^incus-compose -f $tmp/root/compose.yml --profile \* down$" "$log" || vfail "down is not incus-compose down over every profile: $(cat "$log")"
 

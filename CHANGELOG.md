@@ -233,6 +233,10 @@ waiving them.
   exist and is not a known generated file.
 
 ### Fixed
+- **`make logs` works on Incus.** It passed Compose's `--tail=100`, which incus-compose (1.3.5) refuses
+  because its `logs` takes only `-f` and service names. The Incus backend now drops Compose-only log options
+  with a note and shows the whole log. It also sends follow as `--follow`: a bare `-f` was read as `--file`,
+  which left out the stack's compose files (check 58).
 - **The prod overlay's `pgbouncer` service is now the HA pooler** (design.md D-72). It had no credential and
   pointed at `pg`, so wherever the overlay applied it restarted forever beside `pg-pooler`. It is defined in
   `compose.ha.yml` in front of HAProxy's write port (`make up PROFILES=ha,pooler`), and the overlay entry only

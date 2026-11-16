@@ -76,7 +76,28 @@ _mdb_incus_instance() { printf '%s-1\n' "$1"; }
 
 _mdb_be_incus_down()   { _mdb_incus_compose --profile '*' "$@" down; }
 _mdb_be_incus_status() { _mdb_incus_compose --profile '*' "$@" ps; }
-_mdb_be_incus_logs()   { _mdb_incus_compose --profile '*' logs "$@"; }
+
+# incus-compose logs takes -f/--follow and service names, nothing else (1.3.5,
+# cmd/incus-compose/logs.go): `make logs` passes Compose's --tail=100, which it
+# refuses as an undefined flag. The Compose-only options are dropped with a note;
+# those that take a value drop it too.
+_mdb_be_incus_logs() {
+    local -a keep=() dropped=()
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            # Spelled out: _mdb_incus_compose reads a bare -f as --file and
+            # would then leave out the stack's compose files.
+            -f|--follow) keep+=(--follow) ;;
+            --tail|-n|--since|--until|--index) dropped+=("$1 ${2-}"); [[ $# -gt 1 ]] && shift ;;
+            -*) dropped+=("$1") ;;
+            *) keep+=("$1") ;;
+        esac
+        shift
+    done
+    [[ ${#dropped[@]} -eq 0 ]] \
+        || _mdb_rt_err "incus-compose logs has no ${dropped[*]}; showing the whole log"
+    _mdb_incus_compose --profile '*' logs "${keep[@]}"
+}
 
 # Running services: RUNNING instances named <service>-<n>, minus the healthd
 # sidecar and one-off helpers incus-compose may add.

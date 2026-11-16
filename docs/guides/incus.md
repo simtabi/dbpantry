@@ -10,8 +10,10 @@ do on Compose.
 > run end to end on Ubuntu 26.04 (arm64) with Incus 7.0.2 and incus-compose
 > 1.3.5: `make init`, `make up` with every service `healthy`, `make status`,
 > `make logs`, a query through the backend's exec, `make backup ENGINE=pg`,
-> and a row surviving `make down` and `make up`. The other engines, HA and PITR
-> have not been run on Incus. Verify check 58 pins the mapping against stub
+> and a row surviving `make down` and `make up`. On 2026-11-16 the same run was
+> repeated on the same OS and versions, from `main` at `00726f1`: every step passed
+> except `make logs`, which incus-compose refused over `--tail` (fixed since). The
+> other engines, HA and PITR have not been run on Incus. Verify check 58 pins the mapping against stub
 > binaries.
 
 ## Requirements
@@ -66,7 +68,7 @@ incus config get pg-1 user.healthcheck.status --project mdb
 | Verb | Incus |
 |---|---|
 | up | `incus-compose up -d`, then wait for every service's `user.healthcheck.status` to be `healthy` (written by the ic-healthd sidecar) |
-| down, status, logs | `incus-compose down`, `ps`, `logs` |
+| down, status, logs | `incus-compose down`, `ps`, `logs`; `logs` takes only `-f` and service names, so Compose's `--tail`, `--since` and the like are dropped with a note |
 | exec `[-u USER]` | `incus-compose exec -T [-u UID] SERVICE ...`; a user name is resolved to its uid inside the instance first |
 | cp | `incus-compose cp SERVICE:PATH DEST` |
 | running, health | `incus list --project P` (RUNNING `<service>-<n>`) and `user.healthcheck.status` |
