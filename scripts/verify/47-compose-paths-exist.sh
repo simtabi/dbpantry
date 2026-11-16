@@ -44,8 +44,8 @@ done
 missing=0
 checked=0
 for f in "${files[@]}"; do
-    # Short-form bind mounts (- ./src:/dst[:ro]) and long-form secret files
-    # (file: ./src). Build contexts are handled below with their dockerfile.
+    # Short-form bind mounts (- ./src:/dst[:ro]), long-form bind sources
+    # (source: ./src) and long-form secret files (file: ./src). Build contexts are handled below with their dockerfile.
     while IFS= read -r src; do
         src="${src#./}"
         checked=$(( checked + 1 ))
@@ -57,8 +57,12 @@ for f in "${files[@]}"; do
             printf '      %s: mount source %s does not exist\n' "$f" "$src" >&2
         fi
         missing=$(( missing + 1 ))
-    done < <(grep -hE '^[[:space:]]*-[[:space:]]+"?\./[^:"]+:|^[[:space:]]*file:[[:space:]]+\./' "$f" \
-                | sed -E 's/^[[:space:]]*(-|file:)[[:space:]]+"?//; s/[:"].*$//')
+    done < <({ grep -hE '^[[:space:]]*-[[:space:]]+"?\./[^:"]+:|^[[:space:]]*file:[[:space:]]+\./' "$f" \
+                | sed -E 's/^[[:space:]]*(-|file:)[[:space:]]+"?//; s/[:"].*$//'
+              # Long-form bind sources, including ${VAR:-./default}: the default
+              # is what a fresh clone mounts (the backup sidecars' MDB_BACKUP_DIR).
+              grep -hE '^[[:space:]]*source:[[:space:]]+"?(\$\{[A-Z0-9_]+:-)?\./' "$f" \
+                | sed -E 's/^[[:space:]]*source:[[:space:]]+"?(\$\{[A-Z0-9_]+:-)?//; s/[}"].*$//'; })
 
     # context: ./dir followed by dockerfile: rel/path, resolved against the context.
     ctx=""

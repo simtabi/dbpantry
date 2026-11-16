@@ -237,6 +237,23 @@ waiving them.
   `build/`, which is gitignored and no build step touches. Check 70's scratch repository read the operator's global
   git config, where git 2.5x runs hooks declared as `hook.<name>.command` whatever `core.hooksPath` says, so a
   global commit hook could refuse its commits; it now reads no global or system config.
+- **`design.md` matches the compose files.** Sections 2 and 3 still showed the step 1 plan (etcd `v3.6.6`,
+  HAProxy `3.2-alpine`, Caddy `2.10.2`, an `nfrastack/db-backup` service) and had no rows for MongoDB,
+  Cassandra, the poolers or Patroni. They now list what the compose files run, `MDB_BACKUP_DIR` is in the
+  variable reference, and check 71 fails when the service map and the rendered stack disagree (design.md D-79).
+- **The backup sidecars honour `MDB_BACKUP_DIR`.** `backup-pg`, `backup-mysql` and `backup-mariadb` bound
+  `./backups` whatever `MDB_BACKUP_DIR` said, while `make backup`, `restore` and `verify-backups` used it, so
+  scheduled and manual dumps went to different trees and each was pruned on its own. The sidecars now bind
+  `${MDB_BACKUP_DIR:-./backups}` (long form, so the `.env.example` spelling `backups` is a path, not a named
+  volume); the default is unchanged. Check 71 renders six settings against what `scripts/backup` resolves,
+  and check 47 now reads long-form bind sources.
+- **Verify checks stop only what they started.** Checks 15, 18, 24, 25, 28 and 35 booted the operator's
+  Compose project and ran `make down` on it, stopping every service there, including ones the check never
+  started; check 26 ran `make down` without starting anything. Each now runs in a stack of its own
+  (`scratch_stack`, with a new `scratch_call` helper for runtime functions), and 26 no longer stops a stack.
+  Check 60 fails any check that runs a whole-stack down outside its own stack (through make, Compose, the
+  runtime or the `dbpantry` binary); check 27's pre-boot
+  `make down` (its stack needs the ports the operator's holds) is its one exemption.
 - **`make logs` works on Incus.** It passed Compose's `--tail=100`, which incus-compose (1.3.5) refuses
   because its `logs` takes only `-f` and service names. The Incus backend now drops Compose-only log options
   with a note and shows the whole log. It also sends follow as `--follow`: a bare `-f` was read as `--file`,

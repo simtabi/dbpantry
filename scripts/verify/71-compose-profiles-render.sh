@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# verify: every supported profile combination renders, runs one authenticating pooler per upstream, and the prod overlay publishes only poolers and the front door
+# verify: every supported profile combination renders, runs one authenticating pooler per upstream, the prod overlay publishes only poolers and the front door, backup sidecars mount MDB_BACKUP_DIR, and design.md names every service and image
 # tags: structure prod pooling
 # phase: 6
 
@@ -34,7 +34,10 @@ command -v python3 >/dev/null 2>&1 || vfail "python3 is required to read the ren
 
 # A scratch copy: gen-compose writes compose.engines.yml and friends into the
 # tree it runs from, and each case needs its own MDB_PUBLISH.
-s="$(mktemp -d "${TMPDIR:-/tmp}/mdb-render.XXXXXX")"; add_cleanup "rm -rf '$s'"
+# macOS's TMPDIR ends in a slash; Compose normalises the doubled slash away and
+# scripts/backup does not, so strip it or the backup cases compare T// with T/.
+tmpbase="${TMPDIR:-/tmp}"
+s="$(mktemp -d "${tmpbase%/}/mdb-render.XXXXXX")"; add_cleanup "rm -rf '$s'"
 rsync -a --exclude /.git --exclude /backups --exclude /secrets --exclude /certs \
     --exclude /build --exclude /.env --exclude /.env.prod "$MDB_ROOT/" "$s/" \
     || vfail "could not copy the checkout"
@@ -171,3 +174,129 @@ vinfo "the HA pooler's environment matches pg-pooler's apart from its upstream"
 leak="$(cd "$s" && COMPOSE_PROFILES=pg,pg-pooler MDB_ENV_FILE="$s/.env" scripts/helm-values 2>/dev/null | grep -c '_POOLER_ADDR' || true)"
 [[ "$leak" == 0 ]] || vfail "helm-values carries $leak Compose pooler address(es) into the chart"
 vinfo "no Compose pooler address reaches the Helm values"
+
+# --- the backup sidecars mount MDB_BACKUP_DIR ----------------------------------
+#
+# scripts/backup, restore and verify-backups resolve MDB_BACKUP_DIR (the
+# environment, then .env, then backups/, relative to the checkout). The backup
+# sidecars mounted ./backups whatever it said, so a configured directory got
+# the manual dumps and never the scheduled ones, and retention pruned one tree
+# while the other grew. Each case renders the backup profile and reads where
+# every sidecar's /backups comes from.
+# backup_source NAME ENV_LINE ENV_VALUE -> one "service source" line per sidecar
+backup_source() {
+    local name="$1" line="$2" val="$3"
+    local -a args=() envset=()
+    grep -v '^MDB_BACKUP_DIR=' "$MDB_ROOT/.env.example" > "$s/.env"
+    [[ -n "$line" ]] && printf '\n%s\n' "$line" >> "$s/.env"
+    printf 'COMPOSE_FILE=%s\n' "$base_files" >> "$s/.env"
+    ( cd "$s" && MDB_ENV_FILE="$s/.env" scripts/gen-compose >/dev/null ) || vfail "$name: gen-compose failed"
+    local f
+    for f in ${base_files//:/ }; do args+=(-f "$s/$f"); done
+    [[ -z "$val" ]] || envset=(MDB_BACKUP_DIR="$val")
+    # shellcheck disable=SC2016  # expanded by the inner bash
+    ( cd "$s" && env -u COMPOSE_FILE -u COMPOSE_PROFILES -u MDB_BACKUP_DIR COMPOSE_PROJECT_NAME=mdbrender ${envset[@]+"${envset[@]}"} bash -c '. scripts/runtime-lib.sh && mdb_compose "$@"' mdb_compose \
+            --project-directory "$s" --env-file "$s/.env" "${args[@]}" \
+            --profile pg --profile mysql --profile mariadb --profile backup \
+            config --format json > "$s/out/backup-$name.json" 2> "$s/out/backup-$name.err" ) \
+        || { sed 's/^/      /' "$s/out/backup-$name.err" >&2; vfail "backup-$name: compose config failed"; }
+    python3 - "$s/out/backup-$name.json" <<'PY'
+import json, sys
+svc = json.load(open(sys.argv[1]))["services"]
+for name in sorted(n for n in svc if n.startswith("backup-")):
+    src = [v.get("source") for v in svc[name].get("volumes") or [] if v.get("target") == "/backups"]
+    print(name, " ".join(str(x) for x in src) or "none")
+PY
+}
+
+bcases=0
+backup_case() {  # NAME ENV_LINE ENV_VALUE EXPECTED
+    local out want n
+    out="$(backup_source "$1" "$2" "$3")"
+    n="$(printf '%s\n' "$out" | grep -c '^backup-' || true)"
+    (( n == 3 )) || vfail "backup-$1: expected 3 backup sidecars, rendered $n: $out"
+    want="$(printf 'backup-%s %s\n' mariadb "$4" mysql "$4" pg "$4")"
+    [[ "$out" == "$want" ]] || vfail "backup-$1: the sidecars mount
+$out
+       but scripts/backup writes to $4"
+    bcases=$(( bcases + 1 ))
+}
+backup_case unset    ''                                ''            "$s/backups"
+backup_case example  "$(grep -m1 '^MDB_BACKUP_DIR=' "$MDB_ROOT/.env.example")" '' "$s/backups"
+backup_case relative 'MDB_BACKUP_DIR=dumps/nightly'    ''            "$s/dumps/nightly"
+backup_case dotted   'MDB_BACKUP_DIR=./dumps'          ''            "$s/dumps"
+backup_case absolute "MDB_BACKUP_DIR=$s/abs-dumps"     ''            "$s/abs-dumps"
+backup_case environ  'MDB_BACKUP_DIR=dumps/nightly'    "$s/env-dumps" "$s/env-dumps"
+(( bcases == 6 )) || vfail "rendered $bcases backup case(s), expected 6"
+# The same answer scripts/backup gives, for the relative case.
+# shellcheck disable=SC2016  # expanded by the inner bash
+got="$(cd "$s" && env -u MDB_BACKUP_DIR bash -c '. scripts/env-lib.sh; mdb_backup_dir "$PWD" "$PWD/.env"')"
+[[ "$got" == "$s/dumps/nightly" ]] || vfail "scripts resolve MDB_BACKUP_DIR to $got, the sidecars to $s/dumps/nightly"
+vinfo "$bcases MDB_BACKUP_DIR settings: every backup sidecar mounts the directory scripts/backup writes to"
+
+# --- design.md's service map is the rendered stack ------------------------------
+#
+# design.md section 2 lists every service and its image. It drifted from the
+# compose files for months (etcd, HAProxy and Caddy on the step 1 plan, one
+# db-backup service where three sidecars run, no MongoDB, Cassandra, ProxySQL
+# or Patroni rows) and nothing noticed. Every service of the broadest render
+# must have a row whose first `code` in the image cell is its image (`<ver>`
+# stands for a version variable, `<engine>` for an engine name), and
+# every row whose profile is not "—" (not a Compose service) must be rendered.
+#
+# design.md documents the default image names (localhost/...), so this render
+# pins MDB_IMAGE_PREFIX to its default: a user's registry override changes what
+# runs, not what design.md should say.
+design_render() {  # NAME
+    MDB_IMAGE_PREFIX=localhost render "$1" pg,mysql,mariadb,mongodb,cassandra,pooler,ui,backup,metrics,ha none false "$base_files"
+}
+# design_drift RENDERED_JSON DESIGN_MD -> prints one line per disagreement
+design_drift() {
+    python3 - "$1" "$2" <<'PY'
+import json, re, sys
+svc = json.load(open(sys.argv[1]))["services"]
+text = open(sys.argv[2]).read()
+sec = text.split("\n## 2.", 1)[1].split("\n## ", 1)[0]
+rows = {}
+for line in sec.splitlines():
+    cells = [c.strip() for c in line.strip().strip("|").split("|")]
+    if len(cells) < 3 or not cells[0].startswith("`"):
+        continue
+    names = re.findall(r"`([^`]+)`", cells[0])
+    first = re.search(r"`([^`]+)`", cells[1])
+    image = first.group(1) if first else cells[1]
+    for n in names:
+        rows[n] = (image, cells[2])
+bad = []
+for name, d in svc.items():
+    if name not in rows:
+        bad.append(f"{name}: rendered, but design.md section 2 has no row for it")
+        continue
+    got = str(d.get("image", "")).split("@")[0]
+    want = rows[name][0]
+    pat = "^" + re.escape(want).replace(re.escape("<ver>"), "[^:/@]+").replace(re.escape("<engine>"), "[a-z]+") + "$"
+    if not re.match(pat, got):
+        bad.append(f"{name}: design.md says {want}, the compose files run {got}")
+for name, (image, prof) in rows.items():
+    if not prof.startswith("—") and name not in svc:
+        bad.append(f"{name}: in design.md section 2 (profile {prof}), but no compose file defines it")
+print("\n".join(bad))
+PY
+}
+design_render everything
+map_drift="$(design_drift "$s/out/everything.json" "$MDB_ROOT/design.md")"
+[[ -z "$map_drift" ]] || { printf '      %s\n' "$map_drift" >&2; vfail "design.md section 2 disagrees with the compose files (listed above)"; }
+nsvc="$(python3 -c 'import json,sys; print(len(json.load(open(sys.argv[1]))["services"]))' "$s/out/everything.json")"
+(( nsvc >= 25 )) || vfail "the broadest render has $nsvc services; expected at least 25 (measured 2026-11-16)"
+# A registry override in the caller's environment is not drift.
+MDB_IMAGE_PREFIX=registry.example.test/team design_render override
+drift="$(design_drift "$s/out/override.json" "$MDB_ROOT/design.md")"
+[[ -z "$drift" ]] || vfail "MDB_IMAGE_PREFIX=registry.example.test/team was read as design.md drift: $drift"
+# Negative control: a real disagreement is still reported.
+# shellcheck disable=SC2016  # backticks are design.md's code marks, not a substitution
+sed 's#`localhost/dbpantry-pg:<ver>`#`localhost/dbpantry-postgres:<ver>`#' "$MDB_ROOT/design.md" > "$s/design-drifted.md"
+cmp -s "$MDB_ROOT/design.md" "$s/design-drifted.md" && vfail "the negative control did not change design.md's pg row"
+drift="$(design_drift "$s/out/everything.json" "$s/design-drifted.md")"
+[[ "$drift" == *"pg: design.md says localhost/dbpantry-postgres:<ver>"* ]] \
+    || vfail "a renamed pg image in design.md was not reported: [$drift]"
+vinfo "design.md section 2 names all $nsvc rendered services with the images they run (a prefix override is not drift; a renamed image is)"

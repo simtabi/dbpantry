@@ -50,22 +50,21 @@ printf '%s' "$metrics" | grep -q '^pg_up' \
 vinfo "embedded exporter serves metrics on 9187"
 
 # --- the metrics profile under compose ---------------------------------------
-cd "$MDB_ROOT" || exit 1
 need_file "$MDB_ROOT/docker-compose.yml"
 
-mdb_up PROFILES=pg,metrics || vfail "make up PROFILES=pg,metrics failed"
-add_cleanup 'make down'
+# In a stack of its own (scratch_stack). It used to boot the operator's project
+# and `make down` it at exit, stopping every service there.
+scratch_stack "pg,metrics"
+scratch_up || vfail "make up PROFILES=pg,metrics failed"
 
-# shellcheck disable=SC2016  # evaluated by the subshell, not here
-wait_for 60 "the pg-exporter service" bash -c \
-    'mdb_service_running pg-exporter'
+wait_for 60 "the pg-exporter service" scratch_call mdb_service_running pg-exporter
 
 # Exporters must stay on the internal network, unpublished (SPEC section 7).
 # Read through `port`, not `compose ps --format '{{.Ports}}'`: the ps template
 # fields differ between Compose implementations, `port` does not (D-60).
 published=""
 for svc in pg-exporter mysql-exporter; do
-    for id in $(mdb_compose ps -q "$svc" 2>/dev/null); do
+    for id in $(scratch_call mdb_compose ps -q "$svc" 2>/dev/null); do
         p="$(mdb_ctr port "$id" 2>/dev/null || true)"
         [[ -n "$p" ]] && published+="$svc: $p "
     done
@@ -87,7 +86,7 @@ mdb_ctr run --rm --user 0 --entrypoint sh -v "$permvol:/s" "$img" -c \
     'echo pw > /s/p.txt && chown -R 4242:4242 /s && chmod 0700 /s && chmod 0600 /s/p.txt' \
     >/dev/null 2>&1 || vfail "could not prepare the permissions volume"
 for svc in pg-exporter mysqld-exporter; do
-    id="$(mdb_compose ps -q "$svc" 2>/dev/null | head -1)"
+    id="$(scratch_call mdb_compose ps -q "$svc" 2>/dev/null | head -1)"
     [[ -n "$id" ]] || vfail "$svc has no container under the metrics profile"
     user="$(mdb_ctr inspect -f '{{.Config.User}}' "$id" 2>/dev/null)"
     eimg="$(mdb_ctr inspect -f '{{.Config.Image}}' "$id" 2>/dev/null)"

@@ -20,25 +20,34 @@ Resolves the three-way conflict recorded in decision **D-02**.
 
 ## 2. Final service map
 
-| Service | Image | Profile | Internal port | Host port env | Published by default |
+The compose files are the source of truth for every row here; check 71 renders the broadest
+combination and fails when a service, or the image it runs, differs from this table (D-79).
+`<ver>` is the engine's version variable (`MDB_PG_VERSION` and so on). Host ports follow
+`MDB_PUBLISH`: in `direct` and `proxy` mode an engine is `MDB_PORT_BASE` + its offset and a pooler
+that + 100 (`make endpoints` prints them); in `none` (the default) nothing but Caddy is published.
+
+| Service | Image | Profile | Internal port | Host port | Published by default |
 |---|---|---|---|---|---|
-| `pg` | `localhost/dbpantry-pg:<ver>` | `pg` | 5432 | `MDB_PG_HOST_PORT` | no |
-| `mysql` | `localhost/dbpantry-mysql:<ver>` | `mysql` | 3306 | `MDB_MYSQL_HOST_PORT` | no |
-| `mariadb` | `localhost/dbpantry-mariadb:<ver>` | `mariadb` | 3306 | `MDB_MARIADB_HOST_PORT` (3307) | no |
-| `adminer` | `adminer:5.4.1` | `ui` | 8080 | `MDB_ADMINER_HOST_PORT` | no (via Caddy) |
-| `phpmyadmin` | `phpmyadmin:5.2.3` | `ui` | 80 | `MDB_PMA_HOST_PORT` | no (via Caddy) |
-| `pgadmin` | `dpage/pgadmin4:9.9` | `ui` | 80 | `MDB_PGADMIN_HOST_PORT` | no (via Caddy) |
-| `caddy` | `caddy:2.10.2` | `ui`, `prod` | 80/443 | `MDB_CADDY_HTTP_PORT` / `_HTTPS_PORT` | yes (the only web surface) |
-| `backup` | `nfrastack/db-backup:4.9.0` | `backup` | — | — | no |
-| `pgbackrest` | built into `dbpantry-pg` | `prod`, `ha` | — | — | no |
+| `pg` | `localhost/dbpantry-pg:<ver>` | `pg` | 5432 | `MDB_PORT_BASE` + 0 | no |
+| `mysql` | `localhost/dbpantry-mysql:<ver>` | `mysql` | 3306 | `MDB_PORT_BASE` + 1 | no |
+| `mariadb` | `localhost/dbpantry-mariadb:<ver>` | `mariadb` | 3306 | `MDB_PORT_BASE` + its offset | no |
+| `mongodb` | `docker.io/library/mongo:<ver>` | `mongodb` | 27017 | `MDB_PORT_BASE` + its offset | no |
+| `cassandra` | `localhost/dbpantry-cassandra:<ver>` | `cassandra` | 9042 | `MDB_PORT_BASE` + its offset | no |
+| `pg-pooler` | `localhost/dbpantry-pgbouncer:dev` | `pooler` (`pg-pooler`) | 6432 | `MDB_PORT_BASE` + 100 | no |
+| `mysql-pooler`, `mariadb-pooler` | `docker.io/proxysql/proxysql:3.0.10` | `pooler` | 6033 | `MDB_PORT_BASE` + offset + 100 | no |
+| `adminer` | `docker.io/library/adminer:5.4.1` | `ui` | 8080 | `MDB_ADMINER_HOST_PORT` | no (via Caddy) |
+| `phpmyadmin` | `docker.io/library/phpmyadmin:5.2.3` | `ui` | 80 | `MDB_PMA_HOST_PORT` | no (via Caddy) |
+| `pgadmin` | `docker.io/dpage/pgadmin4:9.9` | `ui` | 80 | `MDB_PGADMIN_HOST_PORT` | no (via Caddy) |
+| `caddy` | `localhost/dbpantry-caddy:dev` (built on `caddy:2.11.4`) | `ui`, `prod` | 80/443 | `MDB_CADDY_HTTP_PORT` / `_HTTPS_PORT` | yes (the only web surface) |
+| `backup-pg`, `backup-mysql`, `backup-mariadb` | the engine's own image (`localhost/dbpantry-<engine>:<ver>`), running `scripts/backup --schedule` | `backup` | — | — | no |
 | `pg-exporter` | `quay.io/prometheuscommunity/postgres-exporter:v0.20.1` | `metrics` | 9187 | — | no |
 | `mysqld-exporter` | `docker.io/prom/mysqld-exporter:v0.19.0` | `metrics` | 9104 | — | no |
-| `pgbouncer` | `dbpantry-pgbouncer` (built) | `prod` (required), `ha` | 6432 | `MDB_PGBOUNCER_HOST_PORT` | no |
-| `etcd` | `gcr.io/etcd-development/etcd:v3.6.6` | `ha` | 2379/2380 | — | no |
-| `haproxy` | `haproxy:3.2-alpine` | `ha` | 5432 w / 5433 r | `MDB_HAPROXY_*_PORT` | no |
-| `cli` | `localhost/dbpantry-cli:<ver>` | on demand | — | — | no |
-
-The exporter rows match `docker-compose.yml` as of 2026-11-03. The compose files are the source of truth for every image here; the `etcd`, `haproxy` and `caddy` rows above still show the step 1 plan and differ from `compose.ha.yml` (`quay.io/coreos/etcd:v3.5.21`, `haproxy:3.0-alpine`) and `docker-compose.yml` (the built `dbpantry-caddy` image).
+| `etcd1`, `etcd2`, `etcd3` | `quay.io/coreos/etcd:v3.5.21` | `ha` | 2379/2380 | — | no |
+| `patroni1`, `patroni2`, `patroni3` | `localhost/dbpantry-patroni:<ver>` | `ha` | 5432 | — | no |
+| `haproxy` | `docker.io/library/haproxy:3.0-alpine` | `ha` | 5432 w / 5433 r | `MDB_HAPROXY_*_PORT` | no |
+| `pgbouncer` | `localhost/dbpantry-pgbouncer:dev` | `ha,pooler` (`ha-pooler`) | 6432 | `MDB_HA_POOLER_HOST_PORT` | no |
+| `pgbackrest` | built into `dbpantry-pg` | — (in the pg image, under `prod` and `ha`) | — | — | no |
+| `cli` | `localhost/dbpantry-cli:<ver>` | — (on demand, `make shell`) | — | — | no |
 
 Profiles: engine selectors `pg` / `mysql` / `mariadb`; mode overlays `ui` / `backup` / `metrics` / `prod` / `test` / `ha`. Default `COMPOSE_PROFILES=pg,ui`.
 
@@ -61,14 +70,16 @@ All digests resolved from the live registry this session. **Every image below is
 | Adminer | `5.4.1` | `sha256:a3167350c4eb9ae4473b8ea0f49c8e5ae74c87b240ee2f6086521dba2a6bf243` | [adminer](https://hub.docker.com/_/adminer) |
 | phpMyAdmin | `5.2.3` | `sha256:5e2289bcd500868ed4ac9261ddd7cbcc6e20036f83031ade72667b15dca31c60` | [phpmyadmin](https://hub.docker.com/_/phpmyadmin) |
 | pgAdmin | `9.9` | `sha256:5d9624a93634d1c5e595619cc57b1d330758120d1baf445fa97300c0c1fc3c0a` | [pgadmin4](https://www.pgadmin.org/docs/pgadmin4/latest/container_deployment.html) |
-| Caddy | `2.10.2` | `sha256:c3d7ee5d2b11f9dc54f947f68a734c84e9c9666c92c88a7f30b9cba5da182adb` | [caddy](https://caddyserver.com/docs/) |
+| Caddy | `2.11.4` (base of the built `dbpantry-caddy`; builder `2.11.4-builder`) | `sha256:844f60b64e4724a5aa8245e019dace0d3f199f7433ce6c57676cb30a920dbad9` | [caddy](https://caddyserver.com/docs/); as pinned in `images/caddy/Dockerfile` |
 | pgBouncer | `dbpantry-pgbouncer` (built from `debian:12-slim` + PGDG) | n/a — built here | see **D-10**, superseded by **D-48** |
 | Go toolchain (build stage) | `golang:1.27.3-bookworm` | `sha256:d9b6a1beb9474adc2a1ce842573639b44b2a0dd49b6669f51d3821baf9ec37c9` | [golang](https://hub.docker.com/_/golang); see **D-51** |
 | gosu / rclone / postgres_exporter (in-image) | `1.19` / `v1.75.1` / `v0.20.1`, rebuilt from tag | n/a — built here | see **D-51** |
 | postgres_exporter | `v0.20.1` | `sha256:ac5ec343104fae0e2d84a27bb8d69b38430a11910c5382cad85d478d2bab713e` | prometheus-community; as pinned in `docker-compose.yml` |
 | mysqld_exporter | `v0.19.0` | `sha256:eacb4b18e2ec1e0abdf2d64851b68526c964f6d9cb3e9458fb5d5f5062ea94c1` | prometheus; as pinned in `docker-compose.yml` |
-| db-backup | `nfrastack/db-backup:4.9.0` | `sha256:80d3bc0524611d85fd82738b228f88a92077ad2d0a36ae32237d6a25a93e2439` | see **D-03** |
-| etcd | `v3.6.6` | `sha256:60a30b5d81b2217555e2cfb9537f655b7ba97220b99c39ee2e162a7127225890` | etcd-development |
+| Backup sidecars | the engine images, running `scripts/backup --schedule` | n/a — built here | `nfrastack/db-backup` (D-03) was the step 1 plan and never shipped; see **D-79** |
+| etcd | `quay.io/coreos/etcd:v3.5.21` | `sha256:a3ccd299377af4b9968d8cbaaf9722fe354297f11908f74a846075e1e5f4ee89` | etcd-development; as pinned in `compose.ha.yml` |
+| HAProxy | `docker.io/library/haproxy:3.0-alpine` | `sha256:7c8dac975b9def049d6585b7efe865486acaa7b6ec5e74eec45f08fde8bb2ad4` | as pinned in `compose.ha.yml` |
+| ProxySQL | `docker.io/proxysql/proxysql:3.0.10` | `sha256:47437a4522a9f86690cfd730e97649e15a4e33b01bca9c093717a39296e04024` | as pinned by the MySQL-family descriptors |
 | s6-overlay | `v3.2.3.2` (2026-07-16) | release assets `s6-overlay-{noarch,x86_64,aarch64}.tar.xz` | [s6-overlay](https://github.com/just-containers/s6-overlay) |
 | Patroni | `4.1.4` (pip) | no image published — see **D-11** | [patroni](https://github.com/patroni/patroni) |
 | pgBackRest | `2.59.0` | PGDG apt package | [pgbackrest](https://pgbackrest.org) |
@@ -168,6 +179,7 @@ Reproduced from spec.md section 21.1 as the sizing contract:
 ### Backup
 | Variable | Default | Description | Profile |
 |---|---|---|---|
+| `MDB_BACKUP_DIR` | `backups` | Where dumps go, relative to the checkout or absolute; the environment wins over `.env`. `make backup`/`restore`/`verify-backups` and the backup sidecars' `/backups` bind all use it (D-79) | all |
 | `MDB_BACKUP_SCHEDULE` | `0300` | Nightly start (HHMM) | `backup` |
 | `MDB_BACKUP_COMPRESSION` | `ZSTD` | Maps to `DBnn_COMPRESSION` | `backup` |
 | `MDB_BACKUP_ENCRYPT` | `false` | Reserved: nothing encrypts dumps yet; check-env warns on `true` | `backup` |
@@ -494,6 +506,8 @@ Relied on: pgBouncer configuration reference (<https://www.pgbouncer.org/config.
 
 **D-78: our images are named localhost/dbpantry-*, from one default, and nothing names a remote registry.** Follows D-77. With images no longer published, `ghcr.io/simtabi/dbpantry-*` stayed the name every image was built, run and deployed under: `scripts/build` defaulted `MDB_IMAGE_PREFIX` to it, Compose, the generated engine services, the pooler descriptor, the patroni Dockerfile, the Makefile, five scripts, six checks and both workflows wrote it out, the Helm chart's `global.imageRegistry` defaulted to it, and the Kubernetes backend loaded it into kind. A cluster without an image therefore pulled from a registry that holds nothing. The owner chose `localhost/` (2026-11-13) over an unqualified `dbpantry/<component>`, which check 49 refuses because Podman will not resolve a short name (D-60) and which Docker would expand to Docker Hub on a pull; `localhost` is fully qualified, is the prefix Podman gives local builds, never reaches a remote registry, and loads into kind and minikube as it is. The default is written once, `MDB_IMAGE_PREFIX_DEFAULT=localhost` in `scripts/env-lib.sh`, with `mdb_image_prefix`, `mdb_image` and `mdb_image_ref` (which moves a descriptor's `localhost/dbpantry-pgbouncer:dev` to the prefix in force); the Makefile reads it from there. Files that cannot read it repeat it: Compose as `${MDB_IMAGE_PREFIX:-localhost}`, the patroni Dockerfile's `ARG IMAGE_PREFIX`, the chart's `global.imageRegistry`, the pooler descriptor, and the CI scan steps, which build with the default. `MDB_IMAGE_PREFIX` stays an environment variable, as before, not a `.env` setting. On Kubernetes, `scripts/helm-values` renders `global.imageRegistry` from it and `_mdb_k8s_local_images` reads that back, so kind loads exactly the names the chart runs; `imagePullPolicy` stays `IfNotPresent`. Check 49's Compose parser resolved only a leading `${VAR:-default}`, which misread a prefixed reference as `localhost}/...`; it now resolves every one, innermost first, and still counts 55 references. Check 73 holds every default to `localhost`, fails on a dotted registry before `dbpantry-` in any tracked file but prose, limits `ghcr.io/simtabi` to nine files that describe the frozen images or their history (each at its measured count), and proves that a set prefix reaches `mdb_image`, the pooler, `make shell`, helm-values, kind loading and the rendered chart. Images built before keep their old names: `make build` once, and the next `make up` recreates the containers; volumes are untouched. The first CI run of this change failed four checks, each a reader of the old name the literal search missed: check 42 allowlisted our images as `ghcr\.io/simtabi/[a-z-]+` and check 72 recognised them by the same regex, so both now name `localhost/dbpantry-*` (72 under the prefix in force); `scripts/init` passed the caddy service's raw `image:` line to `run`, which is now Compose syntax, so it resolves it with `mdb_compose_ref` and `make init-prod` (check 26) works again; and check 73 itself listed one image in CI because `make verify` exports `COMPOSE_PROFILES`, which `helm-values` ranks above the `MDB_PROFILES` the check set. Check 73 now sets both, counts the escaped spelling too, and fails on any script that runs a Compose `image:` line without `mdb_compose_ref`. A check run directly is not the check `make verify` runs: reproduce through `make verify CHECKS=`.
 
+
+**D-79: design.md's service map and pins follow the compose files, and a check holds them together; the backup sidecars bind `MDB_BACKUP_DIR`.** Two inconsistencies left open by simtabi/dbpantry#22 (its audit, 2026-11-03). First, section 2 and section 3 still described the step 1 plan: etcd `v3.6.6` from `gcr.io` where `compose.ha.yml` runs `quay.io/coreos/etcd:v3.5.21`, HAProxy `3.2-alpine` where it runs `3.0-alpine`, Caddy `2.10.2` where `docker-compose.yml` runs the built `dbpantry-caddy` on `caddy:2.11.4`, one `nfrastack/db-backup` service where three sidecars (`backup-pg`, `backup-mysql`, `backup-mariadb`) run `scripts/backup` on the engines' own images, and no row for MongoDB, Cassandra, the poolers or the Patroni nodes. The header already said the code wins where the two disagree, so the compose files were right and this file was rewritten to match them; no image changed. Prose said so and nothing enforced it, which is how it drifted, so check 71 now renders the broadest combination (25 services, measured 2026-11-16) and fails when a service has no row, a row names a service no compose file defines, or the image differs (`<ver>` stands for a version variable; rows whose profile is "—" are not Compose services). Second, the sidecars bound `./backups` whatever `MDB_BACKUP_DIR` said, while `scripts/backup`, `restore` and `verify-backups` honour it (environment, then `.env`, then `backups/`), so scheduled and manual dumps went to different trees and retention pruned each separately. The spec says only that dumps go to a backups directory (section 11) and does not name the variable. The sidecars now bind `${MDB_BACKUP_DIR:-./backups}` in the long form, with `create_host_path: true` as the short form implied: the short form would read the `.env.example` value `backups` (no `./`) as a named volume, which Compose then rejects, while a long-form bind source is resolved against the project directory, as `docker compose config` shows. The default is unchanged. Check 71 renders six settings (unset, `backups`, a relative and a `./` path, an absolute path, and the environment over `.env`) against what `mdb_backup_dir` resolves, and check 47 now reads long-form bind sources so `./backups` is still checked. References: the Compose Specification's volumes section, long syntax (https://docs.docker.com/reference/compose-file/services/#volumes) and its `create_host_path` note.
 
 **D-80: phase 2, the command line over the scripts; every make target runs the binary.** (D-79 is taken by simtabi/dbpantry#31, open at the time of writing.) The refactor plan's phase 2 (§10 row 2): the §7 tree for the features that exist, wrapping the scripts, with make targets calling the binary, output formats, exit codes, a tree test and a ledger check. What was done, and where it departs from the plan's text:
 
