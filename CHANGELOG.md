@@ -249,6 +249,10 @@ waiving them.
   (`scratch_stack`, with a new `scratch_call` helper for runtime functions), and 26 no longer stops a stack.
   Check 60 fails any check that runs a whole-stack down outside its own stack; check 27's pre-boot
   `make down` (its stack needs the ports the operator's holds) is its one exemption.
+- **`make logs` works on Incus.** It passed Compose's `--tail=100`, which incus-compose (1.3.5) refuses
+  because its `logs` takes only `-f` and service names. The Incus backend now drops Compose-only log options
+  with a note and shows the whole log. It also sends follow as `--follow`: a bare `-f` was read as `--file`,
+  which left out the stack's compose files (check 58).
 - **The prod overlay's `pgbouncer` service is now the HA pooler** (design.md D-72). It had no credential and
   pointed at `pg`, so wherever the overlay applied it restarted forever beside `pg-pooler`. It is defined in
   `compose.ha.yml` in front of HAProxy's write port (`make up PROFILES=ha,pooler`), and the overlay entry only
