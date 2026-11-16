@@ -50,6 +50,7 @@ so a green `make verify` is the criteria being met rather than a proxy for it.
 | Every profile combination renders with one authenticating pooler per upstream; prod publishes only poolers and the front door | `71-compose-profiles-render` |
 | Every service drops privileges, has a health signal, is limited under prod and takes secrets as files; exceptions must stay needed | `72-service-hardening` |
 | Our images are named `localhost/` by default, nothing names a remote registry for them, and a set `MDB_IMAGE_PREFIX` or `global.imageRegistry` reaches every one | `73-images-local-by-default` |
+| Every make target runs the `dbpantry` command `docs/reference/parity.tsv` names; every row names a real command and an existing proof; every documented target has a row (phase 2) | `74-parity-ledger` |
 | No leftover old product name outside its history | `44-no-old-name` |
 | Cassandra's replaced JARs are pinned by checksum and installed | `45-cassandra-jars` |
 | Every relative link in the Markdown docs resolves | `46-doc-links-resolve` |
