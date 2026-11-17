@@ -49,7 +49,9 @@ DBPANTRY := build/$(HOST_OS)/dbpantry
 GO_VERSION_STAMP := $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 GO_COMMIT_STAMP := $(shell git rev-parse --short HEAD 2>/dev/null || echo none)
 
-DBPANTRY_SOURCES := $(shell find src -name '*.go' -o -name go.mod -o -name go.sum)
+# The files the binary embeds (//go:embed: the dashboard's templates and
+# assets) are sources too, or an edited page would ship stale.
+DBPANTRY_SOURCES := $(shell find src -type f \( -name '*.go' -o -name go.mod -o -name go.sum -o -path '*/templates/*' -o -path '*/resources/*' \))
 
 define build_dbpantry
 	@mkdir -p "$(dir $(DBPANTRY))"
@@ -135,6 +137,10 @@ rotate-secrets: $(DBPANTRY) ## Rotate every database password and secret file, a
 .PHONY: render
 render: $(DBPANTRY) ## Render every templated file (Caddyfile, pgAdmin servers.json)
 	@$(DBPANTRY) config render
+
+.PHONY: start
+start: $(DBPANTRY) ## Everything in one command: boot PROFILES, provision PROJECTS=name[:engine],..., serve the dashboard
+	@$(DBPANTRY) start $(if $(PROJECTS),--project "$(PROJECTS)",) $(if $(NO_DASHBOARD),--no-dashboard,) $(if $(LISTEN),--listen "$(LISTEN)",)
 
 .PHONY: up
 up: $(DBPANTRY) ## Boot the stack (never touches data)

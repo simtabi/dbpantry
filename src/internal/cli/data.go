@@ -23,18 +23,7 @@ pooler mirrors credentials at start (ProxySQL) and is running, it is then
 restarted so the new user can log in through it (N8); --no-pooler-sync skips that.`,
 		Args: cobra.NoArgs,
 		RunE: func(c *cobra.Command, _ []string) error {
-			argv := append([]string{"scripts/new-project", "--name", name}, strArg(c, "engine", eng)...)
-			if a.formatted() {
-				if _, err := a.projectFormatted(c, argv); err != nil {
-					return err
-				}
-			} else if err := a.runSteps(c, script(argv...)); err != nil {
-				return err
-			}
-			if noSync || eng == "" {
-				return nil
-			}
-			return a.syncPooler(c, eng, true)
+			return a.newProject(c, name, eng, noSync)
 		},
 	}
 	newCmd.Flags().StringVar(&name, "name", "", "the project (database) name")
@@ -42,6 +31,27 @@ restarted so the new user can log in through it (N8); --no-pooler-sync skips tha
 	newCmd.Flags().BoolVar(&noSync, "no-pooler-sync", false, "do not restart a mirroring pooler afterwards")
 	cmd.AddCommand(newCmd)
 	return cmd
+}
+
+// newProject provisions one project with scripts/new-project, drawn as a
+// tree and tables on a terminal, then syncs a mirroring pooler. An empty
+// engine is the script's default. `start` runs it too.
+func (a *app) newProject(c *cobra.Command, name, eng string, noSync bool) error {
+	argv := []string{"scripts/new-project", "--name", name}
+	if eng != "" {
+		argv = append(argv, "--engine", eng)
+	}
+	if a.formatted() {
+		if _, err := a.projectFormatted(c, argv); err != nil {
+			return err
+		}
+	} else if err := a.runSteps(c, script(argv...)); err != nil {
+		return err
+	}
+	if noSync || eng == "" {
+		return nil
+	}
+	return a.syncPooler(c, eng, true)
 }
 
 func (a *app) backupCmd() *cobra.Command {

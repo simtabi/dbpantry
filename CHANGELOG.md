@@ -132,8 +132,10 @@ waiving them.
 
 ### Added
 - **A step tree, progress bars and tables on a terminal** (design.md D-81). `make up` shows each step with a spinner and its time, and groups Compose's work into networks, images and containers. Each image build gets a bar with its percentage and an estimated time left. The run ends with a Connect table for the engines you started. `make down` shows what it removed. `make new-project` shows what it generated, the roles and each extension (with a warning for one that could not be created), a table of the project, and the `.env` block flush left between rules. Off a terminal, or with `--plain`, output is unchanged. `--pretty` forces the view.
-- **`make dashboard`**: a read-only web dashboard on `http://127.0.0.1:8484/`, built with Tabler and embedded in the binary. It shows service health, each engine's addresses, provisioned projects and backups, refreshes every five seconds, and serves the same data at `/api/status`.
-- `scripts/new-project --format json`: the provisioning result as one JSON object.
+- **`make start`: everything in one command.** It boots `PROFILES`, provisions `PROJECTS=name[:engine],…` on every engine in them, then serves the dashboard. Every step is idempotent; `NO_DASHBOARD=1` stops after provisioning.
+- **`make dashboard`**: a read-only web dashboard on `http://127.0.0.1:8484/`, built with Tabler 1.7.5's CSS and JavaScript embedded in the binary. Tabler's two-row header and icon menu lead to Overview, Services (state, health, uptime, image), Images, Engines (one page each: addresses, pooler, TLS, extensions, principals), Projects, Backups and Connect. Each project's page has its paste-ready `.env` block, the password blurred until shown, with copy buttons. Pages refresh every five seconds, and the same data, without passwords, is at `/api/status`.
+- `scripts/new-project --format json`: the provisioning result as one JSON object. `--show` prints an existing project's block without provisioning or generating anything.
+
 -- **The `dbpantry` command tree for every existing feature** (refactor plan phase 2): `init`, `config
   validate|render|prod-overlay`, `up`, `down`, `status`, `logs`, `forward`, `destroy`, `runtime`, `shell`,
   `tools`, `project new`, `backup run|verify`, `restore`, `pitr`, `data import|export`, `upgrade`, `ha`,
@@ -236,6 +238,8 @@ waiving them.
   exist and is not a known generated file.
 
 ### Fixed
+
+- `make` now rebuilds the binary when a file it embeds changes (the dashboard's templates and assets), not only when Go code does; a guard test lists every embedded file.
 - `dbpantry endpoints --project NAME` named the project's roles `NAME` and `NAME_readonly`, with
   password files `<engine>_NAME_password.txt`, none of which `make new-project` creates: it creates
   `NAME_user` and `NAME_user_readonly` and writes `<engine>_NAME_user[_readonly]_password.txt`. The

@@ -18,6 +18,10 @@
 # --format json prints one JSON object on stdout instead of the text block, and
 # sends every log line (the hooks' too) to stderr. `dbpantry project new` reads
 # it to draw its tables; the text output is unchanged.
+#
+# --show provisions nothing and generates nothing: it prints the block for a
+# project that already exists, from its password files (the dashboard's project
+# page). It fails when the project has no password file on that engine.
 
 set -euo pipefail
 
@@ -34,6 +38,7 @@ ENV_FILE="${MDB_ENV_FILE:-$ROOT/.env}"
 
 get() { mdb_env_get "$1" "$ENV_FILE"; }
 FORMAT=text
+SHOW=0
 log() { if [[ "$FORMAT" == json ]]; then printf '[new-project] %s\n' "$*" >&2; else printf '[new-project] %s\n' "$*"; fi; }
 die() { printf '[new-project] ERROR: %s\n' "$*" >&2; exit 1; }
 
@@ -44,6 +49,7 @@ while (( $# )); do
         --name)   NAME="${2:-}"; shift 2 ;;
         --engine) ENGINE="${2:-}"; shift 2 ;;
         --format) FORMAT="${2:-}"; shift 2 ;;
+        --show)   SHOW=1; shift ;;
         *) die "unknown argument: $1" ;;
     esac
 done
@@ -136,10 +142,15 @@ gen_password() {
 
 SECRET_FILE="secrets/${ENGINE}_${USER_NAME}_password.txt"
 RO_SECRET_FILE="secrets/${ENGINE}_${USER_NAME}_readonly_password.txt"
-gen_password "$SECRET_FILE"
-gen_password "$RO_SECRET_FILE"
+if (( SHOW )); then
+    [[ -s "$SECRET_FILE" ]] || die "no project '$NAME' on $ENGINE (no $SECRET_FILE); provision it with make new-project NAME=$NAME ENGINE=$ENGINE"
+    SECRET_ACTIONS=("existing" "$([[ -s "$RO_SECRET_FILE" ]] && echo existing || echo missing)")
+else
+    gen_password "$SECRET_FILE"
+    gen_password "$RO_SECRET_FILE"
+fi
 PASSWORD="$(cat "$SECRET_FILE")"
-RO_PASSWORD="$(cat "$RO_SECRET_FILE")"
+RO_PASSWORD="$(cat "$RO_SECRET_FILE" 2>/dev/null || true)"
 
 # -----------------------------------------------------------------------------
 # Provision
@@ -148,15 +159,19 @@ upper="$(printf '%s' "$ENGINE" | tr '[:lower:]-' '[:upper:]_')"
 EXTENSIONS="$(get "MDB_${upper}_INIT_EXTENSIONS")"
 
 # In JSON mode stdout carries only the object, so the hook's notices go to stderr.
-if [[ "$FORMAT" == json ]]; then
+if (( SHOW )); then
+    :
+elif [[ "$FORMAT" == json ]]; then
     hook_provision_project "$DB" "$USER_NAME" "$PASSWORD" "$EXTENSIONS" "$RO_PASSWORD" >&2
 else
     hook_provision_project "$DB" "$USER_NAME" "$PASSWORD" "$EXTENSIONS" "$RO_PASSWORD"
 fi \
     || die "provisioning failed on $ENGINE; is it running? (make up PROFILES=$ENGINE)"
 
-log "provisioned '$DB' on $ENGINE, owned by '$USER_NAME'"
-[[ -n "$EXTENSIONS" ]] && log "extensions requested: $EXTENSIONS"
+if (( ! SHOW )); then
+    log "provisioned '$DB' on $ENGINE, owned by '$USER_NAME'"
+    [[ -n "$EXTENSIONS" ]] && log "extensions requested: $EXTENSIONS"
+fi
 
 # -----------------------------------------------------------------------------
 # The paste-ready block (SPEC section 14)
@@ -206,15 +221,22 @@ fi
 # its own name, which is what PostgreSQL checks on a direct connection and what
 # the pooler requires before it asks for the password.
 if [[ "$(get MDB_MTLS)" == "true" ]] && engine_tls_always; then
-    if "$ROOT/scripts/certs" --client "$USER_NAME" >/dev/null; then
+    # --show reports a certificate that exists; it never issues one.
+    have_cert=0
+    if (( SHOW )); then
+        [[ -f "certs/clients/${USER_NAME}/client.crt" ]] && have_cert=1
+    elif "$ROOT/scripts/certs" --client "$USER_NAME" >/dev/null; then
+        have_cert=1
+    else
+        log "WARNING: could not issue a client certificate for '$USER_NAME'; run: scripts/certs --client $USER_NAME"
+    fi
+    if (( have_cert )); then
         block+="
 # MDB_MTLS is on: present this role's client certificate as well. Copy the
 # three files to the application server; the key never leaves it again.
 DB_SSLCERT=/path/to/dbpantry/certs/clients/${USER_NAME}/client.crt
 DB_SSLKEY=/path/to/dbpantry/certs/clients/${USER_NAME}/client.key
 "
-    else
-        log "WARNING: could not issue a client certificate for '$USER_NAME'; run: scripts/certs --client $USER_NAME"
     fi
 fi
 

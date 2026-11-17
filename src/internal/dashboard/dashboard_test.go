@@ -2,6 +2,7 @@ package dashboard
 
 import (
 	"context"
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -17,29 +18,59 @@ import (
 	"time"
 
 	"github.com/simtabi/dbpantry/src/internal/endpoint"
+	"github.com/simtabi/dbpantry/src/internal/project"
 )
 
 func fixture(context.Context) (Snapshot, error) {
 	return Snapshot{
-		Generated: time.Now(), Version: "test", Backend: "compose",
+		Generated: time.Now(), Version: "test", Backend: "compose", Root: "/srv/dbpantry", Network: "mdb_net",
+		Extensions: map[string][]string{"pg": {"vector"}},
+		Images:     []Image{{Ref: "localhost/dbpantry-pg:17", Size: "1.2GB", Created: "2 hours ago"}},
 		Endpoints: endpoint.Document{Publish: "none", Profiles: []string{"pg", "ui"}, Endpoints: []endpoint.Endpoint{
 			{Engine: "pg", Title: "PostgreSQL", Enabled: true, TLSAlways: true, Direct: endpoint.Access{Network: endpoint.Address{Host: "pg", Port: 5432}}},
 		}},
-		Services: []Service{{Name: "pg", Health: "healthy"}, {Name: "caddy", Health: "none"}},
+		Services: []Service{{Name: "pg", Health: "healthy", State: "running", Image: "localhost/dbpantry-pg:17", Started: time.Now().Add(-time.Hour)}, {Name: "caddy", Health: "none"}},
 		Projects: []Project{{Engine: "pg", Name: "settings", Owner: "settings_user", Readonly: "settings_user_readonly", OwnerSecret: "secrets/pg_settings_user_password.txt"}},
 		Backups:  []Backup{{File: "pg_settings_20261117T000000Z.dump", Engine: "pg", Size: 2048, Modified: time.Now()}},
 	}, nil
 }
 
-func serve(t *testing.T, collect Collect, hosts []string, path, host string) *http.Response {
+func showFixture(_ context.Context, engine, name string) (project.Provisioned, error) {
+	if engine != "pg" || name != "settings" {
+		return project.Provisioned{}, ErrNoProject
+	}
+	return project.Provisioned{
+		Engine: "pg", Title: "PostgreSQL", Database: "settings", Owner: "settings_user", Readonly: "settings_user_readonly",
+		Network: "mdb_net", TLSAlways: true, Pooler: &project.Pooler{Host: "pg-pooler", Port: "6432"},
+		Secrets: []project.Secret{{Role: "settings_user", File: "secrets/pg_settings_user_password.txt", Action: "existing"}},
+		Block:   "DB_HOST=pg\nDB_PASSWORD=" + testPassword + "\n# a <comment>\n",
+	}, nil
+}
+
+// testPassword is generated per run (testing.md: no credential literals).
+var testPassword = func() string {
+	b := make([]byte, 12)
+	_, _ = rand.Read(b)
+	return hex.EncodeToString(b)
+}()
+
+func serve(t *testing.T, collect func(context.Context) (Snapshot, error), hosts []string, path, host string) *http.Response {
 	t.Helper()
-	h, err := Handler(collect, hosts)
+	return serveReq(t, collect, hosts, path, host, nil)
+}
+
+func serveReq(t *testing.T, collect func(context.Context) (Snapshot, error), hosts []string, path, host string, headers map[string]string) *http.Response {
+	t.Helper()
+	h, err := Handler(Sources{Snapshot: collect, Project: showFixture}, hosts)
 	if err != nil {
 		t.Fatal(err)
 	}
 	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, path, nil)
 	if host != "" {
 		req.Host = host
+	}
+	for k, v := range headers {
+		req.Header.Set(k, v)
 	}
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
@@ -66,26 +97,73 @@ func TestDashboardServes(t *testing.T) {
 	}
 	for _, want := range []string{
 		`<link rel="icon" type="image/svg+xml" href="/assets/favicons/favicon.svg">`,
-		`/assets/css/tabler.min.css`,
-		`PostgreSQL`, `settings_user_readonly`, `pg_settings_20261117T000000Z.dump`,
-		`status-green`, `2 <span class="text-secondary fs-3">/ 2</span>`,
+		`/assets/css/tabler.min.css`, `/assets/js/tabler.min.js`,
+		`id="navbar-menu"`, `nav-item active`, `href="/projects/pg/settings"`,
+		`PostgreSQL`, `status-green`, `2 <span class="text-secondary fs-3">of 2</span>`,
 	} {
 		if !strings.Contains(page, want) {
-			t.Errorf("the page lacks %q", want)
+			t.Errorf("the overview lacks %q", want)
 		}
 	}
 	if csp := r.Header.Get("Content-Security-Policy"); !strings.Contains(csp, "default-src 'self'") {
 		t.Errorf("no restrictive CSP: %q", csp)
 	}
+	// Every page renders, with the layout, and lists what it is about.
+	n := 0
+	for path, want := range map[string]string{
+		"/services": "localhost/dbpantry-pg:17", "/images": "1.2GB", "/engines": "Details and principals",
+		"/engines/pg": "vector", "/projects": "settings_user_readonly", "/backups": "pg_settings_20261117T000000Z.dump",
+		"/connect": "/srv/dbpantry/certs/ca.crt",
+	} {
+		n++
+		r := serve(t, fixture, nil, path, "")
+		if b := body(t, r); r.StatusCode != http.StatusOK || !strings.Contains(b, want) || !strings.Contains(b, `id="navbar-menu"`) {
+			t.Errorf("GET %s = %d, want the layout and %q", path, r.StatusCode, want)
+		}
+	}
+	if n != len(pages)-2 { // overview and project are checked on their own
+		t.Fatalf("checked %d pages of %d", n, len(pages)-2)
+	}
+	if r := serve(t, fixture, nil, "/engines/nope", ""); r.StatusCode != http.StatusNotFound {
+		t.Errorf("an unknown engine is 404, got %d", r.StatusCode)
+	}
 
-	part := body(t, serve(t, fixture, nil, "/partials/body", ""))
-	if strings.Contains(part, "<html") || !strings.Contains(part, "settings_user") {
-		t.Error("the partial is the body alone, with the data")
+	part := body(t, serveReq(t, fixture, nil, "/services", "", map[string]string{"X-Partial": "1"}))
+	if strings.Contains(part, "<html") || !strings.Contains(part, "dbpantry-pg") {
+		t.Error("a partial is the page's content alone, with the data")
 	}
 
 	var snap Snapshot
 	if err := json.Unmarshal([]byte(body(t, serve(t, fixture, nil, "/api/status", ""))), &snap); err != nil || len(snap.Services) != 2 {
 		t.Errorf("/api/status is the snapshot as JSON: %v %+v", err, snap.Services)
+	}
+}
+
+func TestProjectPageBlursThePasswordAndRefusesCrossSite(t *testing.T) {
+	r := serve(t, fixture, nil, "/projects/pg/settings", "")
+	b := body(t, r)
+	if r.StatusCode != http.StatusOK {
+		t.Fatalf("GET project = %d", r.StatusCode)
+	}
+	for _, want := range []string{
+		`DB_PASSWORD=<span class="mdb-secret" data-secret>` + testPassword + `</span>`,
+		`# a &lt;comment&gt;`, `data-no-refresh`, `pg-pooler:6432`, `data-copy="#env-block"`,
+	} {
+		if !strings.Contains(b, want) {
+			t.Errorf("the project page lacks %q", want)
+		}
+	}
+	if r := serve(t, fixture, nil, "/projects/pg/nope", ""); r.StatusCode != http.StatusNotFound {
+		t.Errorf("an unknown project is 404, got %d", r.StatusCode)
+	}
+	for site, want := range map[string]int{"cross-site": http.StatusForbidden, "same-site": http.StatusForbidden, "same-origin": http.StatusOK, "none": http.StatusOK} {
+		r := serveReq(t, fixture, nil, "/projects/pg/settings", "", map[string]string{"Sec-Fetch-Site": site})
+		if b := body(t, r); r.StatusCode != want || (want != http.StatusOK && strings.Contains(b, testPassword)) {
+			t.Errorf("Sec-Fetch-Site %s: %d, want %d", site, r.StatusCode, want)
+		}
+	}
+	if strings.Contains(body(t, serve(t, fixture, nil, "/api/status", "")), testPassword) {
+		t.Error("/api/status must never carry a password")
 	}
 }
 
@@ -155,17 +233,19 @@ func TestAssetsLayoutAndVendoredStylesheet(t *testing.T) {
 	if n < 5 {
 		t.Fatalf("inspected %d asset files; the walk found too few to mean anything", n)
 	}
-	b, err := os.ReadFile(filepath.Join("resources", "assets", "css", "tabler.min.css")) // #nosec G304 -- a fixed path in this package
+	readme, err := os.ReadFile(filepath.Join("resources", "assets", "README.md")) // #nosec G304 -- a fixed path in this package
 	if err != nil {
 		t.Fatal(err)
 	}
-	sum := sha256.Sum256(b)
-	readme, err := os.ReadFile(filepath.Join("resources", "assets", "css", "README.md")) // #nosec G304 -- a fixed path in this package
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(string(readme), hex.EncodeToString(sum[:])) || !strings.Contains(string(b[:200]), "Tabler v1.7.5") {
-		t.Error("tabler.min.css is not the Tabler 1.7.5 file README.md records")
+	for _, f := range []string{"css/tabler.min.css", "js/tabler.min.js"} {
+		b, err := os.ReadFile(filepath.Join("resources", "assets", filepath.FromSlash(f))) // #nosec G304 -- a fixed path in this package
+		if err != nil {
+			t.Fatal(err)
+		}
+		sum := sha256.Sum256(b)
+		if !strings.Contains(string(readme), f+" sha256: `"+hex.EncodeToString(sum[:])+"`") || !strings.Contains(string(b[:200]), "Tabler v1.7.5") {
+			t.Errorf("%s is not the Tabler 1.7.5 file resources/assets/README.md records", f)
+		}
 	}
 }
 

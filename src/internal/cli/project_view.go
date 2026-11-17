@@ -2,42 +2,20 @@ package cli
 
 import (
 	"bytes"
-	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
 
+	"github.com/simtabi/dbpantry/src/internal/project"
 	"github.com/simtabi/dbpantry/src/internal/ui"
 )
-
-// provisioned is what `scripts/new-project --format json` prints.
-type provisioned struct {
-	Engine     string   `json:"engine"`
-	Title      string   `json:"title"`
-	Database   string   `json:"database"`
-	Owner      string   `json:"owner"`
-	Readonly   string   `json:"readonly"`
-	Extensions []string `json:"extensions"`
-	Secrets    []struct {
-		Role   string `json:"role"`
-		File   string `json:"file"`
-		Action string `json:"action"`
-	} `json:"secrets"`
-	TLSAlways bool `json:"tls_always"`
-	Pooler    *struct {
-		Host string `json:"host"`
-		Port string `json:"port"`
-	} `json:"pooler"`
-	Network string `json:"network"`
-	Block   string `json:"block"`
-}
 
 // projectFormatted is `project new` on a terminal: the script's JSON drawn as
 // a tree of what was done, a table of the project, its warnings, and the
 // paste-ready block between rules, unindented so it copies cleanly.
-func (a *app) projectFormatted(c *cobra.Command, argv []string) (*provisioned, error) {
+func (a *app) projectFormatted(c *cobra.Command, argv []string) (*project.Provisioned, error) {
 	root, err := a.root()
 	if err != nil {
 		return nil, err
@@ -67,9 +45,9 @@ func (a *app) projectFormatted(c *cobra.Command, argv []string) (*provisioned, e
 	sc.update(func() { node.Start(time.Now()) })
 	err = a.runStepTo(c.Context(), root, env, script(append(argv, "--format", "json")...), &stdout, stderr)
 	stderr.flush()
-	var p provisioned
+	var p project.Provisioned
 	if err == nil {
-		err = json.Unmarshal(lastLine(stdout.Bytes()), &p)
+		p, err = project.Parse(stdout.Bytes())
 	}
 	if err != nil {
 		sc.update(func() { node.Log = nil; node.Finish(ui.Failed, "", time.Now()) })
@@ -129,7 +107,7 @@ func (a *app) projectFormatted(c *cobra.Command, argv []string) (*provisioned, e
 	return &p, nil
 }
 
-func projectTable(st ui.Style, p provisioned, width int) []string {
+func projectTable(st ui.Style, p project.Provisioned, width int) []string {
 	row := func(k, v string) []string { return []string{st.Dim(k), v} }
 	t := ui.Table{Title: "Project " + sanitize(p.Database), Headers: []string{"Setting", "Value"}}
 	t.Rows = append(t.Rows,
@@ -169,13 +147,6 @@ func failedExtension(warnings []string, ext string) bool {
 		}
 	}
 	return false
-}
-
-// lastLine is the last non-empty line: the JSON object, after anything a
-// hook printed to stdout despite the redirect.
-func lastLine(b []byte) []byte {
-	lines := bytes.Split(bytes.TrimSpace(b), []byte("\n"))
-	return lines[len(lines)-1]
 }
 
 func plural(n int, one, many string) string {

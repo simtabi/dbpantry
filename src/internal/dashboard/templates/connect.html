@@ -1,0 +1,78 @@
+{{define "content"}}
+{{$s := .S}}
+<div class="page-header d-print-none"><div class="container-xl"><div class="row g-2 align-items-center">
+  <div class="col"><div class="page-pretitle">Help</div><h2 class="page-title">Connect an application</h2></div>
+</div></div></div>
+<div class="page-body"><div class="container-xl">
+  <div class="row row-cards">
+    <div class="col-12">
+      <div class="card">
+        <div class="card-header"><h3 class="card-title">{{icon "network"}} <span class="ms-2">How this stack is reached</span></h3><div class="card-actions"><span class="badge bg-primary-lt">MDB_PUBLISH={{$s.Endpoints.Publish}}</span></div></div>
+        <div class="card-body">
+          <div class="row g-3">
+            <div class="col-md-4"><div class="card card-sm{{if eq $s.Endpoints.Publish "none"}} border-primary{{end}}"><div class="card-body">
+              <div class="fw-medium mb-1">none {{if eq $s.Endpoints.Publish "none"}}<span class="badge bg-primary-lt ms-1">current</span>{{end}}</div>
+              <div class="text-secondary small">No host port at all, so nothing can collide with software already on the machine. Applications join <code>{{$s.Network}}</code> and connect by service name.</div>
+            </div></div></div>
+            <div class="col-md-4"><div class="card card-sm{{if eq $s.Endpoints.Publish "direct"}} border-primary{{end}}"><div class="card-body">
+              <div class="fw-medium mb-1">direct {{if eq $s.Endpoints.Publish "direct"}}<span class="badge bg-primary-lt ms-1">current</span>{{end}}</div>
+              <div class="text-secondary small">Each engine gets a port on <code>127.0.0.1</code> from <code>MDB_PORT_BASE</code>, for GUI clients and tests on this machine.</div>
+            </div></div></div>
+            <div class="col-md-4"><div class="card card-sm{{if eq $s.Endpoints.Publish "proxy"}} border-primary{{end}}"><div class="card-body">
+              <div class="fw-medium mb-1">proxy {{if eq $s.Endpoints.Publish "proxy"}}<span class="badge bg-primary-lt ms-1">current</span>{{end}}</div>
+              <div class="text-secondary small">The same ports, served through the front-door proxy.</div>
+            </div></div></div>
+          </div>
+          <p class="text-secondary mt-3 mb-0">Change it in <code>{{base $s.Endpoints.EnvFile}}</code>, not on the command line (dbpantry refuses <code>MDB_PUBLISH</code> set outside that file), then run <code>make up</code> again.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-lg-7">
+      <div class="card">
+        <div class="card-header"><h3 class="card-title">Every engine's address</h3></div>
+        <div class="table-responsive">
+          <table class="table table-vcenter card-table">
+            <thead><tr><th>Engine</th><th>host and port, from containers</th><th>From this machine</th></tr></thead>
+            <tbody>{{range $s.Endpoints.Endpoints}}<tr{{if not .Enabled}} class="text-secondary"{{end}}><td>{{.Title}}{{if not .Enabled}} <span class="small">(not enabled)</span>{{end}}</td><td class="mdb-mono text-nowrap">host={{.Direct.Network.Host}} port={{.Direct.Network.Port}}</td><td class="mdb-mono text-nowrap">{{if and .Enabled .Direct.Published}}{{.Direct.Published.Address}}:{{.Direct.Published.Port}}{{else}}–{{end}}</td></tr>{{end}}</tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-lg-5">
+      <div class="card">
+        <div class="card-header"><h3 class="card-title">Join the network</h3><div class="card-actions"><button type="button" class="btn btn-sm" data-copy="#network-snippet">{{icon "copy"}} <span data-copy-label>Copy</span></button></div></div>
+        <div class="card-body p-0"><pre id="network-snippet" class="mdb-env m-0">networks:
+  default:
+    external: true
+    name: {{$s.Network}}</pre></div>
+        <div class="card-footer text-secondary small">Add this to your application's compose file, then use the service names on the left as hosts.</div>
+      </div>
+    </div>
+
+    <div class="col-md-6" id="tls">
+      <div class="card">
+        <div class="card-header"><h3 class="card-title">{{icon "lock"}} <span class="ms-2">TLS</span></h3></div>
+        <div class="card-body">
+          <p>Engines that always use TLS want <code>sslmode=verify-full</code>, the only mode that checks the host name. The others require TLS in the prod profile. Either way, point the client at the toolkit CA:</p>
+          <pre class="mdb-env m-0">{{path $s.Root "certs" "ca.crt"}}</pre>
+          <p class="text-secondary small mt-3 mb-0">Each project's page shows the exact settings for its engine.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-md-6" id="shells">
+      <div class="card">
+        <div class="card-header"><h3 class="card-title">{{icon "terminal"}} <span class="ms-2">Shells and next steps</span></h3></div>
+        <div class="list-group list-group-flush">
+          <div class="list-group-item"><div class="fw-medium">A shell in an engine</div><div class="text-secondary small"><code>make help</code> lists one per engine, for example <code>make psql</code>. They work whatever MDB_PUBLISH says.</div></div>
+          <div class="list-group-item"><div class="fw-medium">A new project</div><div class="text-secondary small"><code>make new-project NAME=myapp ENGINE=&lt;engine&gt;</code></div></div>
+          <div class="list-group-item"><div class="fw-medium">Everything at once</div><div class="text-secondary small"><code>make start PROFILES=&lt;engines&gt; PROJECTS=myapp</code> boots, provisions and opens this dashboard.</div></div>
+          <div class="list-group-item"><div class="fw-medium">Every endpoint, for scripts</div><div class="text-secondary small"><code>dbpantry endpoints -o json</code> or <a href="/api/status">/api/status</a></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div></div>
+{{end}}

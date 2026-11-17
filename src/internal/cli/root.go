@@ -99,7 +99,7 @@ replaces them one bounded context at a time (refactor plan, phase 2).`,
 		// Engines
 		a.manifestCmd(),
 		// Stack
-		a.upCmd(), a.downCmd(), a.statusCmd(), a.logsCmd(), a.endpointsCmd(), a.dashboardCmd(), a.forwardCmd(), a.destroyCmd(),
+		a.startCmd(), a.upCmd(), a.downCmd(), a.statusCmd(), a.logsCmd(), a.endpointsCmd(), a.dashboardCmd(), a.forwardCmd(), a.destroyCmd(),
 		// Fixtures
 		a.fixtureCmd(),
 		// Runtime

@@ -28,18 +28,7 @@ connect. --profile test boots them on tmpfs with durability off instead
 		RunE: func(c *cobra.Command, _ []string) error {
 			switch overlay {
 			case "":
-				if a.formatted() {
-					return a.upFormatted(c)
-				}
-				return a.runSteps(c,
-					script("scripts/check-env", "--quiet"),
-					script("scripts/render-config"),
-					step{Args: []string{"scripts/gen-compose"}, Quiet: true},
-					// up -d --wait on Compose v2; podman-compose and nerdctl
-					// compose have no --wait, so scripts/runtime polls health.
-					script("scripts/runtime", "up"),
-					script("scripts/exposure-notice"),
-				)
+				return a.up(c)
 			case "test":
 				if !a.dryRun {
 					_, _ = a.stdout.Write([]byte("TEST PROFILE: data lives on tmpfs and is DISCARDED on stop.\n"))
@@ -61,6 +50,23 @@ connect. --profile test boots them on tmpfs with durability off instead
 	a.profilesFlag(cmd)
 	cmd.Flags().StringVar(&overlay, "profile", "", "an overlay to boot with: test (tmpfs, durability off)")
 	return cmd
+}
+
+// up boots the stack: drawn as a tree on a terminal, the scripts' own
+// output anywhere else. `start` runs it too.
+func (a *app) up(c *cobra.Command) error {
+	if a.formatted() {
+		return a.upFormatted(c)
+	}
+	return a.runSteps(c,
+		script("scripts/check-env", "--quiet"),
+		script("scripts/render-config"),
+		step{Args: []string{"scripts/gen-compose"}, Quiet: true},
+		// up -d --wait on Compose v2; podman-compose and nerdctl
+		// compose have no --wait, so scripts/runtime polls health.
+		script("scripts/runtime", "up"),
+		script("scripts/exposure-notice"),
+	)
 }
 
 func (a *app) downCmd() *cobra.Command {

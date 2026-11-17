@@ -70,6 +70,7 @@ var wantTree = []string{
 	"secrets rotate",
 	"self-update",
 	"shell",
+	"start",
 	"status",
 	"tools",
 	"up",

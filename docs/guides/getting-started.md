@@ -7,6 +7,19 @@ MySQL together on an Apple Silicon Mac (measured 2026-11-17); later boots reuse 
 Assumes [installation](installation.md) is done and `make verify-structure`
 passes.
 
+## The one command
+
+```bash
+make start PROFILES=pg,mysql PROJECTS=myapp
+```
+
+That boots the profiles and waits until they are healthy, provisions `myapp` on every engine in
+them (`PROJECTS=myapp:pg,billing` names one engine for a project), then serves the dashboard
+until Ctrl-C. Ctrl-C stops the dashboard only; the stack keeps running. Every step is
+idempotent, so running it again changes nothing and reuses each project's passwords. In a script
+or CI, add `NO_DASHBOARD=1` to stop after provisioning. The sections below are the same steps
+one at a time.
+
 ## 1. Start what you need
 
 ```bash
@@ -61,6 +74,11 @@ to `secrets/`. They are separate principals, and sharing one credential would
 mean a leak of the read-only role is a leak of the writable one.
 
 ## 3. Connect
+
+The dashboard shows all of this in one place: `make dashboard`, then `http://127.0.0.1:8484/`.
+Each project's page has its paste-ready `.env` block (the password blurred until you show it,
+with a copy button), the compose snippet that joins the network, and its roles, password files
+and extensions. The Connect page explains the publish modes, TLS and the shells.
 
 A shell, without needing a client installed on your machine:
 

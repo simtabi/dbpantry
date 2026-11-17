@@ -19,7 +19,18 @@ type Snapshot struct {
 	Generated time.Time
 	Version   string
 	Backend   string
+	// Root is the checkout, so the page can name the CA's full path.
+	Root string
+	// Network is the stack's network, which application containers join.
+	Network   string
 	Endpoints endpoint.Document
+	// Extensions are the extensions requested per engine
+	// (MDB_<ENGINE>_INIT_EXTENSIONS), which new-project creates.
+	Extensions map[string][]string
+
+	Images []Image
+	// ImagesErr says why images could not be listed.
+	ImagesErr string
 
 	Services []Service
 	// ServicesErr says why services could not be read: the runtime is
@@ -33,11 +44,23 @@ type Snapshot struct {
 	BackupsErr string
 }
 
-// Service is one running service and its health check's verdict: healthy,
-// unhealthy, starting, or none when it has no health check.
+// Service is one service's container: its state (running, exited, ...),
+// its health check's verdict (healthy, unhealthy, starting, or none when it
+// has none), its image and when it started. State, Image and Started are
+// empty on a backend that reports health only.
 type Service struct {
-	Name   string
-	Health string
+	Name    string
+	Health  string
+	State   string
+	Image   string
+	Started time.Time
+}
+
+// Image is one of the stack's locally built images.
+type Image struct {
+	Ref     string
+	Size    string
+	Created string
 }
 
 // Project is a database `make new-project` provisioned, found by its
@@ -59,11 +82,12 @@ type Backup struct {
 	Modified time.Time
 }
 
-// Healthy counts the services that are healthy or have no check to fail.
+// Healthy counts the running services that are healthy or have no check
+// to fail.
 func (s Snapshot) Healthy() int {
 	n := 0
 	for _, v := range s.Services {
-		if v.Health == "healthy" || v.Health == "none" {
+		if (v.State == "" || v.State == "running") && (v.Health == "healthy" || v.Health == "none") {
 			n++
 		}
 	}
@@ -96,6 +120,38 @@ func (s Snapshot) BackupBytes() int64 {
 		n += b.Size
 	}
 	return n
+}
+
+// Engine is the endpoint of the named engine, or nil.
+func (s Snapshot) Engine(name string) *endpoint.Endpoint {
+	for i := range s.Endpoints.Endpoints {
+		if s.Endpoints.Endpoints[i].Engine == name {
+			return &s.Endpoints.Endpoints[i]
+		}
+	}
+	return nil
+}
+
+// ProjectsOn are the projects provisioned on one engine.
+func (s Snapshot) ProjectsOn(engine string) []Project {
+	var out []Project
+	for _, p := range s.Projects {
+		if p.Engine == engine {
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
+// BackupsOf are the dumps of one engine.
+func (s Snapshot) BackupsOf(engine string) []Backup {
+	var out []Backup
+	for _, b := range s.Backups {
+		if b.Engine == engine {
+			out = append(out, b)
+		}
+	}
+	return out
 }
 
 // Latest is the newest backup, or nil.

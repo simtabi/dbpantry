@@ -1,5 +1,18 @@
 /* dbpantry's few additions to Tabler. */
 .mdb-mark { width: 1.75rem; height: 1.75rem; }
 .mdb-mono { font-family: var(--tblr-font-monospace); font-size: .8125rem; }
-.mdb-refresh[data-state="stale"] .status { --tblr-status-color: var(--tblr-yellow); }
-.mdb-refresh[data-state="error"] .status { --tblr-status-color: var(--tblr-red); }
+.mdb-env {
+  font-family: var(--tblr-font-monospace);
+  font-size: .8125rem;
+  padding: 1rem 1.25rem;
+  background: var(--tblr-bg-surface-secondary);
+  border-radius: 0 0 var(--tblr-card-border-radius) var(--tblr-card-border-radius);
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+/* A password stays blurred until the reader reveals it; copying the block
+   copies it either way, because the text is whole. */
+.mdb-secret { filter: blur(5px); }
+[data-revealed] .mdb-secret { filter: none; }
+.mdb-refresh[data-state="stale"] { --tblr-badge-bg: var(--tblr-yellow-lt); }
+.mdb-refresh[data-state="error"] { --tblr-badge-bg: var(--tblr-red-lt); }
