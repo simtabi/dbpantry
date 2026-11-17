@@ -130,7 +130,12 @@ func connectTable(st ui.Style, doc endpoint.Document, width int) []string {
 		}
 		pooled := st.Dim("–")
 		if e.Pooled != nil {
-			pooled = fmt.Sprintf("%s:%d", e.Pooled.Network.Host, e.Pooled.Network.Port)
+			pooled = sanitize(fmt.Sprintf("%s:%d", e.Pooled.Network.Host, e.Pooled.Network.Port))
+			if !e.Pooled.Enabled {
+				// The pooler profile is not running; say so rather than
+				// list an address nothing answers on.
+				pooled = st.Dim(sanitize(e.Pooled.Network.Host) + " · off")
+			}
 		}
 		tls := st.Dim("prod only")
 		if e.TLSAlways {
@@ -139,7 +144,7 @@ func connectTable(st ui.Style, doc endpoint.Document, width int) []string {
 		t.Rows = append(t.Rows, []string{
 			st.Bold(sanitize(e.Title)),
 			fmt.Sprintf("%s:%d", sanitize(e.Direct.Network.Host), e.Direct.Network.Port),
-			host, sanitize(pooled), tls,
+			host, pooled, tls,
 		})
 	}
 	if len(t.Rows) == 0 {

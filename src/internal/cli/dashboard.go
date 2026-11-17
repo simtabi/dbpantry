@@ -114,7 +114,11 @@ func (a *app) snapshot(ctx context.Context, root string, env []string, backupDir
 	if backend == "" {
 		backend = "compose"
 	}
-	snap := dashboard.Snapshot{Generated: time.Now(), Version: version, Backend: backend, Endpoints: doc, BackupDir: backupDir}
+	shown := backupDir
+	if rel, err := filepath.Rel(root, backupDir); err == nil && !strings.HasPrefix(rel, "..") {
+		shown = rel + "/"
+	}
+	snap := dashboard.Snapshot{Generated: time.Now(), Version: version, Backend: backend, Endpoints: doc, BackupDir: shown}
 
 	var names []string
 	for _, e := range m.Engines {

@@ -38,11 +38,11 @@
       <div class="page-header d-print-none">
         <div class="container-xl">
           <div class="row g-2 align-items-center">
-            <div class="col">
+            <div class="col-12 col-md">
               <div class="page-pretitle">Local database stack</div>
               <h1 class="page-title">Overview</h1>
             </div>
-            <div class="col-auto d-flex flex-wrap gap-2">
+            <div class="col-12 col-md-auto d-flex flex-wrap gap-2">
               {{range .Endpoints.Profiles}}<span class="badge bg-primary-lt">{{.}}</span>{{end}}
               <span class="badge badge-outline text-secondary">publish {{.Endpoints.Publish}}</span>
               <span class="badge badge-outline text-secondary">{{.Backend}}</span>

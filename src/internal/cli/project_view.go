@@ -85,8 +85,9 @@ func (a *app) projectFormatted(c *cobra.Command, argv []string) (*provisioned, e
 			creds.Add(ui.Pad(sanitize(s.Role), 26)+sanitize(s.File), ui.Done).Detail = sanitize(s.Action)
 		}
 		roles := node.Add("Roles", ui.Done)
-		roles.Add(sanitize(p.Owner), ui.Done).Detail = "owner"
-		roles.Add(sanitize(p.Readonly), ui.Done).Detail = "read-only"
+		roleWidth := max(ui.Width(sanitize(p.Owner)), ui.Width(sanitize(p.Readonly)))
+		roles.Add(ui.Pad(sanitize(p.Owner), roleWidth), ui.Done).Detail = "owner"
+		roles.Add(ui.Pad(sanitize(p.Readonly), roleWidth), ui.Done).Detail = "read-only"
 		if len(p.Extensions) > 0 {
 			ext := node.Add("Extensions", ui.Done)
 			for _, e := range p.Extensions {

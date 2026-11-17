@@ -10,6 +10,7 @@ import (
 	"io/fs"
 	"net"
 	"net/http"
+	"path/filepath"
 	"strings"
 	"time"
 )
@@ -148,4 +149,5 @@ var funcs = template.FuncMap{
 		}
 	},
 	"join": strings.Join,
+	"base": filepath.Base,
 }

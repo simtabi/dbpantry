@@ -177,8 +177,15 @@ func (v *View) Nodes() []*ui.Node {
 		}
 		sortByOrder(rs)
 		group := &ui.Node{Label: kindTitle[k], State: groupState(rs)}
+		width := 0
 		for _, r := range rs {
-			group.Children = append(group.Children, v.node(r, children[r.id]))
+			width = max(width, ui.Width(r.name))
+		}
+		for _, r := range rs {
+			n := v.node(r, children[r.id])
+			// Pad names so each group's status column lines up.
+			n.Label = ui.Pad(n.Label, width)
+			group.Children = append(group.Children, n)
 		}
 		group.Detail = countDetail(rs)
 		out = append(out, group)

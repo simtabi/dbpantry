@@ -49,7 +49,7 @@
       </div>
     </div>
 
-    <div class="col-lg-5" id="services">
+    <div class="col-lg-4" id="services">
       <div class="card">
         <div class="card-header">
           <h2 class="card-title">Services</h2>
@@ -84,18 +84,18 @@
       </div>
     </div>
 
-    <div class="col-lg-7" id="engines">
+    <div class="col-lg-8" id="engines">
       <div class="card">
         <div class="card-header">
           <h2 class="card-title">Engines</h2>
-          <div class="card-actions text-secondary small">env file {{.Endpoints.EnvFile}}</div>
+          <div class="card-actions text-secondary small">from <span class="mdb-mono">{{base .Endpoints.EnvFile}}</span></div>
         </div>
         <div class="table-responsive">
           <table class="table table-vcenter card-table">
             <thead><tr><th>Engine</th><th>From containers</th><th>From this machine</th><th>Pooled</th><th>TLS</th></tr></thead>
             <tbody>
               {{range .Endpoints.Endpoints}}
-              <tr>
+              <tr{{if not .Enabled}} class="text-secondary"{{end}}>
                 <td>
                   <div class="d-flex align-items-center gap-2">
                     <span class="status-dot {{if .Enabled}}status-green{{else}}status-secondary{{end}}" title="{{if .Enabled}}enabled{{else}}not in the profiles{{end}}"></span>
@@ -105,9 +105,9 @@
                     </div>
                   </div>
                 </td>
-                <td class="mdb-mono">{{.Direct.Network.Host}}:{{.Direct.Network.Port}}</td>
-                <td class="mdb-mono">{{with .Direct.Published}}{{.Address}}:{{.Port}}{{else}}<span class="text-secondary">not published</span>{{end}}</td>
-                <td class="mdb-mono">{{with .Pooled}}{{.Network.Host}}:{{.Network.Port}}{{else}}<span class="text-secondary">–</span>{{end}}</td>
+                <td class="mdb-mono text-nowrap">{{.Direct.Network.Host}}:{{.Direct.Network.Port}}</td>
+                <td class="mdb-mono text-nowrap">{{if not .Enabled}}–{{else}}{{with .Direct.Published}}{{.Address}}:{{.Port}}{{else}}<span class="text-secondary">not published</span>{{end}}{{end}}</td>
+                <td class="mdb-mono text-nowrap">{{with .Pooled}}{{if .Enabled}}{{.Network.Host}}:{{.Network.Port}}{{else}}<span class="text-secondary" title="add the pooler profile to start it">{{.Network.Host}} · off</span>{{end}}{{else}}<span class="text-secondary">–</span>{{end}}</td>
                 <td>{{if .TLSAlways}}<span class="badge bg-green-lt">always</span>{{else}}<span class="badge bg-secondary-lt">prod</span>{{end}}</td>
               </tr>
               {{end}}
@@ -121,7 +121,7 @@
       <div class="card">
         <div class="card-header">
           <h2 class="card-title">Projects</h2>
-          <div class="card-actions text-secondary small">passwords are never shown; they live in the files named here</div>
+          <div class="card-actions text-secondary small">passwords are never shown</div>
         </div>
         {{if not .Projects}}
         <div class="empty">
@@ -131,7 +131,7 @@
         {{else}}
         <div class="table-responsive">
           <table class="table table-vcenter card-table">
-            <thead><tr><th>Project</th><th>Engine</th><th>Owner</th><th>Read-only</th><th>Password files</th></tr></thead>
+            <thead><tr><th>Project</th><th>Engine</th><th>Owner role</th><th>Read-only role</th><th>Password file</th></tr></thead>
             <tbody>
               {{range .Projects}}
               <tr>
@@ -139,7 +139,7 @@
                 <td><span class="badge bg-primary-lt">{{.Engine}}</span></td>
                 <td class="mdb-mono">{{.Owner}}</td>
                 <td class="mdb-mono">{{.Readonly}}</td>
-                <td class="mdb-mono text-secondary">{{.OwnerSecret}}{{with .ReadonlySecret}}<br>{{.}}{{end}}</td>
+                <td class="mdb-mono text-secondary text-nowrap" title="{{.OwnerSecret}}{{with .ReadonlySecret}} · {{.}}{{end}}">{{.OwnerSecret}}</td>
               </tr>
               {{end}}
             </tbody>
@@ -153,7 +153,7 @@
       <div class="card">
         <div class="card-header">
           <h2 class="card-title">Backups</h2>
-          <div class="card-actions text-secondary small mdb-mono">{{.BackupDir}}</div>
+          <div class="card-actions text-secondary small mdb-mono text-truncate">{{.BackupDir}}</div>
         </div>
         {{if .BackupsErr}}
         <div class="card-body"><div class="alert alert-warning mb-0" role="alert">{{.BackupsErr}}</div></div>
