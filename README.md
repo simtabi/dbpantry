@@ -22,7 +22,8 @@ make up
 
 PostgreSQL and Adminer are running, with **no host port published** — your
 application joins the `mdb_net` network and connects to `pg:5432`. Set
-`MDB_PUBLISH=direct` (or `proxy`) when a GUI client needs a host port; see
+`MDB_PUBLISH=direct` (or `proxy`) in `.env` when a GUI client needs a host port. It is read from
+`.env` only: `MDB_PUBLISH=direct make up` is refused rather than ignored. See
 [Configuration](docs/guides/configuration.md).
 
 Add engines with profiles:

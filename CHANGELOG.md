@@ -233,6 +233,10 @@ waiving them.
   exist and is not a known generated file.
 
 ### Fixed
+- `MDB_PUBLISH` and `MDB_PORT_BASE` set on the command line (`MDB_PUBLISH=direct make up`) were
+  ignored without a word, because `gen-compose` reads them from `.env` only, so the stack booted with
+  no published port. `gen-compose` now refuses a value that differs from the env file and names the
+  file to edit; check 75 proves it.
 - **Checks 67 and 70 pass on a developer's Mac.** Check 67 refused the `.DS_Store` Finder writes into
   `build/`, which is gitignored and no build step touches. Check 70's scratch repository read the operator's global
   git config, where git 2.5x runs hooks declared as `hook.<name>.command` whatever `core.hooksPath` says, so a

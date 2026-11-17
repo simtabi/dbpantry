@@ -86,7 +86,9 @@ networks:
     name: mdb_net
 ```
 
-**For a GUI client that cannot join the compose network**, publish:
+**For a GUI client that cannot join the compose network**, publish, in `.env` (these two are read
+from the env file only; a different value on the command line, such as `MDB_PUBLISH=direct make up`,
+is refused rather than ignored):
 
 ```
 MDB_PUBLISH=direct     # each engine gets its own host port
