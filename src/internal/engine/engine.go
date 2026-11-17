@@ -299,13 +299,18 @@ func fromDescriptor(d Descriptor, root string, bases map[string]map[string]strin
 }
 
 // ProjectPrincipals are the two roles scripts/new-project creates for a
-// project NAME on this engine: the owner (app) and its read-only companion,
-// with the password files it writes (secrets/<engine>_<name>_password.txt and
-// secrets/<engine>_<name>_readonly_password.txt).
+// project NAME on this engine, named as it names them: the owner <name>_user
+// (app) and its read-only companion <name>_user_readonly, with the password
+// files it writes (secrets/<engine>_<name>_user_password.txt and
+// secrets/<engine>_<name>_user_readonly_password.txt).
+// TestProjectPrincipalsMatchNewProject reads the script, so the two cannot
+// drift again: until 2026-11-17 this returned <name> and <name>_readonly, a
+// user and files that new-project never creates.
 func (e Engine) ProjectPrincipals(project string) []Principal {
+	user := project + "_user"
 	return []Principal{
-		{Role: "app", User: project, PasswordFile: SecretsDir + "/" + e.Name + "_" + project + "_password.txt"},
-		{Role: "read-only", User: project + "_readonly", PasswordFile: SecretsDir + "/" + e.Name + "_" + project + "_readonly_password.txt"},
+		{Role: "app", User: user, PasswordFile: SecretsDir + "/" + e.Name + "_" + user + "_password.txt"},
+		{Role: "read-only", User: user + "_readonly", PasswordFile: SecretsDir + "/" + e.Name + "_" + user + "_readonly_password.txt"},
 	}
 }
 

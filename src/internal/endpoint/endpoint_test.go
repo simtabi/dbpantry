@@ -139,7 +139,7 @@ func TestProjectPrincipals(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if ps := find(t, d, "mysql").Principals; len(ps) != 3 || ps[2].PasswordFile != "/run/secrets/mysql_shop_readonly_password.txt" {
+	if ps := find(t, d, "mysql").Principals; len(ps) != 3 || ps[2].PasswordFile != "/run/secrets/mysql_shop_user_readonly_password.txt" {
 		t.Errorf("%+v", ps)
 	}
 }

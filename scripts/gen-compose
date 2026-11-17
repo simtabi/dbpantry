@@ -69,6 +69,24 @@ get() { mdb_env_get "$1" "$ENV_FILE"; }
 PUBLISH="$(get MDB_PUBLISH)"; PUBLISH="${PUBLISH:-none}"
 PORT_BASE="$(get MDB_PORT_BASE)"; PORT_BASE="${PORT_BASE:-54000}"
 
+# MDB_PUBLISH and MDB_PORT_BASE come from the env file alone, so these ports and
+# `dbpantry endpoints` always agree. A different value in the environment --
+# `MDB_PUBLISH=direct make up` -- used to be ignored without a word, booting a
+# stack that published nothing. Refuse it and name the file to edit instead.
+for _v in MDB_PUBLISH MDB_PORT_BASE; do
+    [ -n "${!_v+set}" ] || continue
+    case "$_v" in MDB_PUBLISH) _want="$PUBLISH" ;; *) _want="$PORT_BASE" ;; esac
+    if [ "${!_v}" != "$_want" ]; then
+        printf 'gen-compose: %s=%s is set in the environment, but %s is read from %s only, which says %s.
+' \
+            "$_v" "${!_v}" "$_v" "$ENV_FILE" "$_want" >&2
+        printf '  Set %s=%s in %s and run the command again without it.
+' "$_v" "${!_v}" "$ENV_FILE" >&2
+        exit 1
+    fi
+done
+unset _v _want
+
 # pooler_addr INDEX -> an address near the top of MDB_NETWORK_SUBNET.
 #
 # Under mTLS PostgreSQL has to tell its pooler apart from a direct client

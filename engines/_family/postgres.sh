@@ -132,17 +132,22 @@ GRANT CONNECT, TEMPORARY ON DATABASE ${db} TO ${user};
 GRANT CONNECT ON DATABASE ${db} TO ${user}_readonly;
 SQL
 
-    local old_ifs ext
+    # Split the list first and loop with the default IFS: engine_exec reaches
+    # mdb_compose, which splits "docker compose" into words, so running it while
+    # IFS=',' made every CREATE EXTENSION run a command that does not exist and
+    # warn about extensions the image ships (found 2026-11-17, check 76).
+    local ext err
+    local -a exts=()
     if [ -n "$extensions" ]; then
-        old_ifs="$IFS"; IFS=','
-        for ext in $extensions; do
+        IFS=',' read -r -a exts <<< "$extensions"
+        for ext in ${exts[@]+"${exts[@]}"}; do
             ext="${ext// /}"
             [ -z "$ext" ] && continue
-            engine_exec "$MDB_ENGINE_NAME" psql -U postgres -d "$db" -q \
-                -c "CREATE EXTENSION IF NOT EXISTS \"$ext\" CASCADE;" >/dev/null 2>&1 \
-                || printf '  WARNING: extension %s could not be created\n' "$ext" >&2
+            if ! err="$(engine_exec "$MDB_ENGINE_NAME" psql -U postgres -d "$db" -q \
+                -c "CREATE EXTENSION IF NOT EXISTS \"$ext\" CASCADE;" 2>&1 >/dev/null)"; then
+                printf '  WARNING: extension %s could not be created: %s\n' "$ext" "${err:-no error output}" >&2
+            fi
         done
-        IFS="$old_ifs"
     fi
 
     engine_exec "$MDB_ENGINE_NAME" psql -U postgres -d "$db" -q <<SQL >/dev/null 2>&1 || true

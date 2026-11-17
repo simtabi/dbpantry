@@ -67,6 +67,9 @@ appears to have eaten your data. To actually migrate, see [Upgrade](../runbooks/
 
 ### Ports and exposure
 
+These three live in `.env`. `MDB_PUBLISH` and `MDB_PORT_BASE` are read from the env file only;
+setting a different value on the command line (`MDB_PUBLISH=direct make up`) is refused, not ignored.
+
 ```
 MDB_PUBLISH=none        # none | direct | proxy
 MDB_PORT_BASE=54000
