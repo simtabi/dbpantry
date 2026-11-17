@@ -244,7 +244,8 @@ func TestPrincipalsArePathsOnly(t *testing.T) {
 			t.Errorf("principal %d: %+v", i, p)
 		}
 	}
-	if all[1].PasswordFile != "/run/secrets/x_shop_password.txt" || all[2].User != "shop_readonly" {
+	if all[1].User != "shop_user" || all[1].PasswordFile != "/run/secrets/x_shop_user_password.txt" ||
+		all[2].User != "shop_user_readonly" || all[2].PasswordFile != "/run/secrets/x_shop_user_readonly_password.txt" {
 		t.Errorf("project principals do not match scripts/new-project: %+v", all[1:])
 	}
 }
@@ -335,5 +336,40 @@ func TestCheckHelmMatchesTheChartAndCatchesDrift(t *testing.T) {
 	problems, _ = m.CheckHelm(drifted)
 	if len(problems) != 1 || !strings.Contains(problems[0], "engines.cassandra.port") {
 		t.Fatalf("drift not reported: %v", problems)
+	}
+}
+
+// TestProjectPrincipalsMatchNewProject reads scripts/new-project, which creates
+// the roles and writes the files, and fails if ProjectPrincipals names anything
+// else. It pins the script's three naming lines, so a rename there fails here
+// rather than leaving `dbpantry endpoints --project` pointing at a user that
+// does not exist.
+func TestProjectPrincipalsMatchNewProject(t *testing.T) {
+	b, err := os.ReadFile(filepath.Join("..", "..", "..", "scripts", "new-project"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	script := string(b)
+	for _, line := range []string{
+		`USER_NAME="${NAME}_user"`,
+		`SECRET_FILE="secrets/${ENGINE}_${USER_NAME}_password.txt"`,
+		`RO_SECRET_FILE="secrets/${ENGINE}_${USER_NAME}_readonly_password.txt"`,
+	} {
+		if !strings.Contains(script, line) {
+			t.Fatalf("scripts/new-project no longer says %s; update ProjectPrincipals to match", line)
+		}
+	}
+	ps := Engine{Name: "pg"}.ProjectPrincipals("settings")
+	want := []Principal{
+		{Role: "app", User: "settings_user", PasswordFile: SecretsDir + "/pg_settings_user_password.txt"},
+		{Role: "read-only", User: "settings_user_readonly", PasswordFile: SecretsDir + "/pg_settings_user_readonly_password.txt"},
+	}
+	if len(ps) != len(want) {
+		t.Fatalf("got %d principals, want %d", len(ps), len(want))
+	}
+	for i := range want {
+		if ps[i] != want[i] {
+			t.Errorf("principal %d = %+v, want %+v (as scripts/new-project names it)", i, ps[i], want[i])
+		}
 	}
 }

@@ -137,7 +137,7 @@ mdb_runtime_init() {
 mdb_ctr() {
     mdb_runtime_init || return 125
     local -a _c
-    read -r -a _c <<< "$MDB_CTR_CMD"
+    IFS=$' \t\n' read -r -a _c <<< "$MDB_CTR_CMD"
     "${_c[@]}" "$@"
 }
 
@@ -168,7 +168,7 @@ _mdb_rt_compose_var() {
 mdb_compose() {
     mdb_runtime_init || return 125
     local -a _c _pre
-    read -r -a _c <<< "$MDB_COMPOSE_CMD"
+    IFS=$' \t\n' read -r -a _c <<< "$MDB_COMPOSE_CMD"
     if [[ "$MDB_COMPOSE_FLAVOR" != compose-v2 ]]; then
         local a has_f=0 has_p=0 files profiles f p
         for a in "$@"; do

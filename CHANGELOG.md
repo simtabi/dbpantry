@@ -233,6 +233,18 @@ waiving them.
   exist and is not a known generated file.
 
 ### Fixed
+- `dbpantry endpoints --project NAME` named the project's roles `NAME` and `NAME_readonly`, with
+  password files `<engine>_NAME_password.txt`, none of which `make new-project` creates: it creates
+  `NAME_user` and `NAME_user_readonly` and writes `<engine>_NAME_user[_readonly]_password.txt`. The
+  principals now use new-project's names, and a Go test reads `scripts/new-project` so they cannot
+  drift again.
+- `make new-project` warned that `vector` and `pg_stat_statements` could not be created although the
+  image ships both: the extension loop ran with `IFS=','`, so `mdb_compose` read `docker compose` as one
+  command word. The loop now splits the list first and runs with the default IFS, the warning carries
+  psql's error, and `mdb_compose`/`mdb_ctr` split their command strings on whitespace whatever the
+  caller's IFS; check 76 proves it without a running engine.
+- Getting started said "about a minute" with no mention of the first image build (about 8 minutes for
+  PostgreSQL and MySQL).
 - `MDB_PUBLISH` and `MDB_PORT_BASE` set on the command line (`MDB_PUBLISH=direct make up`) were
   ignored without a word, because `gen-compose` reads them from `.env` only, so the stack booted with
   no published port. `gen-compose` now refuses a value that differs from the env file and names the

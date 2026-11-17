@@ -1,6 +1,8 @@
 # Getting started
 
-From a fresh clone to an application talking to a database, in about a minute.
+From a fresh clone to an application talking to a database, in about a minute once the images exist.
+The first `make up` builds each engine image locally, which took about 8 minutes for PostgreSQL and
+MySQL together on an Apple Silicon Mac (measured 2026-11-17); later boots reuse them.
 
 Assumes [installation](installation.md) is done and `make verify-structure`
 passes.
