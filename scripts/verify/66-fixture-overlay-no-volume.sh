@@ -60,3 +60,41 @@ if printf '%s\n' "$with" | grep -q '"type": "volume"'; then
 $(printf '%s\n' "$with" | grep -B12 '"type": "volume"' | grep -E '"(source|target)"' | sed 's/^ */       /' | head -10)"
 fi
 vinfo "profiles $profiles: $services services, no volume mount (and the same render without the overlay has them)"
+
+# The fixture runs beside the stack, so its network needs its own subnet:
+# Docker refuses a pool that overlaps the stack's mdb_net, and until
+# 2026-11-17 `fixture up` failed for exactly that whenever the stack was up.
+# Render with the environment the fixture's own plan sets, and check the
+# network's subnet, that it differs from the stack's, and that every pooler's
+# fixed address lies inside it.
+read -r -a words <<< "${up_line%% scripts/runtime up*}"
+fxenv=()
+for w in "${words[@]}"; do
+    [[ "$w" == *=* && "$w" != COMPOSE_PROFILES=* ]] && fxenv+=("$w")
+done
+(( ${#fxenv[@]} >= 3 )) || vfail "the fixture plan sets ${#fxenv[@]} variables, expected its project, subnet and ports: $up_line"
+fx="$(env "${fxenv[@]}" COMPOSE_PROFILES="$profiles" bash -c '. scripts/runtime-lib.sh && mdb_compose "$@" config --format json' _ "${files[@]}" 2>&1)" \
+    || vfail "compose config failed with the fixture's environment: $(printf '%s\n' "$fx" | tail -5)"
+stack="$(printf '%s\n' "$without")"
+check="$(python3 - "$fx" "$stack" <<'PY'
+import ipaddress, json, sys
+fx, st = json.loads(sys.argv[1]), json.loads(sys.argv[2])
+net = lambda d: ipaddress.ip_network(d["networks"]["mdb"]["ipam"]["config"][0]["subnet"])
+a, b = net(fx), net(st)
+if a.overlaps(b):
+    print(f"FAIL the fixture network {a} overlaps the stack's {b}"); sys.exit()
+n = 0
+for name, svc in fx["services"].items():
+    ip = (svc.get("networks") or {}).get("mdb", {}) or {}
+    ip = ip.get("ipv4_address") if isinstance(ip, dict) else None
+    if ip:
+        n += 1
+        if ipaddress.ip_address(ip) not in a:
+            print(f"FAIL {name} has {ip}, outside the fixture network {a}"); sys.exit()
+print(f"OK {a} {b} {n}")
+PY
+)"
+[[ "$check" == OK* ]] || vfail "${check#FAIL }"
+read -r _ fxnet stnet npool <<< "$check"
+(( npool >= 1 )) || vfail "no pooler with a fixed address in the fixture render, so the address check inspected nothing"
+vinfo "fixture network $fxnet beside the stack's $stnet; $npool pooler address(es) inside it"
