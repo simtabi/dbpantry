@@ -88,10 +88,7 @@ func TestValidateProfiles(t *testing.T) {
 // replaces or stops the long-lived stack's engines.
 func TestEnvSeparatesTheFixtureFromTheStack(t *testing.T) {
 	m := manifest(t)
-	env, err := Env(m, "mdb", DefaultPortBase, DefaultSubnet)
-	if err != nil {
-		t.Fatal(err)
-	}
+	env := Env(m, "mdb", DefaultPortBase)
 	have := map[string]string{}
 	for _, kv := range env {
 		k, v, _ := strings.Cut(kv, "=")
@@ -154,68 +151,5 @@ func TestCleanupRemovesOnlyFixtureSecrets(t *testing.T) {
 	}
 	if _, err := os.Stat(keep); err != nil {
 		t.Fatalf("the stack's own secret was removed: %v", err)
-	}
-}
-
-// PoolerAddr is gen-compose's pooler_addr: the stack's default subnet gives
-// 172.28.255.254 for the first pooler, which is what compose.engines.yml has
-// always pinned.
-func TestPoolerAddrMatchesGenCompose(t *testing.T) {
-	cases := map[string]string{
-		"172.28.0.0/16|1": "172.28.255.254",
-		"172.28.0.0/16|2": "172.28.255.253",
-		"172.29.0.0/16|1": "172.29.255.254",
-		"10.210.7.0/24|3": "10.210.7.252",
-	}
-	for in, want := range cases {
-		subnet, idx, _ := strings.Cut(in, "|")
-		got, err := PoolerAddr(subnet, map[string]uint32{"1": 1, "2": 2, "3": 3}[idx])
-		if err != nil || got != want {
-			t.Errorf("PoolerAddr(%s, %s) = %q, %v; want %s", subnet, idx, got, err, want)
-		}
-	}
-	if _, err := PoolerAddr("not-a-cidr", 1); err == nil {
-		t.Error("an invalid subnet was accepted")
-	}
-	if _, err := PoolerAddr("172.29.0.0/16", 0); err == nil {
-		t.Error("pooler index 0, the broadcast address, was accepted")
-	}
-	if _, err := PoolerAddr("10.0.0.0/30", 3); err == nil {
-		t.Error("an index past the subnet's hosts was accepted")
-	}
-}
-
-// The fixture's network must not overlap the stack's, or Docker refuses it.
-func TestEnvGivesTheFixtureItsOwnSubnet(t *testing.T) {
-	m := manifest(t)
-	env, err := Env(m, "mdb", DefaultPortBase, DefaultSubnet)
-	if err != nil {
-		t.Fatal(err)
-	}
-	have := map[string]string{}
-	for _, kv := range env {
-		k, v, _ := strings.Cut(kv, "=")
-		have[k] = v
-	}
-	if have["MDB_NETWORK_SUBNET"] != DefaultSubnet || Overlaps(DefaultSubnet, "172.28.0.0/16") {
-		t.Fatalf("fixture subnet %q overlaps the stack's default", have["MDB_NETWORK_SUBNET"])
-	}
-	poolers := 0
-	for _, e := range m.Implemented() {
-		if e.Pooler == nil {
-			continue
-		}
-		poolers++
-		up := strings.ToUpper(strings.ReplaceAll(e.Name, "-", "_"))
-		ip := have["MDB_FIXTURE_"+up+"_POOLER_IP"]
-		if !Overlaps(ip+"/32", DefaultSubnet) || have["MDB_FIXTURE_"+up+"_POOLER_ADDR"] != ip+"/32" {
-			t.Errorf("%s pooler address %q / %q is not inside %s", e.Name, ip, have["MDB_FIXTURE_"+up+"_POOLER_ADDR"], DefaultSubnet)
-		}
-	}
-	if poolers == 0 {
-		t.Fatal("no pooler in the manifest, so no address was checked")
-	}
-	if !Overlaps("172.28.0.0/16", "172.28.4.0/24") || Overlaps("172.28.0.0/16", "172.29.0.0/16") {
-		t.Fatal("Overlaps")
 	}
 }

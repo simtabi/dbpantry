@@ -10,10 +10,8 @@ package fixture
 
 import (
 	"context"
-	"encoding/binary"
 	"fmt"
 	"io"
-	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -138,62 +136,16 @@ func ProjectName(stack string) string {
 // host port at portBase + offset, overriding the defaults gen-compose bakes
 // from MDB_PORT_BASE. It sets neither MDB_PUBLISH nor MDB_PORT_BASE, which
 // gen-compose reads from the env file only.
-func Env(m engine.Manifest, stack string, portBase int, subnet string) ([]string, error) {
-	env := []string{"COMPOSE_PROJECT_NAME=" + ProjectName(stack), "MDB_FIXTURE=1", "MDB_NETWORK_SUBNET=" + subnet}
-	var poolers uint32
+func Env(m engine.Manifest, stack string, portBase int) []string {
+	env := []string{"COMPOSE_PROJECT_NAME=" + ProjectName(stack), "MDB_FIXTURE=1"}
 	for _, e := range m.Implemented() {
 		up := strings.ToUpper(strings.ReplaceAll(e.Name, "-", "_"))
 		env = append(env, fmt.Sprintf("MDB_%s_HOST_PORT=%d", up, portBase+e.PortOffset))
 		if e.Pooler != nil {
-			poolers++
-			addr, err := PoolerAddr(subnet, poolers)
-			if err != nil {
-				return nil, err
-			}
-			env = append(env,
-				fmt.Sprintf("MDB_%s_POOLER_HOST_PORT=%d", up, portBase+e.PortOffset+PoolerPortStep),
-				fmt.Sprintf("MDB_FIXTURE_%s_POOLER_IP=%s", up, addr),
-				fmt.Sprintf("MDB_FIXTURE_%s_POOLER_ADDR=%s/32", up, addr))
+			env = append(env, fmt.Sprintf("MDB_%s_POOLER_HOST_PORT=%d", up, portBase+e.PortOffset+PoolerPortStep))
 		}
 	}
-	return env, nil
-}
-
-// DefaultSubnet is the fixture network's subnet when MDB_FIXTURE_NETWORK_SUBNET
-// is unset. It must differ from the stack's (MDB_NETWORK_SUBNET, default
-// 172.28.0.0/16): Docker refuses a second network on an overlapping pool, so
-// until 2026-11-17 `fixture up` failed whenever the stack was running.
-const DefaultSubnet = "172.29.0.0/16"
-
-// PoolerAddr is scripts/gen-compose's pooler_addr: the idx-th address down
-// from the subnet's broadcast address, where Docker's dynamic allocation (from
-// the bottom) never reaches. Poolers are numbered from 1 in engine-name order
-// (0 is refused),
-// as gen-compose numbers them.
-func PoolerAddr(subnet string, idx uint32) (string, error) {
-	_, n, err := net.ParseCIDR(subnet)
-	if err != nil || n.IP.To4() == nil {
-		return "", fmt.Errorf("fixture subnet %q is not an IPv4 CIDR", subnet)
-	}
-	ones, _ := n.Mask.Size()
-	base := binary.BigEndian.Uint32(n.IP.To4())
-	host := uint32(1)<<(32-ones) - 1
-	if idx == 0 || idx >= host {
-		return "", fmt.Errorf("fixture subnet %q is too small for %d poolers", subnet, idx)
-	}
-	ip := make(net.IP, 4)
-	binary.BigEndian.PutUint32(ip, (base|host)-idx)
-	return ip.String(), nil
-}
-
-// Overlaps reports whether two IPv4 CIDRs share any address.
-func Overlaps(a, b string) bool {
-	_, x, errA := net.ParseCIDR(a)
-	_, y, errB := net.ParseCIDR(b)
-	if errA != nil || errB != nil {
-		return false
-	}
-	return x.Contains(y.IP) || y.Contains(x.IP)
+	return env
 }
 
 // PoolerPortStep mirrors endpoint.PoolerPortStep: a pooler publishes at its

@@ -137,6 +137,10 @@ waiving them.
   D-52 to D-57, which sat after the end of the document, are back in the decision log.
 
 ### Added
+- `dbpantry endpoints` names each engine's admin user (`postgres`, `root`, `cassandra`; MongoDB's
+  `MDB_MONGODB_ROOT_USER` overrides it), from a new optional descriptor key `MDB_ENGINE_ADMIN_USER`.
+  laranail-test-db's `principal: admin` needs it. A Go test reads the family scripts, so the descriptor
+  cannot name a login the toolkit never uses.
 - `make new-project NAME=x FIXTURE=1` (`project new --fixture`) provisions in the fixture, with password
   files under `secrets/fixture/`, which `fixture down` removes; `make endpoints FIXTURE=1` (`endpoints
   --fixture`) reports the fixture's ports and those files. A test run that names its own project gets
@@ -243,12 +247,6 @@ waiving them.
   exist and is not a known generated file.
 
 ### Fixed
-- **`fixture up` failed whenever the stack was running** ("Pool overlaps with other one on this address
-  space"): the fixture's network asked for the stack's subnet. It now uses `MDB_FIXTURE_NETWORK_SUBNET`
-  (default `172.29.0.0/16`), refused when it overlaps `MDB_NETWORK_SUBNET`, and gen-compose writes each
-  pooler's fixed address as `${MDB_FIXTURE_<ENGINE>_POOLER_IP:-<stack address>}`, so the stack's render is
-  unchanged. Check 66 now renders the fixture's network and pooler addresses. Found by the
-  laranail/settings pilot.
 - `dbpantry endpoints --project NAME` named the project's roles `NAME` and `NAME_readonly`, with
   password files `<engine>_NAME_password.txt`, none of which `make new-project` creates: it creates
   `NAME_user` and `NAME_user_readonly` and writes `<engine>_NAME_user[_readonly]_password.txt`. The

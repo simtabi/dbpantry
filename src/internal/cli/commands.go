@@ -141,10 +141,8 @@ direct endpoint ("superuser": false on every pooled one).`,
 }
 
 // fixtureEnv is fixture.Env for this checkout: the stack's compose project
-// (COMPOSE_PROJECT_NAME, environment over env file), MDB_FIXTURE_PORT_BASE
-// from the env file (else fixture.DefaultPortBase) and MDB_FIXTURE_NETWORK_SUBNET
-// (else fixture.DefaultSubnet), refused when it overlaps the stack's
-// MDB_NETWORK_SUBNET. It also returns the port base.
+// (COMPOSE_PROJECT_NAME, environment over env file) and MDB_FIXTURE_PORT_BASE
+// from the env file, else fixture.DefaultPortBase. It also returns that base.
 func fixtureEnv(m engine.Manifest, s *config.Settings) ([]string, int, error) {
 	base := fixture.DefaultPortBase
 	if v := s.File("MDB_FIXTURE_PORT_BASE"); v != "" {
@@ -154,24 +152,7 @@ func fixtureEnv(m engine.Manifest, s *config.Settings) ([]string, int, error) {
 		}
 		base = n
 	}
-	// The fixture's network needs a subnet of its own: Docker refuses a pool
-	// that overlaps the stack's network, which is up whenever the stack is.
-	stack := s.File("MDB_NETWORK_SUBNET")
-	if stack == "" {
-		stack = "172.28.0.0/16"
-	}
-	subnet := s.File("MDB_FIXTURE_NETWORK_SUBNET")
-	if subnet == "" {
-		subnet = fixture.DefaultSubnet
-	}
-	if fixture.Overlaps(subnet, stack) {
-		return nil, 0, fmt.Errorf("MDB_FIXTURE_NETWORK_SUBNET=%s overlaps the stack's MDB_NETWORK_SUBNET=%s in %s; give the fixture its own range", subnet, stack, s.EnvFile)
-	}
-	env, err := fixture.Env(m, s.Effective("COMPOSE_PROJECT_NAME"), base, subnet)
-	if err != nil {
-		return nil, 0, err
-	}
-	return env, base, nil
+	return fixture.Env(m, s.Effective("COMPOSE_PROJECT_NAME"), base), base, nil
 }
 
 func writeEndpointsTable(a *app, doc endpoint.Document) error {

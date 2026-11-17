@@ -179,3 +179,25 @@ func TestPoolerPortStepMatchesFixture(t *testing.T) {
 		t.Fatalf("fixture.PoolerPortStep=%d, endpoint.PoolerPortStep=%d", fixture.PoolerPortStep, PoolerPortStep)
 	}
 }
+
+// The admin principal carries its login name, and MDB_<ENGINE>_ROOT_USER
+// overrides it where an engine reads that variable (MongoDB).
+func TestAdminPrincipalNamesItsUser(t *testing.T) {
+	d, err := Resolve(manifest(t), settings(t, "MDB_PUBLISH=direct\nMDB_MONGODB_ROOT_USER=dba\n"), Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	admin := func(name string) string {
+		for _, p := range find(t, d, name).Principals {
+			if p.Role == "admin" {
+				return p.User
+			}
+		}
+		return ""
+	}
+	for name, want := range map[string]string{"pg": "postgres", "mysql": "root", "mariadb": "root", "mongodb": "dba"} {
+		if got := admin(name); got != want {
+			t.Errorf("%s admin user = %q, want %q", name, got, want)
+		}
+	}
+}
