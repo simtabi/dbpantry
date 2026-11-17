@@ -81,7 +81,7 @@ func (p Progress) Fraction() float64 {
 	return float64(p.Done) / float64(p.Total)
 }
 
-// Line draws the bar, the counts and the estimate: "███░░  40%  4/10  ~12s left".
+// Progress draws the bar, the counts and the estimate: "███░░  40%  4/10  ~12s left".
 func (s Style) Progress(p Progress, width int, now time.Time) string {
 	f := p.Fraction()
 	parts := []string{s.Bar(f, width)}

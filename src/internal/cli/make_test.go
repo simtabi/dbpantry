@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"bufio"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -13,7 +12,9 @@ import (
 // make rebuilds build/<os>/dbpantry only when one of DBPANTRY_SOURCES is
 // newer. Every file a //go:embed directive pulls in has to be among them,
 // or an edited template or stylesheet ships stale (found 2026-11-17, when a
-// dashboard CSS fix did not reach the running page).
+// dashboard CSS fix did not reach the running page). The embedded files are
+// the ones the Go toolchain itself reports (go list's EmbedFiles), so the
+// test reads no directive by hand.
 func TestMakeRebuildsOnEveryEmbeddedFile(t *testing.T) {
 	repo, err := filepath.Abs(filepath.Join("..", "..", ".."))
 	if err != nil {
@@ -27,9 +28,9 @@ func TestMakeRebuildsOnEveryEmbeddedFile(t *testing.T) {
 	if m == nil {
 		t.Fatal("no DBPANTRY_SOURCES := $(shell …) line in the Makefile")
 	}
-	cmd := exec.Command("sh", "-c", string(m[1])) // #nosec G204 -- the Makefile's own find expression
-	cmd.Dir = repo
-	out, err := cmd.Output()
+	find := exec.CommandContext(t.Context(), "sh", "-c", string(m[1])) // #nosec G204 -- the Makefile's own find expression
+	find.Dir = repo
+	out, err := find.Output()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -38,45 +39,23 @@ func TestMakeRebuildsOnEveryEmbeddedFile(t *testing.T) {
 		sources[filepath.Clean(f)] = true
 	}
 
-	embedded := 0
-	err = filepath.WalkDir(filepath.Join(repo, "src"), func(p string, d os.DirEntry, err error) error {
-		if err != nil || d.IsDir() || !strings.HasSuffix(p, ".go") {
-			return err
-		}
-		f, err := os.Open(p) // #nosec G304 -- a Go file of this module
-		if err != nil {
-			return err
-		}
-		defer f.Close()
-		sc := bufio.NewScanner(f)
-		for sc.Scan() {
-			patterns, ok := strings.CutPrefix(strings.TrimSpace(sc.Text()), "//go:embed ")
-			if !ok {
-				continue
-			}
-			for _, pat := range strings.Fields(patterns) {
-				matches, _ := filepath.Glob(filepath.Join(filepath.Dir(p), pat))
-				for _, match := range matches {
-					_ = filepath.WalkDir(match, func(q string, e os.DirEntry, err error) error {
-						if err != nil || e.IsDir() {
-							return err
-						}
-						embedded++
-						rel, _ := filepath.Rel(repo, q)
-						if !sources[rel] {
-							t.Errorf("%s is embedded in the binary but is not in DBPANTRY_SOURCES, so editing it does not rebuild", rel)
-						}
-						return nil
-					})
-				}
-			}
-		}
-		return sc.Err()
-	})
+	list := exec.CommandContext(t.Context(), "go", "list", "-f", `{{range .EmbedFiles}}{{$.Dir}}/{{.}}{{"\n"}}{{end}}`, "./...")
+	list.Dir = filepath.Join(repo, "src")
+	embeddedOut, err := list.Output()
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("go list: %v", err)
 	}
-	if embedded < 10 {
-		t.Fatalf("found %d embedded files; the //go:embed scan read too little to mean anything", embedded)
+	embedded := strings.Fields(string(embeddedOut))
+	if len(embedded) < 10 {
+		t.Fatalf("go list reported %d embedded files; too few to mean anything", len(embedded))
+	}
+	for _, f := range embedded {
+		rel, err := filepath.Rel(repo, f)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !sources[rel] {
+			t.Errorf("%s is embedded in the binary but is not in DBPANTRY_SOURCES, so editing it does not rebuild", rel)
+		}
 	}
 }

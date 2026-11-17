@@ -37,14 +37,26 @@ func (s Style) paint(code, text string) string {
 	return code + text + reset
 }
 
-// Bold, Dim, Red, Green, Yellow, Blue and Cyan paint text when colour is on.
-func (s Style) Bold(t string) string   { return s.paint(bold, t) }
-func (s Style) Dim(t string) string    { return s.paint(dim, t) }
-func (s Style) Red(t string) string    { return s.paint(red, t) }
-func (s Style) Green(t string) string  { return s.paint(green, t) }
+// Bold paints text bold when colour is on.
+func (s Style) Bold(t string) string { return s.paint(bold, t) }
+
+// Dim paints text faint when colour is on.
+func (s Style) Dim(t string) string { return s.paint(dim, t) }
+
+// Red paints text red when colour is on.
+func (s Style) Red(t string) string { return s.paint(red, t) }
+
+// Green paints text green when colour is on.
+func (s Style) Green(t string) string { return s.paint(green, t) }
+
+// Yellow paints text yellow when colour is on.
 func (s Style) Yellow(t string) string { return s.paint(yellow, t) }
-func (s Style) Blue(t string) string   { return s.paint(blue, t) }
-func (s Style) Cyan(t string) string   { return s.paint(cyan, t) }
+
+// Blue paints text blue when colour is on.
+func (s Style) Blue(t string) string { return s.paint(blue, t) }
+
+// Cyan paints text cyan when colour is on.
+func (s Style) Cyan(t string) string { return s.paint(cyan, t) }
 
 // State is where a step or a resource is.
 type State int

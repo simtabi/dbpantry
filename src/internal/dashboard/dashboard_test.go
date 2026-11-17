@@ -7,7 +7,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"io"
 	"io/fs"
 	"net/http"
 	"net/http/httptest"
@@ -30,7 +29,7 @@ func fixture(context.Context) (Snapshot, error) {
 			{Engine: "pg", Title: "PostgreSQL", Enabled: true, TLSAlways: true, Direct: endpoint.Access{Network: endpoint.Address{Host: "pg", Port: 5432}}},
 		}},
 		Services: []Service{{Name: "pg", Health: "healthy", State: "running", Image: "localhost/dbpantry-pg:17", Started: time.Now().Add(-time.Hour)}, {Name: "caddy", Health: "none"}},
-		Projects: []Project{{Engine: "pg", Name: "settings", Owner: "settings_user", Readonly: "settings_user_readonly", OwnerSecret: "secrets/pg_settings_user_password.txt"}},
+		Projects: []Project{{Engine: "pg", Name: "settings", Owner: "settings_user", Readonly: "settings_user_readonly", OwnerSecret: "secrets/pg_settings_user_password.txt"}}, // #nosec G101 -- a file path, not a credential
 		Backups:  []Backup{{File: "pg_settings_20261117T000000Z.dump", Engine: "pg", Size: 2048, Modified: time.Now()}},
 	}, nil
 }
@@ -54,12 +53,12 @@ var testPassword = func() string {
 	return hex.EncodeToString(b)
 }()
 
-func serve(t *testing.T, collect func(context.Context) (Snapshot, error), hosts []string, path, host string) *http.Response {
+func serve(t *testing.T, collect func(context.Context) (Snapshot, error), hosts []string, path, host string) *httptest.ResponseRecorder {
 	t.Helper()
 	return serveReq(t, collect, hosts, path, host, nil)
 }
 
-func serveReq(t *testing.T, collect func(context.Context) (Snapshot, error), hosts []string, path, host string, headers map[string]string) *http.Response {
+func serveReq(t *testing.T, collect func(context.Context) (Snapshot, error), hosts []string, path, host string, headers map[string]string) *httptest.ResponseRecorder {
 	t.Helper()
 	h, err := Handler(Sources{Snapshot: collect, Project: showFixture}, hosts)
 	if err != nil {
@@ -74,26 +73,18 @@ func serveReq(t *testing.T, collect func(context.Context) (Snapshot, error), hos
 	}
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
-	res := rec.Result()
-	t.Cleanup(func() { _ = res.Body.Close() })
-	return res
+	return rec
 }
 
-func body(t *testing.T, r *http.Response) string {
-	t.Helper()
-	defer r.Body.Close()
-	b, err := io.ReadAll(r.Body)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return string(b)
-}
+// body is the response's body. A recorder holds it in memory, so there is
+// nothing to close.
+func body(_ *testing.T, r *httptest.ResponseRecorder) string { return r.Body.String() }
 
 func TestDashboardServes(t *testing.T) {
 	r := serve(t, fixture, nil, "/", "")
 	page := body(t, r)
-	if r.StatusCode != http.StatusOK {
-		t.Fatalf("GET / = %d", r.StatusCode)
+	if r.Code != http.StatusOK {
+		t.Fatalf("GET / = %d", r.Code)
 	}
 	for _, want := range []string{
 		`<link rel="icon" type="image/svg+xml" href="/assets/favicons/favicon.svg">`,
@@ -105,7 +96,7 @@ func TestDashboardServes(t *testing.T) {
 			t.Errorf("the overview lacks %q", want)
 		}
 	}
-	if csp := r.Header.Get("Content-Security-Policy"); !strings.Contains(csp, "default-src 'self'") {
+	if csp := r.Header().Get("Content-Security-Policy"); !strings.Contains(csp, "default-src 'self'") {
 		t.Errorf("no restrictive CSP: %q", csp)
 	}
 	// Every page renders, with the layout, and lists what it is about.
@@ -117,15 +108,15 @@ func TestDashboardServes(t *testing.T) {
 	} {
 		n++
 		r := serve(t, fixture, nil, path, "")
-		if b := body(t, r); r.StatusCode != http.StatusOK || !strings.Contains(b, want) || !strings.Contains(b, `id="navbar-menu"`) {
-			t.Errorf("GET %s = %d, want the layout and %q", path, r.StatusCode, want)
+		if b := body(t, r); r.Code != http.StatusOK || !strings.Contains(b, want) || !strings.Contains(b, `id="navbar-menu"`) {
+			t.Errorf("GET %s = %d, want the layout and %q", path, r.Code, want)
 		}
 	}
 	if n != len(pages)-2 { // overview and project are checked on their own
 		t.Fatalf("checked %d pages of %d", n, len(pages)-2)
 	}
-	if r := serve(t, fixture, nil, "/engines/nope", ""); r.StatusCode != http.StatusNotFound {
-		t.Errorf("an unknown engine is 404, got %d", r.StatusCode)
+	if r := serve(t, fixture, nil, "/engines/nope", ""); r.Code != http.StatusNotFound {
+		t.Errorf("an unknown engine is 404, got %d", r.Code)
 	}
 
 	part := body(t, serveReq(t, fixture, nil, "/services", "", map[string]string{"X-Partial": "1"}))
@@ -142,8 +133,8 @@ func TestDashboardServes(t *testing.T) {
 func TestProjectPageBlursThePasswordAndRefusesCrossSite(t *testing.T) {
 	r := serve(t, fixture, nil, "/projects/pg/settings", "")
 	b := body(t, r)
-	if r.StatusCode != http.StatusOK {
-		t.Fatalf("GET project = %d", r.StatusCode)
+	if r.Code != http.StatusOK {
+		t.Fatalf("GET project = %d", r.Code)
 	}
 	for _, want := range []string{
 		`DB_PASSWORD=<span class="mdb-secret" data-secret>` + testPassword + `</span>`,
@@ -153,13 +144,13 @@ func TestProjectPageBlursThePasswordAndRefusesCrossSite(t *testing.T) {
 			t.Errorf("the project page lacks %q", want)
 		}
 	}
-	if r := serve(t, fixture, nil, "/projects/pg/nope", ""); r.StatusCode != http.StatusNotFound {
-		t.Errorf("an unknown project is 404, got %d", r.StatusCode)
+	if r := serve(t, fixture, nil, "/projects/pg/nope", ""); r.Code != http.StatusNotFound {
+		t.Errorf("an unknown project is 404, got %d", r.Code)
 	}
 	for site, want := range map[string]int{"cross-site": http.StatusForbidden, "same-site": http.StatusForbidden, "same-origin": http.StatusOK, "none": http.StatusOK} {
 		r := serveReq(t, fixture, nil, "/projects/pg/settings", "", map[string]string{"Sec-Fetch-Site": site})
-		if b := body(t, r); r.StatusCode != want || (want != http.StatusOK && strings.Contains(b, testPassword)) {
-			t.Errorf("Sec-Fetch-Site %s: %d, want %d", site, r.StatusCode, want)
+		if b := body(t, r); r.Code != want || (want != http.StatusOK && strings.Contains(b, testPassword)) {
+			t.Errorf("Sec-Fetch-Site %s: %d, want %d", site, r.Code, want)
 		}
 	}
 	if strings.Contains(body(t, serve(t, fixture, nil, "/api/status", "")), testPassword) {
@@ -172,22 +163,22 @@ func TestProjectPageBlursThePasswordAndRefusesCrossSite(t *testing.T) {
 func TestFaviconIsServedAsSVG(t *testing.T) {
 	r := serve(t, fixture, nil, "/assets/favicons/favicon.svg", "")
 	b := body(t, r)
-	if r.StatusCode != http.StatusOK || r.Header.Get("Content-Type") != "image/svg+xml" || !strings.HasPrefix(b, "<svg") {
-		t.Errorf("favicon: %d %q", r.StatusCode, r.Header.Get("Content-Type"))
+	if r.Code != http.StatusOK || r.Header().Get("Content-Type") != "image/svg+xml" || !strings.HasPrefix(b, "<svg") {
+		t.Errorf("favicon: %d %q", r.Code, r.Header().Get("Content-Type"))
 	}
-	if r := serve(t, fixture, nil, "/assets/css/tabler.min.css", ""); r.StatusCode != http.StatusOK || !strings.HasPrefix(r.Header.Get("Content-Type"), "text/css") {
-		t.Errorf("stylesheet: %d %q", r.StatusCode, r.Header.Get("Content-Type"))
+	if r := serve(t, fixture, nil, "/assets/css/tabler.min.css", ""); r.Code != http.StatusOK || !strings.HasPrefix(r.Header().Get("Content-Type"), "text/css") {
+		t.Errorf("stylesheet: %d %q", r.Code, r.Header().Get("Content-Type"))
 	}
 }
 
 func TestOtherHostsAreRefused(t *testing.T) {
 	hosts := []string{"localhost", "127.0.0.1", "::1"}
-	if r := serve(t, fixture, hosts, "/", "evil.example:8484"); r.StatusCode != http.StatusMisdirectedRequest {
-		t.Errorf("a rebinding Host was answered: %d", r.StatusCode)
+	if r := serve(t, fixture, hosts, "/", "evil.example:8484"); r.Code != http.StatusMisdirectedRequest {
+		t.Errorf("a rebinding Host was answered: %d", r.Code)
 	}
 	for _, h := range []string{"localhost:8484", "127.0.0.1:8484", "[::1]:8484"} {
-		if r := serve(t, fixture, hosts, "/", h); r.StatusCode != http.StatusOK {
-			t.Errorf("Host %s refused: %d", h, r.StatusCode)
+		if r := serve(t, fixture, hosts, "/", h); r.Code != http.StatusOK {
+			t.Errorf("Host %s refused: %d", h, r.Code)
 		}
 	}
 }
@@ -203,8 +194,8 @@ func TestUnavailableRuntimeIsNotAnEmptyStack(t *testing.T) {
 		t.Error("an unreachable runtime must read as unavailable, never as nothing running")
 	}
 	broken := func(context.Context) (Snapshot, error) { return Snapshot{}, errors.New("no manifest") }
-	if r := serve(t, broken, nil, "/", ""); r.StatusCode != http.StatusInternalServerError {
-		t.Errorf("a failed read is an error page: %d", r.StatusCode)
+	if r := serve(t, broken, nil, "/", ""); r.Code != http.StatusInternalServerError {
+		t.Errorf("a failed read is an error page: %d", r.Code)
 	}
 }
 
