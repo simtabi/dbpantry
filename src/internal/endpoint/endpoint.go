@@ -73,13 +73,15 @@ type Endpoint struct {
 
 // Document is the endpoints output.
 type Document struct {
-	SchemaVersion int        `json:"schema_version"`
-	Publish       string     `json:"publish"`
-	PortBase      int        `json:"port_base"`
-	BindAddr      string     `json:"bind_addr"`
-	Profiles      []string   `json:"profiles"`
-	EnvFile       string     `json:"env_file"`
-	Endpoints     []Endpoint `json:"endpoints"`
+	SchemaVersion int      `json:"schema_version"`
+	Publish       string   `json:"publish"`
+	PortBase      int      `json:"port_base"`
+	BindAddr      string   `json:"bind_addr"`
+	Profiles      []string `json:"profiles"`
+	EnvFile       string   `json:"env_file"`
+	// Fixture is true when the document describes the fixture (--fixture).
+	Fixture   bool       `json:"fixture,omitempty"`
+	Endpoints []Endpoint `json:"endpoints"`
 }
 
 // Options select what to report.
@@ -89,6 +91,12 @@ type Options struct {
 	// Project, when set, adds the app and read-only principals that
 	// `make new-project NAME=<project>` creates.
 	Project string
+	// FixtureBase, when above zero, describes the fixture instead of the
+	// stack: engines published at FixtureBase + offset (the ports
+	// fixture.Env sets, whatever the env file pins), only in direct mode
+	// (the fixture runs no proxy), and project password files under
+	// SecretsDir/fixture, where new-project writes them for a fixture.
+	FixtureBase int
 }
 
 // Resolve builds the endpoints document for the implemented engines.
@@ -110,10 +118,29 @@ func Resolve(m engine.Manifest, s *config.Settings, o Options) (Document, error)
 		bind = DefaultBindAddr
 	}
 	profiles := Profiles(m, s, o.Profiles)
+	fixture := o.FixtureBase > 0
+	if fixture {
+		base = o.FixtureBase
+		if publish == "proxy" {
+			publish = "none"
+		}
+	}
+	// port is a published host port: the fixture's base + offset, or the
+	// stack's, which an explicit MDB_*_HOST_PORT may pin elsewhere.
+	port := func(name string, def int) (int, error) {
+		if fixture {
+			return def, nil
+		}
+		return hostPort(s, name, def)
+	}
+	secretsDir := engine.SecretsDir
+	if fixture {
+		secretsDir = engine.SecretsDir + "/fixture"
+	}
 
 	doc := Document{
 		SchemaVersion: SchemaVersion, Publish: publish, PortBase: base, BindAddr: bind,
-		Profiles: profiles, EnvFile: s.EnvFile, Endpoints: []Endpoint{},
+		Profiles: profiles, EnvFile: s.EnvFile, Fixture: fixture, Endpoints: []Endpoint{},
 	}
 	on := func(p string) bool { return contains(profiles, p) }
 
@@ -127,11 +154,11 @@ func Resolve(m engine.Manifest, s *config.Settings, o Options) (Document, error)
 		}
 		switch publish {
 		case "direct":
-			port, err := hostPort(s, "MDB_"+upper+"_HOST_PORT", base+e.PortOffset)
+			p, err := port("MDB_"+upper+"_HOST_PORT", base+e.PortOffset)
 			if err != nil {
 				return Document{}, err
 			}
-			ep.Direct.Published = &Published{Address: bind, Port: port, Via: "direct"}
+			ep.Direct.Published = &Published{Address: bind, Port: p, Via: "direct"}
 		case "proxy":
 			ep.Direct.Published = &Published{Address: bind, Port: base + e.PortOffset, Via: "proxy"}
 		}
@@ -143,16 +170,16 @@ func Resolve(m engine.Manifest, s *config.Settings, o Options) (Document, error)
 			}
 			// Only direct mode publishes a pooler; the proxy routes engines only.
 			if publish == "direct" {
-				port, err := hostPort(s, "MDB_"+upper+"_POOLER_HOST_PORT", base+e.PortOffset+PoolerPortStep)
+				p, err := port("MDB_"+upper+"_POOLER_HOST_PORT", base+e.PortOffset+PoolerPortStep)
 				if err != nil {
 					return Document{}, err
 				}
-				pooled.Published = &Published{Address: bind, Port: port, Via: "direct"}
+				pooled.Published = &Published{Address: bind, Port: p, Via: "direct"}
 			}
 			ep.Pooled = pooled
 		}
 		if o.Project != "" {
-			ep.Principals = append(ep.Principals, e.ProjectPrincipals(o.Project)...)
+			ep.Principals = append(ep.Principals, e.ProjectPrincipalsIn(o.Project, secretsDir)...)
 		}
 		doc.Endpoints = append(doc.Endpoints, ep)
 	}

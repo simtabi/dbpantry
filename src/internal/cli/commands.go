@@ -4,12 +4,15 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"text/tabwriter"
 
 	"github.com/spf13/cobra"
 
+	"github.com/simtabi/dbpantry/src/internal/config"
 	"github.com/simtabi/dbpantry/src/internal/endpoint"
+	"github.com/simtabi/dbpantry/src/internal/engine"
 	"github.com/simtabi/dbpantry/src/internal/fixture"
 )
 
@@ -91,6 +94,7 @@ func (a *app) checkHelmCmd() *cobra.Command {
 
 func (a *app) endpointsCmd() *cobra.Command {
 	var output, profiles, project string
+	var fx bool
 	cmd := &cobra.Command{
 		Use:   "endpoints",
 		Short: "Print where to connect to each engine: network, published and pooled endpoints",
@@ -113,7 +117,13 @@ direct endpoint ("superuser": false on every pooled one).`,
 			if err != nil {
 				return err
 			}
-			doc, err := endpoint.Resolve(m, s, endpoint.Options{Profiles: profiles, Project: project})
+			o := endpoint.Options{Profiles: profiles, Project: project}
+			if fx {
+				if _, o.FixtureBase, err = fixtureEnv(m, s); err != nil {
+					return err
+				}
+			}
+			doc, err := endpoint.Resolve(m, s, o)
 			if err != nil {
 				return err
 			}
@@ -126,7 +136,23 @@ direct endpoint ("superuser": false on every pooled one).`,
 	cmd.Flags().StringVarP(&output, "output", "o", "table", "output format: table or json")
 	cmd.Flags().StringVar(&profiles, "profiles", "", "profiles to report as enabled (default: $PROFILES, else MDB_PROFILES, else pg,ui)")
 	cmd.Flags().StringVar(&project, "project", "", "also list the app and read-only principals `make new-project NAME=<project>` creates")
+	cmd.Flags().BoolVar(&fx, "fixture", false, "describe the fixture (`fixture up`) instead of the stack: its ports and its projects' password files")
 	return cmd
+}
+
+// fixtureEnv is fixture.Env for this checkout: the stack's compose project
+// (COMPOSE_PROJECT_NAME, environment over env file) and MDB_FIXTURE_PORT_BASE
+// from the env file, else fixture.DefaultPortBase. It also returns that base.
+func fixtureEnv(m engine.Manifest, s *config.Settings) ([]string, int, error) {
+	base := fixture.DefaultPortBase
+	if v := s.File("MDB_FIXTURE_PORT_BASE"); v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil || n <= 0 {
+			return nil, 0, fmt.Errorf("MDB_FIXTURE_PORT_BASE=%q in %s is not a port number", v, s.EnvFile)
+		}
+		base = n
+	}
+	return fixture.Env(m, s.Effective("COMPOSE_PROJECT_NAME"), base), base, nil
 }
 
 func writeEndpointsTable(a *app, doc endpoint.Document) error {
@@ -169,15 +195,19 @@ func (a *app) fixtureCmd() *cobra.Command {
 		if b := s.Effective("MDB_BACKEND"); b != "" && b != "compose" {
 			return usagef("fixtures run on the compose backend only (MDB_BACKEND=%s)", b)
 		}
+		fx, _, err := fixtureEnv(m, s)
+		if err != nil {
+			return err
+		}
 		var plan []fixture.Step
 		if up {
 			selected := endpoint.Profiles(m, s, profiles)
 			if err := fixture.ValidateProfiles(m, selected); err != nil {
 				return usageError{err}
 			}
-			plan = fixture.UpPlan(selected)
+			plan = fixture.UpPlan(selected, fx)
 		} else {
-			plan = fixture.DownPlan()
+			plan = fixture.DownPlan(fx)
 		}
 		if dryRun {
 			for _, st := range plan {
@@ -190,7 +220,13 @@ func (a *app) fixtureCmd() *cobra.Command {
 		for _, st := range plan {
 			a.log.Info("fixture", "run", st.String())
 		}
-		return fixture.Run(c.Context(), fixture.ExecRunner{Stdout: a.stdout, Stderr: a.stderr}, root, plan)
+		if err := fixture.Run(c.Context(), fixture.ExecRunner{Stdout: a.stdout, Stderr: a.stderr}, root, plan); err != nil {
+			return err
+		}
+		if !up {
+			return fixture.Cleanup(root)
+		}
+		return nil
 	}
 	up := &cobra.Command{
 		Use:   "up",

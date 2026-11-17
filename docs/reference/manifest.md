@@ -124,6 +124,30 @@ for health. `fixture down` stops that stack. `--dry-run` prints the commands.
   services with volumes of their own, and are refused with exit code 64.
 - FerretDB is refused until its image exists: it has a descriptor and no Compose service.
 - Fixtures run on the Compose backend only.
+- **A fixture runs beside the stack, never instead of it.** It is its own Compose project
+  (`<COMPOSE_PROJECT_NAME>-fixture`, so `mdb-fixture`) and publishes at `MDB_FIXTURE_PORT_BASE`
+  (default 55000) + offset under `MDB_PUBLISH=direct`: PostgreSQL 55000, MySQL 55001, poolers +100.
+  Until 2026-11-17 it ran as the stack's project, so `fixture up` replaced every application's
+  engine with a tmpfs one and `fixture down` stopped them.
+
+### A test suite on the fixture
+
+Durability is off in the fixture (`fsync=off`, `innodb_flush_log_at_trx_commit=0`, tmpfs), which
+is what makes per-test schema rebuilds fast: the laranail/settings pilot measured MySQL at ~9x
+PostgreSQL's time on the durable stack. Give each test run its own project name, so two runs never
+share a database:
+
+```bash
+make fixture-up PROFILES=pg,mysql
+make new-project NAME=settings_r1 FIXTURE=1                 # one database per run
+make new-project NAME=settings_r1 ENGINE=mysql FIXTURE=1
+make endpoints OUTPUT=json PROFILES=pg,mysql PROJECT=settings_r1 FIXTURE=1
+make fixture-down                                           # also removes secrets/fixture/
+```
+
+`--fixture` on `project new` sets `MDB_FIXTURE=1`, so new-project writes the password files to
+`secrets/fixture/` (in containers `/run/secrets/fixture/`), and skips the pooler sync, which acts on
+the stack. `endpoints --fixture` reports the fixture's ports and those password files.
 
 ## What phase 1 does not do yet
 

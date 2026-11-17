@@ -3,6 +3,8 @@ package fixture
 import (
 	"context"
 	"errors"
+	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -35,7 +37,7 @@ func manifest(t *testing.T) engine.Manifest {
 // fixture up is exactly what make test-profile runs, with the caller's profiles.
 func TestUpPlanIsTheTestProfile(t *testing.T) {
 	r := &recorder{}
-	if err := Run(context.Background(), r, "/x", UpPlan([]string{"pg", "pg-pooler"})); err != nil {
+	if err := Run(context.Background(), r, "/x", UpPlan([]string{"pg", "pg-pooler"}, nil)); err != nil {
 		t.Fatal(err)
 	}
 	want := []string{
@@ -49,21 +51,21 @@ func TestUpPlanIsTheTestProfile(t *testing.T) {
 }
 
 func TestDownPlanNeverRemovesVolumes(t *testing.T) {
-	for _, s := range DownPlan() {
+	for _, s := range DownPlan(nil) {
 		for _, a := range s.Args {
 			if a == "-v" || a == "--volumes" {
 				t.Fatalf("fixture down removes volumes: %s", s)
 			}
 		}
 	}
-	if got := DownPlan()[0].String(); got != "scripts/runtime down -f docker-compose.yml -f compose.engines.yml -f compose.test.yml" {
+	if got := DownPlan(nil)[0].String(); got != "scripts/runtime down -f docker-compose.yml -f compose.engines.yml -f compose.test.yml" {
 		t.Fatalf("down: %s", got)
 	}
 }
 
 func TestRunStopsAtTheFirstFailure(t *testing.T) {
 	r := &recorder{fail: 1}
-	if err := Run(context.Background(), r, "/x", UpPlan([]string{"pg"})); err == nil || len(r.steps) != 1 {
+	if err := Run(context.Background(), r, "/x", UpPlan([]string{"pg"}, nil)); err == nil || len(r.steps) != 1 {
 		t.Fatalf("err=%v steps=%v", err, r.steps)
 	}
 }
@@ -79,5 +81,75 @@ func TestValidateProfiles(t *testing.T) {
 		if err := ValidateProfiles(m, bad); err == nil {
 			t.Errorf("accepted %v", bad)
 		}
+	}
+}
+
+// A fixture runs as its own compose project on its own ports, so it never
+// replaces or stops the long-lived stack's engines.
+func TestEnvSeparatesTheFixtureFromTheStack(t *testing.T) {
+	m := manifest(t)
+	env := Env(m, "mdb", DefaultPortBase)
+	have := map[string]string{}
+	for _, kv := range env {
+		k, v, _ := strings.Cut(kv, "=")
+		have[k] = v
+	}
+	if have["COMPOSE_PROJECT_NAME"] != "mdb-fixture" || have["MDB_FIXTURE"] != "1" {
+		t.Fatalf("env %v", env)
+	}
+	if _, ok := have["MDB_PUBLISH"]; ok {
+		t.Fatalf("env sets MDB_PUBLISH, which gen-compose refuses from the environment: %v", env)
+	}
+	if _, ok := have["MDB_PORT_BASE"]; ok {
+		t.Fatalf("env sets MDB_PORT_BASE, which gen-compose refuses from the environment: %v", env)
+	}
+	n := 0
+	for _, e := range m.Implemented() {
+		up := strings.ToUpper(strings.ReplaceAll(e.Name, "-", "_"))
+		want := fmt.Sprint(DefaultPortBase + e.PortOffset)
+		if have["MDB_"+up+"_HOST_PORT"] != want {
+			t.Errorf("%s host port = %q, want %s", e.Name, have["MDB_"+up+"_HOST_PORT"], want)
+		}
+		n++
+	}
+	if n == 0 {
+		t.Fatal("the manifest has no implemented engine, so nothing was checked")
+	}
+	if ProjectName("") != "mdb-fixture" || ProjectName("shop") != "shop-fixture" {
+		t.Fatal("ProjectName")
+	}
+}
+
+func TestPlansCarryTheFixtureEnv(t *testing.T) {
+	fx := []string{"COMPOSE_PROJECT_NAME=mdb-fixture"}
+	up := UpPlan([]string{"pg"}, fx)
+	if got := up[len(up)-1].String(); !strings.HasPrefix(got, "COMPOSE_PROFILES=pg COMPOSE_PROJECT_NAME=mdb-fixture scripts/runtime up") {
+		t.Fatalf("up: %s", got)
+	}
+	if got := DownPlan(fx)[0].String(); !strings.HasPrefix(got, "COMPOSE_PROJECT_NAME=mdb-fixture scripts/runtime down") {
+		t.Fatalf("down: %s", got)
+	}
+}
+
+func TestCleanupRemovesOnlyFixtureSecrets(t *testing.T) {
+	root := t.TempDir()
+	keep := filepath.Join(root, "secrets", "pg_shop_user_password.txt")
+	drop := filepath.Join(root, "secrets", SecretsSubdir, "pg_t1_user_password.txt")
+	for _, p := range []string{keep, drop} {
+		if err := os.MkdirAll(filepath.Dir(p), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte("x"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := Cleanup(root); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(drop); !os.IsNotExist(err) {
+		t.Fatalf("fixture secret survived: %v", err)
+	}
+	if _, err := os.Stat(keep); err != nil {
+		t.Fatalf("the stack's own secret was removed: %v", err)
 	}
 }

@@ -34,6 +34,10 @@ waiving them.
   `MDB_EXTRA_SANS`, then restart `pg-pooler`.
 
 ### Changed
+- **`fixture up` runs beside the stack instead of replacing it.** It is now its own Compose project
+  (`<project>-fixture`) on `MDB_FIXTURE_PORT_BASE` (default 55000), so a test suite's tmpfs engines
+  no longer restart every application's database, and `fixture down` stops only the fixture. No
+  consumer read the fixture's old ports (searched simtabi, laranail and sangehq, 11,677 files).
 -- **The make targets run the `dbpantry` binary** (refactor plan phase 2, design.md D-80). Every target
   except `help`, `dbpantry` and the `go-*` targets now runs a `dbpantry` command, which runs the script the
   target used to run, with the same arguments, and exits with that script's status. Check 74 holds each
@@ -131,6 +135,10 @@ waiving them.
   D-52 to D-57, which sat after the end of the document, are back in the decision log.
 
 ### Added
+- `make new-project NAME=x FIXTURE=1` (`project new --fixture`) provisions in the fixture, with password
+  files under `secrets/fixture/`, which `fixture down` removes; `make endpoints FIXTURE=1` (`endpoints
+  --fixture`) reports the fixture's ports and those files. A test run that names its own project gets
+  its own database, so concurrent runs no longer collide (laranail/settings pilot findings 1 and 4).
 -- **The `dbpantry` command tree for every existing feature** (refactor plan phase 2): `init`, `config
   validate|render|prod-overlay`, `up`, `down`, `status`, `logs`, `forward`, `destroy`, `runtime`, `shell`,
   `tools`, `project new`, `backup run|verify`, `restore`, `pitr`, `data import|export`, `upgrade`, `ha`,
