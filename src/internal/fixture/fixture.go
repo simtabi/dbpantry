@@ -94,8 +94,8 @@ func ValidateProfiles(m engine.Manifest, profiles []string) error {
 // UpPlan is what `fixture up` runs: render the templated files, generate the
 // engine services, and boot the selected profiles with the test overlay,
 // waiting for health (scripts/runtime up).
-func UpPlan(profiles []string) []Step {
-	env := []string{"COMPOSE_PROFILES=" + strings.Join(profiles, ",")}
+func UpPlan(profiles []string, fx []string) []Step {
+	env := append([]string{"COMPOSE_PROFILES=" + strings.Join(profiles, ",")}, fx...)
 	return []Step{
 		{Args: []string{"scripts/render-config"}, Quiet: true},
 		{Args: []string{"scripts/gen-compose"}, Quiet: true},
@@ -105,8 +105,59 @@ func UpPlan(profiles []string) []Step {
 
 // DownPlan is what `fixture down` runs: stop the fixture stack. It removes no
 // volume: the overlay never created one, and `down` never touches data.
-func DownPlan() []Step {
-	return []Step{{Args: append([]string{"scripts/runtime", "down"}, fileArgs()...)}}
+func DownPlan(fx []string) []Step {
+	return []Step{{Args: append([]string{"scripts/runtime", "down"}, fileArgs()...), Env: fx}}
+}
+
+// DefaultPortBase is where a fixture's host ports start when
+// MDB_FIXTURE_PORT_BASE is unset: far enough from the long-lived stack's
+// MDB_PORT_BASE (54000) that both run at once.
+const DefaultPortBase = 55000
+
+// SecretsSubdir is the directory under secrets/ that new-project writes a
+// fixture project's password files to, so Cleanup drops them together with
+// the engines' tmpfs data.
+const SecretsSubdir = "fixture"
+
+// ProjectName is the compose project a fixture runs as. It is its own:
+// until 2026-11-17 a fixture ran as the long-lived stack's project, so
+// `fixture up` replaced every application's engine with a tmpfs one and
+// `fixture down` stopped them all.
+func ProjectName(stack string) string {
+	if stack == "" {
+		stack = "mdb"
+	}
+	return stack + "-fixture"
+}
+
+// Env is the environment of every fixture step, and of new-project and
+// endpoints aimed at the fixture (--fixture): its compose project, MDB_FIXTURE=1
+// (new-project's switch to secrets/fixture/), and each engine's and pooler's
+// host port at portBase + offset, overriding the defaults gen-compose bakes
+// from MDB_PORT_BASE. It sets neither MDB_PUBLISH nor MDB_PORT_BASE, which
+// gen-compose reads from the env file only.
+func Env(m engine.Manifest, stack string, portBase int) []string {
+	env := []string{"COMPOSE_PROJECT_NAME=" + ProjectName(stack), "MDB_FIXTURE=1"}
+	for _, e := range m.Implemented() {
+		up := strings.ToUpper(strings.ReplaceAll(e.Name, "-", "_"))
+		env = append(env, fmt.Sprintf("MDB_%s_HOST_PORT=%d", up, portBase+e.PortOffset))
+		if e.Pooler != nil {
+			env = append(env, fmt.Sprintf("MDB_%s_POOLER_HOST_PORT=%d", up, portBase+e.PortOffset+PoolerPortStep))
+		}
+	}
+	return env
+}
+
+// PoolerPortStep mirrors endpoint.PoolerPortStep: a pooler publishes at its
+// engine's port + 100. endpoint's TestPoolerPortStepMatchesFixture keeps the two
+// equal (endpoint cannot be imported here without a cycle in its tests).
+const PoolerPortStep = 100
+
+// Cleanup removes the password files new-project wrote for the fixture's
+// projects. Their roles lived in the fixture's tmpfs and are gone once it is
+// down, so the files would only accumulate.
+func Cleanup(root string) error {
+	return os.RemoveAll(filepath.Join(root, "secrets", SecretsSubdir))
 }
 
 // Run executes a plan in order, stopping at the first failure.

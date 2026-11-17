@@ -13,7 +13,7 @@ func (a *app) projectCmd() *cobra.Command {
 		Short: "Provision application databases",
 	}
 	var name, eng string
-	var noSync bool
+	var noSync, fx bool
 	newCmd := &cobra.Command{
 		Use:   "new",
 		Short: "Provision a database, its roles and extensions, and print the Laravel .env block",
@@ -24,10 +24,26 @@ restarted so the new user can log in through it (N8); --no-pooler-sync skips tha
 		Args: cobra.NoArgs,
 		RunE: func(c *cobra.Command, _ []string) error {
 			argv := append([]string{"scripts/new-project", "--name", name}, strArg(c, "engine", eng)...)
-			if err := a.runSteps(c, script(argv...)); err != nil {
+			st := script(argv...)
+			if fx {
+				m, root, err := a.manifest()
+				if err != nil {
+					return err
+				}
+				s, err := a.settings(root)
+				if err != nil {
+					return err
+				}
+				if st.Env, _, err = fixtureEnv(m, s); err != nil {
+					return err
+				}
+			}
+			if err := a.runSteps(c, st); err != nil {
 				return err
 			}
-			if noSync || eng == "" {
+			// A fixture's pooler is not synced: syncPooler acts on the stack's
+			// compose project, and a test suite connects to the engine directly.
+			if noSync || eng == "" || fx {
 				return nil
 			}
 			return a.syncPooler(c, eng, true)
@@ -36,6 +52,7 @@ restarted so the new user can log in through it (N8); --no-pooler-sync skips tha
 	newCmd.Flags().StringVar(&name, "name", "", "the project (database) name")
 	newCmd.Flags().StringVar(&eng, "engine", "", "the engine (default: the script's, PostgreSQL)")
 	newCmd.Flags().BoolVar(&noSync, "no-pooler-sync", false, "do not restart a mirroring pooler afterwards")
+	newCmd.Flags().BoolVar(&fx, "fixture", false, "provision in the fixture (`fixture up`), with password files under secrets/fixture/; give each test run its own --name for an isolated database")
 	cmd.AddCommand(newCmd)
 	return cmd
 }

@@ -352,8 +352,10 @@ func TestProjectPrincipalsMatchNewProject(t *testing.T) {
 	script := string(b)
 	for _, line := range []string{
 		`USER_NAME="${NAME}_user"`,
-		`SECRET_FILE="secrets/${ENGINE}_${USER_NAME}_password.txt"`,
-		`RO_SECRET_FILE="secrets/${ENGINE}_${USER_NAME}_readonly_password.txt"`,
+		`SECRET_DIR="secrets"`,
+		`SECRET_DIR="secrets/fixture"`,
+		`SECRET_FILE="${SECRET_DIR}/${ENGINE}_${USER_NAME}_password.txt"`,
+		`RO_SECRET_FILE="${SECRET_DIR}/${ENGINE}_${USER_NAME}_readonly_password.txt"`,
 	} {
 		if !strings.Contains(script, line) {
 			t.Fatalf("scripts/new-project no longer says %s; update ProjectPrincipals to match", line)

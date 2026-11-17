@@ -63,8 +63,19 @@ func TestEndpointsAndFixtureDryRun(t *testing.T) {
 		t.Fatalf("exit %d: %s %s", code, out, errs)
 	}
 	code, out, _ = run(t, "fixture", "up", "--profiles", "pg,pooler", "--dry-run")
-	if code != ExitOK || !strings.Contains(out, "COMPOSE_PROFILES=pg,pg-pooler scripts/runtime up") {
-		t.Fatalf("exit %d: %s", code, out)
+	// The fixture runs as its own compose project on its own ports, never as the stack.
+	for _, want := range []string{"COMPOSE_PROFILES=pg,pg-pooler COMPOSE_PROJECT_NAME=mdb-fixture MDB_FIXTURE=1 ", "MDB_PG_HOST_PORT=55000 ", "scripts/runtime up -f docker-compose.yml"} {
+		if code != ExitOK || !strings.Contains(out, want) {
+			t.Fatalf("exit %d, want %q in: %s", code, want, out)
+		}
+	}
+	code, out, _ = run(t, "endpoints", "-o", "json", "--profiles", "pg", "--fixture", "--project", "t1")
+	if code != ExitOK || !strings.Contains(out, `"fixture": true`) || !strings.Contains(out, "/run/secrets/fixture/pg_t1_user_password.txt") {
+		t.Fatalf("endpoints --fixture: exit %d: %s", code, out)
+	}
+	code, out, _ = run(t, "project", "new", "--name", "t1", "--engine", "pg", "--fixture", "--dry-run")
+	if code != ExitOK || !strings.Contains(out, "COMPOSE_PROJECT_NAME=mdb-fixture MDB_FIXTURE=1") || !strings.Contains(out, "scripts/new-project --name t1 --engine pg") {
+		t.Fatalf("project new --fixture: exit %d: %s", code, out)
 	}
 	code, out, _ = run(t, "manifest", "check-helm")
 	if code != ExitOK || !strings.Contains(out, "matches engines/") {
