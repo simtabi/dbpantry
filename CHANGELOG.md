@@ -34,6 +34,12 @@ waiving them.
   `MDB_EXTRA_SANS`, then restart `pg-pooler`.
 
 ### Changed
+- **`fixture up` runs beside the stack instead of replacing it.** It is now its own Compose project
+  (`<project>-fixture`) on `MDB_FIXTURE_PORT_BASE` (default 55000), so a test suite's tmpfs engines
+  no longer restart every application's database, and `fixture down` stops only the fixture. No
+  consumer read the fixture's old ports (searched simtabi, laranail and sangehq, 11,677 files). Check 64
+  now looks for the fixture's containers and volumes in its own project, and fails if it finds no fixture
+  container or one in the stack's project.
 -- **The make targets run the `dbpantry` binary** (refactor plan phase 2, design.md D-80). Every target
   except `help`, `dbpantry` and the `go-*` targets now runs a `dbpantry` command, which runs the script the
   target used to run, with the same arguments, and exits with that script's status. Check 74 holds each
@@ -135,7 +141,10 @@ waiving them.
 - **`make start`: everything in one command.** It boots `PROFILES`, provisions `PROJECTS=name[:engine],…` on every engine in them, then serves the dashboard. Every step is idempotent; `NO_DASHBOARD=1` stops after provisioning.
 - **`make dashboard`**: a read-only web dashboard on `http://127.0.0.1:8484/`, built with Tabler 1.7.5's CSS and JavaScript embedded in the binary. Tabler's two-row header and icon menu lead to Overview, Services (state, health, uptime, image), Images, Engines (one page each: addresses, pooler, TLS, extensions, principals), Projects, Backups and Connect. Each project's page has its paste-ready `.env` block, the password blurred until shown, with copy buttons. Pages refresh every five seconds, and the same data, without passwords, is at `/api/status`.
 - `scripts/new-project --format json`: the provisioning result as one JSON object. `--show` prints an existing project's block without provisioning or generating anything.
-
+- `make new-project NAME=x FIXTURE=1` (`project new --fixture`) provisions in the fixture, with password
+  files under `secrets/fixture/`, which `fixture down` removes; `make endpoints FIXTURE=1` (`endpoints
+  --fixture`) reports the fixture's ports and those files. A test run that names its own project gets
+  its own database, so concurrent runs no longer collide (laranail/settings pilot findings 1 and 4).
 -- **The `dbpantry` command tree for every existing feature** (refactor plan phase 2): `init`, `config
   validate|render|prod-overlay`, `up`, `down`, `status`, `logs`, `forward`, `destroy`, `runtime`, `shell`,
   `tools`, `project new`, `backup run|verify`, `restore`, `pitr`, `data import|export`, `upgrade`, `ha`,

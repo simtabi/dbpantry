@@ -51,7 +51,7 @@ dashboard only; the stack keeps running (make down stops it).`,
 						engines = []string{s.engine}
 					}
 					for _, eng := range engines {
-						if err := a.newProject(c, s.name, eng, false); err != nil {
+						if err := a.newProject(c, s.name, eng, false, false); err != nil {
 							return err
 						}
 					}

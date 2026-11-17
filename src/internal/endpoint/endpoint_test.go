@@ -7,6 +7,7 @@ import (
 
 	"github.com/simtabi/dbpantry/src/internal/config"
 	"github.com/simtabi/dbpantry/src/internal/engine"
+	"github.com/simtabi/dbpantry/src/internal/fixture"
 )
 
 func manifest(t *testing.T) engine.Manifest {
@@ -141,5 +142,40 @@ func TestProjectPrincipals(t *testing.T) {
 	}
 	if ps := find(t, d, "mysql").Principals; len(ps) != 3 || ps[2].PasswordFile != "/run/secrets/mysql_shop_user_readonly_password.txt" {
 		t.Errorf("%+v", ps)
+	}
+}
+
+// --fixture reports the fixture's ports (base + offset, whatever the env file
+// pins for the stack) and its projects' password files under secrets/fixture.
+func TestFixtureEndpoints(t *testing.T) {
+	d, err := Resolve(manifest(t), settings(t, "MDB_PUBLISH=direct\nMDB_PG_HOST_PORT=5442\n"), Options{Project: "t1", FixtureBase: 55000})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !d.Fixture || d.PortBase != 55000 {
+		t.Fatalf("fixture=%v base=%d", d.Fixture, d.PortBase)
+	}
+	pg := find(t, d, "pg")
+	e, _ := manifest(t).Engine("pg")
+	if pg.Direct.Published == nil || pg.Direct.Published.Port != 55000+e.PortOffset {
+		t.Fatalf("pg published %+v", pg.Direct.Published)
+	}
+	ps := pg.Principals
+	if len(ps) < 2 || ps[len(ps)-2].PasswordFile != "/run/secrets/fixture/pg_t1_user_password.txt" {
+		t.Fatalf("principals %+v", ps)
+	}
+	stack, err := Resolve(manifest(t), settings(t, "MDB_PUBLISH=direct\nMDB_PG_HOST_PORT=5442\n"), Options{Project: "t1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stack.Fixture || find(t, stack, "pg").Direct.Published.Port != 5442 {
+		t.Fatalf("the stack's pinned port changed: %+v", find(t, stack, "pg").Direct.Published)
+	}
+}
+
+// fixture.Env publishes poolers at the same step endpoints reports them at.
+func TestPoolerPortStepMatchesFixture(t *testing.T) {
+	if fixture.PoolerPortStep != PoolerPortStep {
+		t.Fatalf("fixture.PoolerPortStep=%d, endpoint.PoolerPortStep=%d", fixture.PoolerPortStep, PoolerPortStep)
 	}
 }

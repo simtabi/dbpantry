@@ -214,8 +214,8 @@ shell: $(DBPANTRY) ## Open the cli image (tools with no server required)
 	@$(DBPANTRY) tools --image $(MDB_IMAGE_PREFIX)/dbpantry-cli:dev
 
 .PHONY: new-project
-new-project: $(DBPANTRY) ## Provision DB + roles + extensions, print the Laravel .env block
-	@$(DBPANTRY) project new --name "$(NAME)" --engine "$(or $(ENGINE),pg)"
+new-project: $(DBPANTRY) ## Provision DB + roles + extensions, print the Laravel .env block (FIXTURE=1: in the fixture)
+	@$(DBPANTRY) project new --name "$(NAME)" --engine "$(or $(ENGINE),pg)" $(if $(FIXTURE),--fixture,)
 
 # -----------------------------------------------------------------------------
 # Backup and restore
@@ -338,17 +338,17 @@ manifest: $(DBPANTRY) ## Print the engine manifest as JSON (OUTPUT=tsv|helm, MAT
 	@$(DBPANTRY) manifest $(if $(MATRIX),--matrix "$(MATRIX)",-o "$(or $(OUTPUT),json)")
 
 .PHONY: endpoints
-endpoints: $(DBPANTRY) ## Where to connect to each engine (OUTPUT=json, PROFILES=, PROJECT=)
-	@$(DBPANTRY) endpoints -o "$(or $(OUTPUT),table)" $(if $(PROFILES),--profiles "$(PROFILES)",) $(if $(PROJECT),--project "$(PROJECT)",)
+endpoints: $(DBPANTRY) ## Where to connect to each engine (OUTPUT=json, PROFILES=, PROJECT=, FIXTURE=1)
+	@$(DBPANTRY) endpoints -o "$(or $(OUTPUT),table)" $(if $(PROFILES),--profiles "$(PROFILES)",) $(if $(PROJECT),--project "$(PROJECT)",) $(if $(FIXTURE),--fixture,)
 
 .PHONY: dashboard
 dashboard: $(DBPANTRY) ## Serve the read-only web dashboard on 127.0.0.1:8484 (LISTEN= to change)
 	@$(DBPANTRY) dashboard $(if $(LISTEN),--listen "$(LISTEN)",)
 
 .PHONY: fixture-up
-fixture-up: $(DBPANTRY) ## Boot disposable tmpfs engines for a test suite (PROFILES=pg,mysql)
+fixture-up: $(DBPANTRY) ## Boot disposable tmpfs engines for a test suite, beside the stack (PROFILES=pg,mysql)
 	@$(DBPANTRY) fixture up $(if $(PROFILES),--profiles "$(PROFILES)",)
 
 .PHONY: fixture-down
-fixture-down: $(DBPANTRY) ## Stop the fixture engines (they hold no volume)
+fixture-down: $(DBPANTRY) ## Stop the fixture engines and drop secrets/fixture/ (they hold no volume)
 	@$(DBPANTRY) fixture down

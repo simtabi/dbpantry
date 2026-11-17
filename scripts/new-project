@@ -132,7 +132,7 @@ gen_password() {
         log "reusing the existing password in $file"
         SECRET_ACTIONS+=("reused")
     else
-        mkdir -p secrets
+        mkdir -p "$(dirname "$file")"
         openssl rand -base64 96 | LC_ALL=C tr -dc 'A-Za-z0-9' | cut -c1-40 > "$file"
         chmod 0600 "$file"
         log "generated $file"
@@ -140,8 +140,14 @@ gen_password() {
     fi
 }
 
-SECRET_FILE="secrets/${ENGINE}_${USER_NAME}_password.txt"
-RO_SECRET_FILE="secrets/${ENGINE}_${USER_NAME}_readonly_password.txt"
+# A fixture's projects (`dbpantry project new --fixture`, which sets
+# MDB_FIXTURE=1) keep their password files in secrets/fixture/, which
+# `fixture down` removes with the fixture's tmpfs data. The stack's projects
+# keep them in secrets/.
+SECRET_DIR="secrets"
+[[ "${MDB_FIXTURE:-0}" == "1" ]] && SECRET_DIR="secrets/fixture"
+SECRET_FILE="${SECRET_DIR}/${ENGINE}_${USER_NAME}_password.txt"
+RO_SECRET_FILE="${SECRET_DIR}/${ENGINE}_${USER_NAME}_readonly_password.txt"
 if (( SHOW )); then
     [[ -s "$SECRET_FILE" ]] || die "no project '$NAME' on $ENGINE (no $SECRET_FILE); provision it with make new-project NAME=$NAME ENGINE=$ENGINE"
     SECRET_ACTIONS=("existing" "$([[ -s "$RO_SECRET_FILE" ]] && echo existing || echo missing)")

@@ -307,10 +307,17 @@ func fromDescriptor(d Descriptor, root string, bases map[string]map[string]strin
 // drift again: until 2026-11-17 this returned <name> and <name>_readonly, a
 // user and files that new-project never creates.
 func (e Engine) ProjectPrincipals(project string) []Principal {
+	return e.ProjectPrincipalsIn(project, SecretsDir)
+}
+
+// ProjectPrincipalsIn is ProjectPrincipals with the password files under dir:
+// SecretsDir for the stack's projects, SecretsDir + "/fixture" for a fixture's,
+// where new-project writes them when MDB_FIXTURE=1.
+func (e Engine) ProjectPrincipalsIn(project, dir string) []Principal {
 	user := project + "_user"
 	return []Principal{
-		{Role: "app", User: user, PasswordFile: SecretsDir + "/" + e.Name + "_" + user + "_password.txt"},
-		{Role: "read-only", User: user + "_readonly", PasswordFile: SecretsDir + "/" + e.Name + "_" + user + "_readonly_password.txt"},
+		{Role: "app", User: user, PasswordFile: dir + "/" + e.Name + "_" + user + "_password.txt"},
+		{Role: "read-only", User: user + "_readonly", PasswordFile: dir + "/" + e.Name + "_" + user + "_readonly_password.txt"},
 	}
 }
 

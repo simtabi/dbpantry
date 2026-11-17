@@ -12,10 +12,11 @@ import (
 	"github.com/simtabi/dbpantry/src/internal/ui"
 )
 
-// projectFormatted is `project new` on a terminal: the script's JSON drawn as
+// projectFormatted is `project new` on a terminal, with stepEnv added to the
+// script's environment (the fixture's, under --fixture): the script's JSON drawn as
 // a tree of what was done, a table of the project, its warnings, and the
 // paste-ready block between rules, unindented so it copies cleanly.
-func (a *app) projectFormatted(c *cobra.Command, argv []string) (*project.Provisioned, error) {
+func (a *app) projectFormatted(c *cobra.Command, argv, stepEnv []string) (*project.Provisioned, error) {
 	root, err := a.root()
 	if err != nil {
 		return nil, err
@@ -43,7 +44,7 @@ func (a *app) projectFormatted(c *cobra.Command, argv []string) (*project.Provis
 		})
 	}}
 	sc.update(func() { node.Start(time.Now()) })
-	err = a.runStepTo(c.Context(), root, env, script(append(argv, "--format", "json")...), &stdout, stderr)
+	err = a.runStepTo(c.Context(), root, env, step{Args: append(argv, "--format", "json"), Env: stepEnv}, &stdout, stderr)
 	stderr.flush()
 	var p project.Provisioned
 	if err == nil {
