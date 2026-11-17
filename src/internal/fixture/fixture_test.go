@@ -169,13 +169,19 @@ func TestPoolerAddrMatchesGenCompose(t *testing.T) {
 	}
 	for in, want := range cases {
 		subnet, idx, _ := strings.Cut(in, "|")
-		got, err := PoolerAddr(subnet, map[string]int{"1": 1, "2": 2, "3": 3}[idx])
+		got, err := PoolerAddr(subnet, map[string]uint32{"1": 1, "2": 2, "3": 3}[idx])
 		if err != nil || got != want {
 			t.Errorf("PoolerAddr(%s, %s) = %q, %v; want %s", subnet, idx, got, err, want)
 		}
 	}
 	if _, err := PoolerAddr("not-a-cidr", 1); err == nil {
 		t.Error("an invalid subnet was accepted")
+	}
+	if _, err := PoolerAddr("172.29.0.0/16", 0); err == nil {
+		t.Error("pooler index 0, the broadcast address, was accepted")
+	}
+	if _, err := PoolerAddr("10.0.0.0/30", 3); err == nil {
+		t.Error("an index past the subnet's hosts was accepted")
 	}
 }
 

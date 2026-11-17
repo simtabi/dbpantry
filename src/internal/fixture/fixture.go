@@ -140,7 +140,7 @@ func ProjectName(stack string) string {
 // gen-compose reads from the env file only.
 func Env(m engine.Manifest, stack string, portBase int, subnet string) ([]string, error) {
 	env := []string{"COMPOSE_PROJECT_NAME=" + ProjectName(stack), "MDB_FIXTURE=1", "MDB_NETWORK_SUBNET=" + subnet}
-	poolers := 0
+	var poolers uint32
 	for _, e := range m.Implemented() {
 		up := strings.ToUpper(strings.ReplaceAll(e.Name, "-", "_"))
 		env = append(env, fmt.Sprintf("MDB_%s_HOST_PORT=%d", up, portBase+e.PortOffset))
@@ -167,9 +167,10 @@ const DefaultSubnet = "172.29.0.0/16"
 
 // PoolerAddr is scripts/gen-compose's pooler_addr: the idx-th address down
 // from the subnet's broadcast address, where Docker's dynamic allocation (from
-// the bottom) never reaches. Poolers are numbered from 1 in engine-name order,
+// the bottom) never reaches. Poolers are numbered from 1 in engine-name order
+// (0 is refused),
 // as gen-compose numbers them.
-func PoolerAddr(subnet string, idx int) (string, error) {
+func PoolerAddr(subnet string, idx uint32) (string, error) {
 	_, n, err := net.ParseCIDR(subnet)
 	if err != nil || n.IP.To4() == nil {
 		return "", fmt.Errorf("fixture subnet %q is not an IPv4 CIDR", subnet)
@@ -177,11 +178,11 @@ func PoolerAddr(subnet string, idx int) (string, error) {
 	ones, _ := n.Mask.Size()
 	base := binary.BigEndian.Uint32(n.IP.To4())
 	host := uint32(1)<<(32-ones) - 1
-	if uint32(idx) >= host {
+	if idx == 0 || idx >= host {
 		return "", fmt.Errorf("fixture subnet %q is too small for %d poolers", subnet, idx)
 	}
 	ip := make(net.IP, 4)
-	binary.BigEndian.PutUint32(ip, (base|host)-uint32(idx))
+	binary.BigEndian.PutUint32(ip, (base|host)-idx)
 	return ip.String(), nil
 }
 
