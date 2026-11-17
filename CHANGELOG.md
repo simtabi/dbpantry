@@ -437,7 +437,8 @@ waiving them.
 
 ### Security
 
-- **The Go toolchain moves to 1.27.4** for GO-2026-6859 in `net/http`, which the dashboard's HTTP server made reachable from the binary (`govulncheck` reported 17 call paths; it reports none on 1.27.4). The engine images' Go build stage still uses `golang:1.27.3`; moving it needs new digests and image rebuilds.- **Every service drops privileges, has a health signal, and is limited under prod** (design.md D-75). etcd and
+- **The Go toolchain moves to 1.27.4** for GO-2026-6859 in `net/http`, which the dashboard's HTTP server made reachable from the binary (`govulncheck` reported 17 call paths; it reports none on 1.27.4). The engine images' Go build stage still uses `golang:1.27.3`; moving it needs new digests and image rebuilds.
+- **Every service drops privileges, has a health signal, and is limited under prod** (design.md D-75). etcd and
   HAProxy drop all capabilities; MongoDB, Cassandra, poolers, sidecars, etcd, HAProxy, Patroni and the UIs get
   prod limits (`MDB_<ENGINE>_CPU_LIMIT`/`_MEM_LIMIT`, `MDB_POOLER_*`, `MDB_AUX_*`); the exporters get
   healthchecks. pg-exporter now connects with `sslmode=require` and ProxySQL reaches its server over TLS, so
