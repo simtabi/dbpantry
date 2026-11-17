@@ -22,8 +22,15 @@ need_image "$(image_name pg)"
 
 scratch_stack "pg,mongodb"
 
+# The fixture runs as its own compose project, <stack project>-fixture, so it
+# never replaces the stack (2026-11-17). Volumes are checked in both projects:
+# reading only the stack's would pass whatever the fixture leaked.
+FIXTURE_PROJECT="${SCRATCH_PROJECT}-fixture"
 project_volumes() {
-    mdb_ctr volume ls -q --filter "label=com.docker.compose.project=$SCRATCH_PROJECT" 2>/dev/null | awk 'NF' | sort
+    local p
+    for p in "$SCRATCH_PROJECT" "$FIXTURE_PROJECT"; do
+        mdb_ctr volume ls -q --filter "label=com.docker.compose.project=$p" 2>/dev/null
+    done | awk 'NF' | sort
 }
 
 before="$(project_volumes)"
@@ -39,15 +46,19 @@ add_cleanup "scratch_run '$DBPANTRY_BIN' fixture down >/dev/null 2>&1 || true"
 # none, so it reports "none", never "healthy", and is accepted as running.
 fixture_ready() {
     local pg mongo
-    pg="$(scratch_run bash -c '. scripts/backend-lib.sh && mdb_svc_health pg')"
-    mongo="$(scratch_run bash -c '. scripts/backend-lib.sh && mdb_svc_health mongodb')"
+    pg="$(scratch_run env COMPOSE_PROJECT_NAME="$FIXTURE_PROJECT" bash -c '. scripts/backend-lib.sh && mdb_svc_health pg')"
+    mongo="$(scratch_run env COMPOSE_PROJECT_NAME="$FIXTURE_PROJECT" bash -c '. scripts/backend-lib.sh && mdb_svc_health mongodb')"
     [[ "$pg" == healthy && ( "$mongo" == healthy || "$mongo" == none ) ]]
 }
 wait_for 90 "the fixture's pg to report healthy and mongodb to run" fixture_ready
 
 during="$(project_volumes)"
 [[ -z "$during" ]] || vfail "the fixture created volumes while running (data must be on tmpfs): $(printf '%s\n' "$during" | tr '\n' ' ')"
-vinfo "pg and mongodb healthy, with no volume"
+running="$(mdb_ctr ps -q --filter "label=com.docker.compose.project=$FIXTURE_PROJECT" 2>/dev/null | grep -c . || true)"
+(( running >= 1 )) || vfail "no container runs in the fixture project $FIXTURE_PROJECT, so the volume checks inspected nothing"
+stack="$(mdb_ctr ps -q --filter "label=com.docker.compose.project=$SCRATCH_PROJECT" 2>/dev/null | grep -c . || true)"
+(( stack == 0 )) || vfail "fixture up started $stack container(s) in the stack's project $SCRATCH_PROJECT instead of its own"
+vinfo "pg and mongodb healthy in $FIXTURE_PROJECT ($running containers), none in the stack's project, with no volume"
 
 out="$(scratch_run "$DBPANTRY_BIN" fixture down 2>&1)" || vfail "dbpantry fixture down failed: $(printf '%s\n' "$out" | tail -5)"
 after="$(project_volumes)"
