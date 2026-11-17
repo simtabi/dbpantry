@@ -127,6 +127,10 @@ for health. `fixture down` stops that stack. `--dry-run` prints the commands.
 - **A fixture runs beside the stack, never instead of it.** It is its own Compose project
   (`<COMPOSE_PROJECT_NAME>-fixture`, so `mdb-fixture`) and publishes at `MDB_FIXTURE_PORT_BASE`
   (default 55000) + offset under `MDB_PUBLISH=direct`: PostgreSQL 55000, MySQL 55001, poolers +100.
+  Its network has its own subnet, `MDB_FIXTURE_NETWORK_SUBNET` (default `172.29.0.0/16`), because
+  Docker refuses a second network on the stack's range; `fixture` refuses a value that overlaps
+  `MDB_NETWORK_SUBNET`, and pins each pooler at the same offset from the top of the fixture's range
+  as gen-compose does for the stack's. Check 66 renders both and proves they do not overlap.
   Until 2026-11-17 it ran as the stack's project, so `fixture up` replaced every application's
   engine with a tmpfs one and `fixture down` stopped them.
 
