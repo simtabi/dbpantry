@@ -1,6 +1,8 @@
 # Getting started
 
-From a fresh clone to an application talking to a database, in about a minute.
+From a fresh clone to an application talking to a database, in about a minute once the images exist.
+The first `make up` builds each engine image locally, which took about 8 minutes for PostgreSQL and
+MySQL together on an Apple Silicon Mac (measured 2026-11-17); later boots reuse them.
 
 Assumes [installation](installation.md) is done and `make verify-structure`
 passes.
@@ -86,7 +88,9 @@ networks:
     name: mdb_net
 ```
 
-**For a GUI client that cannot join the compose network**, publish:
+**For a GUI client that cannot join the compose network**, publish, in `.env` (these two are read
+from the env file only; a different value on the command line, such as `MDB_PUBLISH=direct make up`,
+is refused rather than ignored):
 
 ```
 MDB_PUBLISH=direct     # each engine gets its own host port

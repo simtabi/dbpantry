@@ -22,7 +22,8 @@ make up
 
 PostgreSQL and Adminer are running, with **no host port published** — your
 application joins the `mdb_net` network and connects to `pg:5432`. Set
-`MDB_PUBLISH=direct` (or `proxy`) when a GUI client needs a host port; see
+`MDB_PUBLISH=direct` (or `proxy`) in `.env` when a GUI client needs a host port. It is read from
+`.env` only: `MDB_PUBLISH=direct make up` is refused rather than ignored. See
 [Configuration](docs/guides/configuration.md).
 
 Add engines with profiles:
@@ -101,7 +102,7 @@ Read once, to learn how the toolkit works and how to set it up.
 - [Installation](docs/guides/installation.md) — prerequisites and first run
 - [Container runtimes](docs/guides/runtimes.md) — Docker, OrbStack, Colima, Rancher Desktop, Podman, nerdctl ([Docker](docs/guides/runtime-docker.md) · [Podman](docs/guides/runtime-podman.md) · [nerdctl](docs/guides/runtime-nerdctl.md))
 - [Kubernetes](docs/guides/kubernetes.md) — the Helm chart, `MDB_BACKEND=kubernetes`, OrbStack, kind and real clusters
-- [Getting started](docs/guides/getting-started.md) — a new project connected in under a minute
+- [Getting started](docs/guides/getting-started.md) — a new project connected in under a minute (after the first image build)
 - [Configuration](docs/guides/configuration.md) — every `MDB_` variable
 - [Supported versions](docs/guides/versions.md) — which versions are maintained, and running any other
 - [Architecture](docs/guides/architecture.md) — how engines are declared rather than hardcoded

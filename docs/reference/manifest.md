@@ -106,8 +106,9 @@ Superusers cannot authenticate through a pooler, so admin work uses `direct`.
 
 Principals are paths, never values. `admin` is the engine's root secret,
 `/run/secrets/<root_secret>`. `--project NAME` adds the two roles `make new-project NAME=<name>`
-creates: `app` (user `<name>`, `/run/secrets/<engine>_<name>_password.txt`) and `read-only` (user
-`<name>_readonly`, `/run/secrets/<engine>_<name>_readonly_password.txt`). The files exist once the
+creates: `app` (user `<name>_user`, `/run/secrets/<engine>_<name>_user_password.txt`) and `read-only`
+(user `<name>_user_readonly`, `/run/secrets/<engine>_<name>_user_readonly_password.txt`). On the host
+the same files are `secrets/<engine>_<name>_user[_readonly]_password.txt`. The files exist once the
 project has been provisioned.
 
 ## Fixtures
