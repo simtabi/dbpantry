@@ -131,6 +131,9 @@ waiving them.
   D-52 to D-57, which sat after the end of the document, are back in the decision log.
 
 ### Added
+- **A step tree, progress bars and tables on a terminal** (design.md D-81). `make up` shows each step with a spinner and its time, and groups Compose's work into networks, images and containers. Each image build gets a bar with its percentage and an estimated time left. The run ends with a Connect table for the engines you started. `make down` shows what it removed. `make new-project` shows what it generated, the roles and each extension (with a warning for one that could not be created), a table of the project, and the `.env` block flush left between rules. Off a terminal, or with `--plain`, output is unchanged. `--pretty` forces the view.
+- **`make dashboard`**: a read-only web dashboard on `http://127.0.0.1:8484/`, built with Tabler and embedded in the binary. It shows service health, each engine's addresses, provisioned projects and backups, refreshes every five seconds, and serves the same data at `/api/status`.
+- `scripts/new-project --format json`: the provisioning result as one JSON object.
 -- **The `dbpantry` command tree for every existing feature** (refactor plan phase 2): `init`, `config
   validate|render|prod-overlay`, `up`, `down`, `status`, `logs`, `forward`, `destroy`, `runtime`, `shell`,
   `tools`, `project new`, `backup run|verify`, `restore`, `pitr`, `data import|export`, `upgrade`, `ha`,

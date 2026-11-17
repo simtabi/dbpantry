@@ -1,0 +1,66 @@
+{{define "page"}}<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>dbpantry · dashboard</title>
+  <link rel="icon" type="image/svg+xml" href="/assets/favicons/favicon.svg">
+  <link rel="stylesheet" href="/assets/css/tabler.min.css">
+  <link rel="stylesheet" href="/assets/css/dashboard.css">
+  <script src="/assets/js/theme.js"></script>
+</head>
+<body>
+  <a href="#content" class="visually-hidden-focusable skip-link">Skip to content</a>
+  <div class="page">
+    <header class="navbar navbar-expand-md d-print-none">
+      <div class="container-xl">
+        <a href="/" class="navbar-brand navbar-brand-autodark d-flex align-items-center gap-2 pe-0 pe-md-3">
+          <img src="/assets/favicons/favicon.svg" alt="" class="mdb-mark">
+          <span>dbpantry</span>
+        </a>
+        <ul class="navbar-nav flex-row me-auto">
+          <li class="nav-item"><a class="nav-link" href="#services">Services</a></li>
+          <li class="nav-item"><a class="nav-link" href="#engines">Engines</a></li>
+          <li class="nav-item"><a class="nav-link" href="#projects">Projects</a></li>
+          <li class="nav-item"><a class="nav-link" href="#backups">Backups</a></li>
+        </ul>
+        <div class="navbar-nav flex-row align-items-center gap-3">
+          <span class="mdb-refresh text-secondary small d-flex align-items-center gap-2" data-state="live" aria-live="polite">
+            <span class="status status-green"><span class="status-dot status-dot-animated"></span><span data-refresh-label>Live</span></span>
+          </span>
+          <button type="button" class="btn btn-ghost-secondary btn-sm" data-theme-toggle aria-label="Switch between light and dark">
+            <span class="hide-theme-dark">Dark</span><span class="hide-theme-light">Light</span>
+          </button>
+        </div>
+      </div>
+    </header>
+    <div class="page-wrapper">
+      <div class="page-header d-print-none">
+        <div class="container-xl">
+          <div class="row g-2 align-items-center">
+            <div class="col">
+              <div class="page-pretitle">Local database stack</div>
+              <h1 class="page-title">Overview</h1>
+            </div>
+            <div class="col-auto d-flex flex-wrap gap-2">
+              {{range .Endpoints.Profiles}}<span class="badge bg-primary-lt">{{.}}</span>{{end}}
+              <span class="badge badge-outline text-secondary">publish {{.Endpoints.Publish}}</span>
+              <span class="badge badge-outline text-secondary">{{.Backend}}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <main id="content" class="page-body" data-refresh-target>
+        {{template "body" .}}
+      </main>
+      <footer class="footer footer-transparent d-print-none">
+        <div class="container-xl text-secondary small">
+          dbpantry {{.Version}} · read-only · refreshes every 5 seconds · <a href="/api/status" class="text-reset">JSON</a>
+        </div>
+      </footer>
+    </div>
+  </div>
+  <script src="/assets/js/dashboard.js"></script>
+</body>
+</html>
+{{end}}

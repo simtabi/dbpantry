@@ -1,0 +1,5 @@
+/* dbpantry's few additions to Tabler. */
+.mdb-mark { width: 1.75rem; height: 1.75rem; }
+.mdb-mono { font-family: var(--tblr-font-monospace); font-size: .8125rem; }
+.mdb-refresh[data-state="stale"] .status { --tblr-status-color: var(--tblr-yellow); }
+.mdb-refresh[data-state="error"] .status { --tblr-status-color: var(--tblr-red); }

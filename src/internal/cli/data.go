@@ -24,7 +24,11 @@ restarted so the new user can log in through it (N8); --no-pooler-sync skips tha
 		Args: cobra.NoArgs,
 		RunE: func(c *cobra.Command, _ []string) error {
 			argv := append([]string{"scripts/new-project", "--name", name}, strArg(c, "engine", eng)...)
-			if err := a.runSteps(c, script(argv...)); err != nil {
+			if a.formatted() {
+				if _, err := a.projectFormatted(c, argv); err != nil {
+					return err
+				}
+			} else if err := a.runSteps(c, script(argv...)); err != nil {
 				return err
 			}
 			if noSync || eng == "" {

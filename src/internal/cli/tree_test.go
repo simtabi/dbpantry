@@ -28,6 +28,7 @@ var wantTree = []string{
 	"config prod-overlay",
 	"config render",
 	"config validate",
+	"dashboard",
 	"data",
 	"data export",
 	"data import",

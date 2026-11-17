@@ -58,6 +58,7 @@ self-update	self-update	go:TestCommandsRunTheirScripts	9
 manifest	manifest	62	1
 -	manifest check-helm	65	1
 endpoints	endpoints	go:TestEndpointsAndFixtureDryRun	1
+dashboard	dashboard	go:TestDashboardServes	1
 fixture-up	fixture up	64,66	1
 fixture-down	fixture down	64	1
 -	version	go:TestVersionFormats	2

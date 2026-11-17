@@ -36,6 +36,10 @@ type app struct {
 	dryRun  bool
 	noInput bool
 	noColor bool
+	// plain prints the scripts' own output on a terminal too (pretty.go).
+	plain bool
+	// pretty draws the formatted output off a terminal too (less -R, a test).
+	pretty bool
 	// profiles is a wrapped command's --profiles, when it has one.
 	profiles string
 	// jsonErrors is set by a command run with -o json: its failure is
@@ -82,6 +86,9 @@ replaces them one bounded context at a time (refactor plan, phase 2).`,
 	pf.BoolVar(&a.dryRun, "dry-run", false, "print the scripts a command would run, and run nothing")
 	pf.BoolVar(&a.noInput, "no-input", false, "never prompt: a command that needs a typed confirmation without --confirm exits 7")
 	pf.BoolVar(&a.noColor, "no-color", false, "no colour in output (also NO_COLOR)")
+	pf.BoolVar(&a.plain, "plain", false, "print the scripts' own output, without the step tree, progress bars and tables drawn on a terminal")
+	pf.BoolVar(&a.pretty, "pretty", false, "draw the step tree, progress bars and tables even when output is not a terminal (e.g. into less -R)")
+	root.MarkFlagsMutuallyExclusive("plain", "pretty")
 
 	// The tree, declared one command at a time (TestTreeIsDeclared).
 	root.AddCommand(
@@ -92,7 +99,7 @@ replaces them one bounded context at a time (refactor plan, phase 2).`,
 		// Engines
 		a.manifestCmd(),
 		// Stack
-		a.upCmd(), a.downCmd(), a.statusCmd(), a.logsCmd(), a.endpointsCmd(), a.forwardCmd(), a.destroyCmd(),
+		a.upCmd(), a.downCmd(), a.statusCmd(), a.logsCmd(), a.endpointsCmd(), a.dashboardCmd(), a.forwardCmd(), a.destroyCmd(),
 		// Fixtures
 		a.fixtureCmd(),
 		// Runtime

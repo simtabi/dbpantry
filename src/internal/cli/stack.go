@@ -28,6 +28,9 @@ connect. --profile test boots them on tmpfs with durability off instead
 		RunE: func(c *cobra.Command, _ []string) error {
 			switch overlay {
 			case "":
+				if a.formatted() {
+					return a.upFormatted(c)
+				}
 				return a.runSteps(c,
 					script("scripts/check-env", "--quiet"),
 					script("scripts/render-config"),
@@ -65,7 +68,12 @@ func (a *app) downCmd() *cobra.Command {
 		Use:   "down",
 		Short: "Stop the stack (never touches data; deleting volumes is destroy)",
 		Args:  cobra.NoArgs,
-		RunE:  func(c *cobra.Command, _ []string) error { return a.runSteps(c, script("scripts/runtime", "down")) },
+		RunE: func(c *cobra.Command, _ []string) error {
+			if a.formatted() {
+				return a.downFormatted(c)
+			}
+			return a.runSteps(c, script("scripts/runtime", "down"))
+		},
 	}
 }
 
