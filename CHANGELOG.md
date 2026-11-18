@@ -137,6 +137,10 @@ waiving them.
   D-52 to D-57, which sat after the end of the document, are back in the decision log.
 
 ### Added
+- `dbpantry endpoints` names each engine's admin user (`postgres`, `root`, `cassandra`; MongoDB's
+  `MDB_MONGODB_ROOT_USER` overrides it), from a new optional descriptor key `MDB_ENGINE_ADMIN_USER`.
+  laranail-test-db's `principal: admin` needs it. A Go test reads the family scripts, so the descriptor
+  cannot name a login the toolkit never uses.
 - `make new-project NAME=x FIXTURE=1` (`project new --fixture`) provisions in the fixture, with password
   files under `secrets/fixture/`, which `fixture down` removes; `make endpoints FIXTURE=1` (`endpoints
   --fixture`) reports the fixture's ports and those files. A test run that names its own project gets
