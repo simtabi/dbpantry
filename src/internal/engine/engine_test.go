@@ -2,6 +2,7 @@ package engine
 
 import (
 	"bytes"
+	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -373,5 +374,57 @@ func TestProjectPrincipalsMatchNewProject(t *testing.T) {
 		if ps[i] != want[i] {
 			t.Errorf("principal %d = %+v, want %+v (as scripts/new-project names it)", i, ps[i], want[i])
 		}
+	}
+}
+
+// TestAdminUserMatchesFamilyScripts reads the scripts that log in as each
+// engine's superuser and fails if MDB_ENGINE_ADMIN_USER names anyone else, so
+// `dbpantry endpoints` cannot report an admin login the toolkit never uses.
+func TestAdminUserMatchesFamilyScripts(t *testing.T) {
+	es, err := Load(filepath.Join("..", "..", "..", "engines"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	read := func(rel string) string {
+		b, err := os.ReadFile(filepath.Join("..", "..", "..", rel)) // #nosec G304 -- this repository's own scripts, named in the table below
+		if err != nil {
+			t.Fatal(err)
+		}
+		return string(b)
+	}
+	// Where each engine's scripts spell the superuser, and how.
+	uses := map[string]struct{ file, form string }{
+		"pg":        {"engines/_family/postgres.sh", "psql -U %s "},
+		"mysql":     {"engines/_family/mysql.sh", `"-u%s"`},
+		"mariadb":   {"engines/_family/mysql.sh", `"-u%s"`},
+		"cassandra": {"engines/_family/cassandra.sh", "cqlsh -u %s "},
+		"mongodb":   {"engines/mongodb/compose-env.yml", "${MDB_MONGODB_ROOT_USER:-%s}"},
+	}
+	checked := 0
+	for _, e := range es {
+		admin := ""
+		for _, p := range e.Principals {
+			if p.Role == "admin" {
+				admin = p.User
+			}
+		}
+		u, ok := uses[e.Name]
+		if !ok {
+			if admin != "" {
+				t.Errorf("%s names admin user %q, but no script is known to log in as it; add it to this test", e.Name, admin)
+			}
+			continue
+		}
+		if admin == "" {
+			t.Errorf("%s: MDB_ENGINE_ADMIN_USER is empty", e.Name)
+			continue
+		}
+		if !strings.Contains(read(u.file), fmt.Sprintf(u.form, admin)) {
+			t.Errorf("%s: admin user %q does not appear as %q in %s", e.Name, admin, fmt.Sprintf(u.form, admin), u.file)
+		}
+		checked++
+	}
+	if checked < 5 {
+		t.Fatalf("checked %d engines' admin users, want at least 5", checked)
 	}
 }

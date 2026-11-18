@@ -446,6 +446,16 @@ _port_busy() {
     fi
 }
 
+# _fixture_ports_busy BASE -> true when any port a fixture publishes from BASE
+# (each engine at BASE + its offset, each pooler 100 above) is already held.
+_fixture_ports_busy() {
+    local base="$1" off
+    for off in 0 1 2 3 4 5 100 101 102 103 104 105; do
+        _port_busy $(( base + off )) && return 0
+    done
+    return 1
+}
+
 scratch_stack() {
     local profiles="$1" sdir proj base key
     sdir="$(mktemp -d "${TMPDIR:-/tmp}/mdb-scratch.XXXXXX")" || vfail "mktemp failed"
@@ -468,7 +478,7 @@ scratch_stack() {
     # Every port key moves to a run of free high ports. The active lines are
     # deleted rather than overridden: check-env reads every assignment.
     base=$(( 41000 + (RANDOM % 200) * 100 ))
-    sed -i.bak -E '/^(COMPOSE_PROJECT_NAME|MDB_PROFILES|MDB_BACKUP_DIR|MDB_NETWORK_SUBNET|MDB_[A-Z0-9_]*PORT)=/d' "$sdir/.env" \
+    sed -i.bak -E '/^(COMPOSE_PROJECT_NAME|MDB_PROFILES|MDB_BACKUP_DIR|MDB_NETWORK_SUBNET|MDB_FIXTURE_NETWORK_SUBNET|MDB_FIXTURE_PORT_BASE|MDB_[A-Z0-9_]*PORT)=/d' "$sdir/.env" \
         && rm -f "$sdir/.env.bak"
     {
         printf '\n# scratch_stack (verify): never the operator project\n'
@@ -477,6 +487,15 @@ scratch_stack() {
         printf 'MDB_BACKUP_DIR="%s"\n' "$sdir/backups"
         # Its own subnet too: the operator's mdb_net already holds the default.
         printf 'MDB_NETWORK_SUBNET=10.%s.%s.0/24\n' "$(( 200 + RANDOM % 50 ))" "$(( RANDOM % 250 ))"
+        # And its fixture's (`dbpantry fixture` in a scratch stack): every fixture
+        # otherwise claims 172.29.0.0/16 and ports from 55000, which a fixture
+        # already running on this host holds, so Docker refused the network
+        # (2026-11-17, check 64 beside laranail/settings' fixture). 10.150-199
+        # never meets the stack's 10.200-249 above.
+        printf 'MDB_FIXTURE_NETWORK_SUBNET=10.%s.%s.0/24\n' "$(( 150 + RANDOM % 50 ))" "$(( RANDOM % 250 ))"
+        fbase=$(( 47000 + (RANDOM % 100) * 200 ))
+        while _fixture_ports_busy "$fbase"; do fbase=$(( fbase + 200 )); done
+        printf 'MDB_FIXTURE_PORT_BASE=%s\n' "$fbase"
         for key in $(grep -oE '^#?MDB_[A-Z0-9_]*PORT=' "$MDB_ROOT/.env.example" | tr -d '#=' | sort -u); do
             # A random base can still land on a listener (another tool's
             # ephemeral port), which check-env then rightly refuses.

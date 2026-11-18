@@ -92,6 +92,12 @@ func (a *app) runSteps(c *cobra.Command, steps ...step) error {
 }
 
 func (a *app) runStep(ctx context.Context, root string, env []string, s step) error {
+	return a.runStepTo(ctx, root, env, s, a.stdout, a.stderr)
+}
+
+// runStepTo runs a step with its output sent to stdout and stderr: the
+// terminal, or the lines a formatted view reads (pretty.go).
+func (a *app) runStepTo(ctx context.Context, root string, env []string, s step, stdout, stderr io.Writer) error {
 	cmd := exec.CommandContext(ctx, filepath.Join(root, s.Args[0]), s.Args[1:]...) // #nosec G204 -- a fixed script of this repository; the arguments are the caller's, as make passed them
 	// An interrupt reaches the script from the terminal, as it did under
 	// make; the binary waits for it rather than killing it, so Ctrl-C in a
@@ -99,7 +105,7 @@ func (a *app) runStep(ctx context.Context, root string, env []string, s step) er
 	cmd.Cancel = func() error { return nil }
 	cmd.Dir = root
 	cmd.Env = append(append([]string{}, env...), s.Env...)
-	cmd.Stdout, cmd.Stderr = a.stdout, a.stderr
+	cmd.Stdout, cmd.Stderr = stdout, stderr
 	if s.Quiet {
 		cmd.Stdout = io.Discard
 	}

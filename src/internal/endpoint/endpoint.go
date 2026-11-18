@@ -150,7 +150,7 @@ func Resolve(m engine.Manifest, s *config.Settings, o Options) (Document, error)
 			Engine: e.Name, Title: e.Title, Family: e.Family, Enabled: on(e.Name),
 			TLSAlways: e.TLSAlways, BootBudget: e.BootBudget,
 			Direct:     Access{Network: Address{e.Name, e.Port}, Superuser: true, Enabled: on(e.Name)},
-			Principals: append([]engine.Principal(nil), e.Principals...),
+			Principals: adminUser(s, upper, append([]engine.Principal(nil), e.Principals...)),
 		}
 		switch publish {
 		case "direct":
@@ -240,4 +240,20 @@ func contains(list []string, s string) bool {
 		}
 	}
 	return false
+}
+
+// adminUser applies an MDB_<ENGINE>_ROOT_USER override (environment over env
+// file) to the admin principal: MongoDB's root user is configurable that way,
+// and its compose environment reads the same variable.
+func adminUser(s *config.Settings, upper string, ps []engine.Principal) []engine.Principal {
+	override := s.Effective("MDB_" + upper + "_ROOT_USER")
+	if override == "" {
+		return ps
+	}
+	for i := range ps {
+		if ps[i].Role == "admin" {
+			ps[i].User = override
+		}
+	}
+	return ps
 }

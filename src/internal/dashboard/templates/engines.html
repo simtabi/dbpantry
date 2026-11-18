@@ -1,0 +1,31 @@
+{{define "content"}}
+<div class="page-header d-print-none"><div class="container-xl"><div class="row g-2 align-items-center">
+  <div class="col"><div class="page-pretitle">{{.S.Enabled}} of {{len .S.Endpoints.Endpoints}} enabled</div><h2 class="page-title">Engines</h2></div>
+</div></div></div>
+<div class="page-body"><div class="container-xl">
+  <div class="row row-cards">
+    {{$s := .S}}
+    {{range .S.Endpoints.Endpoints}}
+    <div class="col-md-6 col-xl-4">
+      <div class="card{{if not .Enabled}} card-inactive{{end}}">
+        <div class="card-status-top {{if .Enabled}}bg-green{{else}}bg-secondary{{end}}"></div>
+        <div class="card-body">
+          <div class="d-flex align-items-center mb-3">
+            <span class="avatar me-3 {{if .Enabled}}bg-green-lt{{end}}">{{icon "database"}}</span>
+            <div><h3 class="card-title mb-0"><a href="/engines/{{.Engine}}" class="text-reset">{{.Title}}</a></h3><div class="text-secondary small">{{.Engine}} · {{.Family}}</div></div>
+            <span class="badge ms-auto {{if .Enabled}}bg-green-lt{{else}}bg-secondary-lt{{end}}">{{if .Enabled}}enabled{{else}}not enabled{{end}}</span>
+          </div>
+          <div class="datagrid">
+            <div class="datagrid-item"><div class="datagrid-title">From containers</div><div class="datagrid-content mdb-mono">{{.Direct.Network.Host}}:{{.Direct.Network.Port}}</div></div>
+            <div class="datagrid-item"><div class="datagrid-title">From this machine</div><div class="datagrid-content mdb-mono">{{if not .Enabled}}–{{else}}{{with .Direct.Published}}{{.Address}}:{{.Port}}{{else}}not published{{end}}{{end}}</div></div>
+            <div class="datagrid-item"><div class="datagrid-title">Pooler</div><div class="datagrid-content mdb-mono">{{with .Pooled}}{{.Network.Host}}:{{.Network.Port}}{{if not .Enabled}} <span class="text-secondary">(off)</span>{{end}}{{else}}–{{end}}</div></div>
+            <div class="datagrid-item"><div class="datagrid-title">Projects</div><div class="datagrid-content">{{len ($s.ProjectsOn .Engine)}}</div></div>
+          </div>
+        </div>
+        <div class="card-footer"><a href="/engines/{{.Engine}}">Details and principals</a></div>
+      </div>
+    </div>
+    {{end}}
+  </div>
+</div></div>
+{{end}}

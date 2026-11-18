@@ -283,7 +283,10 @@ func fromDescriptor(d Descriptor, root string, bases map[string]map[string]strin
 
 	// N13: principals by role, as paths. The admin is the engine's root
 	// secret; project roles come from Project.
-	e.Principals = []Principal{{Role: "admin", PasswordFile: e.RootSecretFile}}
+	// The admin's login is MDB_ENGINE_ADMIN_USER (optional: an engine without
+	// it reports the password file only), the name the family scripts log in as;
+	// TestAdminUserMatchesFamilyScripts keeps the two equal.
+	e.Principals = []Principal{{Role: "admin", User: d.Value("MDB_ENGINE_ADMIN_USER"), PasswordFile: e.RootSecretFile}}
 
 	e.Bases = map[string]string{}
 	for _, v := range e.Versions {

@@ -1,0 +1,140 @@
+{{define "content"}}
+<div class="page-header d-print-none">
+  <div class="container-xl">
+    <div class="row g-2 align-items-center">
+      <div class="col-12 col-md">
+        <div class="page-pretitle">Local database stack</div>
+        <h2 class="page-title">Overview</h2>
+      </div>
+      <div class="col-12 col-md-auto ms-auto d-print-none">
+        <div class="btn-list">
+          {{range .S.Endpoints.Profiles}}<span class="badge bg-primary-lt">{{.}}</span>{{end}}
+          <a href="/connect" class="btn btn-primary d-none d-sm-inline-block">{{icon "plug"}} Connect an application</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="page-body">
+  <div class="container-xl">
+    <div class="row row-deck row-cards">
+
+      <div class="col-sm-6 col-lg-3">
+        <div class="card"><div class="card-body">
+          <div class="d-flex align-items-center"><div class="subheader">Services healthy</div><div class="ms-auto"><a href="/services" class="text-secondary small">Details</a></div></div>
+          {{if .S.ServicesErr}}
+          <div class="h1 mb-3 text-red">Unavailable</div><div class="text-secondary small">the runtime did not answer</div>
+          {{else}}
+          <div class="h1 mb-3">{{.S.Healthy}} <span class="text-secondary fs-3">of {{len .S.Services}}</span></div>
+          <div class="progress progress-sm"><div class="progress-bar {{if eq .S.HealthPercent 100}}bg-green{{else}}bg-yellow{{end}}" style="width: {{.S.HealthPercent}}%" role="progressbar" aria-valuenow="{{.S.HealthPercent}}" aria-valuemin="0" aria-valuemax="100" aria-label="{{.S.HealthPercent}}% healthy"></div></div>
+          {{end}}
+        </div></div>
+      </div>
+
+      <div class="col-sm-6 col-lg-3">
+        <div class="card"><div class="card-body">
+          <div class="d-flex align-items-center"><div class="subheader">Engines enabled</div><div class="ms-auto"><a href="/engines" class="text-secondary small">Details</a></div></div>
+          <div class="h1 mb-3">{{.S.Enabled}} <span class="text-secondary fs-3">of {{len .S.Endpoints.Endpoints}}</span></div>
+          <div class="text-secondary small">profiles {{join .S.Endpoints.Profiles ", "}}</div>
+        </div></div>
+      </div>
+
+      <div class="col-sm-6 col-lg-3">
+        <div class="card"><div class="card-body">
+          <div class="d-flex align-items-center"><div class="subheader">Projects</div><div class="ms-auto"><a href="/projects" class="text-secondary small">Details</a></div></div>
+          <div class="h1 mb-3">{{len .S.Projects}}</div>
+          <div class="text-secondary small">provisioned with make new-project</div>
+        </div></div>
+      </div>
+
+      <div class="col-sm-6 col-lg-3">
+        <div class="card"><div class="card-body">
+          <div class="d-flex align-items-center"><div class="subheader">Images</div><div class="ms-auto"><a href="/images" class="text-secondary small">Details</a></div></div>
+          {{if .S.ImagesErr}}<div class="h1 mb-3 text-secondary">–</div><div class="text-secondary small">could not be listed</div>
+          {{else}}<div class="h1 mb-3">{{len .S.Images}}</div><div class="text-secondary small">built locally{{with .S.Latest}} · last backup {{ago .Modified}}{{else}} · no backups yet{{end}}</div>{{end}}
+        </div></div>
+      </div>
+
+      <div class="col-12">
+        {{if eq .S.Endpoints.Publish "none"}}
+        <div class="alert alert-info mb-0 w-100" role="alert">
+          <div class="d-flex"><div>{{icon "info"}}</div><div class="ms-2">
+            <h4 class="alert-heading">No host ports are published (MDB_PUBLISH=none)</h4>
+            <div class="text-secondary">Applications join the <code>{{.S.Network}}</code> network and connect by service name. For a GUI client that cannot join it, set <code>MDB_PUBLISH=direct</code> (or <code>proxy</code>) in <code>{{base .S.Endpoints.EnvFile}}</code> and run <code>make up</code> again. <a href="/connect">How to connect</a></div>
+          </div></div>
+        </div>
+        {{else}}
+        <div class="alert alert-success mb-0 w-100" role="alert">
+          <div class="d-flex"><div>{{icon "check"}}</div><div class="ms-2">
+            <h4 class="alert-heading">Published on this machine (MDB_PUBLISH={{.S.Endpoints.Publish}})</h4>
+            <div class="text-secondary">Each running engine listens on <code>{{.S.Endpoints.BindAddr}}</code> from port base {{.S.Endpoints.PortBase}}; applications in containers still join <code>{{.S.Network}}</code>. <a href="/connect">How to connect</a></div>
+          </div></div>
+        </div>
+        {{end}}
+      </div>
+
+      <div class="col-lg-5">
+        <div class="card">
+          <div class="card-header"><h3 class="card-title">Services</h3><div class="card-actions"><a href="/services">View all</a></div></div>
+          {{if .S.ServicesErr}}<div class="card-body">{{template "services-unavailable" .S.ServicesErr}}</div>
+          {{else if not .S.Services}}<div class="empty"><div class="empty-icon">{{icon "server"}}</div><p class="empty-title">Nothing is running</p><p class="empty-subtitle text-secondary">Start the stack with <code>make up</code>, or everything at once with <code>make start</code>.</p></div>
+          {{else}}
+          <div class="list-group list-group-flush">
+            {{range .S.Services}}
+            <div class="list-group-item"><div class="row align-items-center">
+              <div class="col-auto"><span class="avatar avatar-sm">{{icon "server"}}</span></div>
+              <div class="col text-truncate"><div class="mdb-mono">{{.Name}}</div><div class="text-secondary small text-truncate">{{if .Image}}{{.Image}}{{end}}{{if not .Started.IsZero}} · up {{since .Started}}{{end}}</div></div>
+              <div class="col-auto">{{template "health-status" .}}</div>
+            </div></div>
+            {{end}}
+          </div>
+          {{end}}
+        </div>
+      </div>
+
+      <div class="col-lg-7">
+        <div class="card">
+          <div class="card-header"><h3 class="card-title">Where to connect</h3><div class="card-actions"><a href="/engines">All engines</a></div></div>
+          <div class="table-responsive">
+            <table class="table table-vcenter card-table">
+              <thead><tr><th>Engine</th><th>From containers</th><th>From this machine</th><th>TLS</th></tr></thead>
+              <tbody>
+                {{range .S.Endpoints.Endpoints}}{{if .Enabled}}
+                <tr>
+                  <td><a href="/engines/{{.Engine}}" class="text-reset fw-medium">{{.Title}}</a></td>
+                  <td class="mdb-mono text-nowrap">{{.Direct.Network.Host}}:{{.Direct.Network.Port}}</td>
+                  <td class="mdb-mono text-nowrap">{{with .Direct.Published}}{{.Address}}:{{.Port}}{{else}}<span class="text-secondary">not published</span>{{end}}</td>
+                  <td>{{if .TLSAlways}}<span class="badge bg-green-lt">always</span>{{else}}<span class="badge bg-secondary-lt">prod</span>{{end}}</td>
+                </tr>
+                {{end}}{{end}}
+              </tbody>
+            </table>
+          </div>
+          {{if eq .S.Enabled 0}}<div class="card-body text-secondary">No engine is in the profiles. Start one with <code>make up PROFILES=&lt;engine&gt;</code>.</div>{{end}}
+        </div>
+      </div>
+
+      <div class="col-12">
+        <div class="card">
+          <div class="card-header"><h3 class="card-title">Projects</h3><div class="card-actions"><a href="/projects">View all</a></div></div>
+          {{if not .S.Projects}}
+          <div class="empty"><div class="empty-icon">{{icon "folders"}}</div><p class="empty-title">No projects yet</p><p class="empty-subtitle text-secondary">Provision one with <code>make new-project NAME=myapp ENGINE=&lt;engine&gt;</code>.</p></div>
+          {{else}}
+          <div class="table-responsive">
+            <table class="table table-vcenter card-table table-hover">
+              <thead><tr><th>Project</th><th>Engine</th><th>Owner role</th><th class="w-1"></th></tr></thead>
+              <tbody>
+                {{range .S.Projects}}
+                <tr><td class="fw-medium">{{.Name}}</td><td><span class="badge bg-primary-lt">{{.Engine}}</span></td><td class="mdb-mono">{{.Owner}}</td><td><a href="/projects/{{.Engine}}/{{.Name}}" class="btn btn-sm">Connection details</a></td></tr>
+                {{end}}
+              </tbody>
+            </table>
+          </div>
+          {{end}}
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+{{end}}

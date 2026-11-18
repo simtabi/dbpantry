@@ -1,0 +1,21 @@
+{{define "content"}}
+<div class="page-header d-print-none"><div class="container-xl"><div class="row g-2 align-items-center">
+  <div class="col"><div class="page-pretitle">Built locally</div><h2 class="page-title">Images</h2></div>
+</div></div></div>
+<div class="page-body"><div class="container-xl">
+  <div class="card">
+    {{if .S.ImagesErr}}<div class="card-body"><div class="alert alert-warning mb-0" role="alert">Images could not be listed: {{.S.ImagesErr}}</div></div>
+    {{else if not .S.Images}}
+    <div class="empty"><div class="empty-icon">{{icon "package"}}</div><p class="empty-title">No images built yet</p><p class="empty-subtitle text-secondary">The first <code>make up</code> builds each engine's image (several minutes each); <code>make build</code> builds them all.</p></div>
+    {{else}}
+    <div class="table-responsive">
+      <table class="table table-vcenter card-table">
+        <thead><tr><th>Image</th><th class="text-end">Size</th><th class="text-end">Built</th></tr></thead>
+        <tbody>{{range .S.Images}}<tr><td class="mdb-mono">{{.Ref}}</td><td class="text-end text-nowrap">{{.Size}}</td><td class="text-end text-secondary text-nowrap">{{.Created}}</td></tr>{{end}}</tbody>
+      </table>
+    </div>
+    {{end}}
+    <div class="card-footer text-secondary small">Rebuild: <code>make build</code> · scan for vulnerabilities: <code>make scan</code></div>
+  </div>
+</div></div>
+{{end}}

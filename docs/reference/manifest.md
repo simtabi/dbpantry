@@ -105,7 +105,9 @@ Superusers cannot authenticate through a pooler, so admin work uses `direct`.
 ### Principals
 
 Principals are paths, never values. `admin` is the engine's root secret,
-`/run/secrets/<root_secret>`. `--project NAME` adds the two roles `make new-project NAME=<name>`
+`/run/secrets/<root_secret>`, with its login name from the descriptor's `MDB_ENGINE_ADMIN_USER`
+(`postgres` for PostgreSQL, `root` for MySQL and MariaDB, `cassandra`, and `root` for MongoDB unless
+`MDB_MONGODB_ROOT_USER` overrides it); an engine without the key reports the file only. `--project NAME` adds the two roles `make new-project NAME=<name>`
 creates: `app` (user `<name>_user`, `/run/secrets/<engine>_<name>_user_password.txt`) and `read-only`
 (user `<name>_user_readonly`, `/run/secrets/<engine>_<name>_user_readonly_password.txt`). On the host
 the same files are `secrets/<engine>_<name>_user[_readonly]_password.txt`. The files exist once the
@@ -131,6 +133,10 @@ for health. `fixture down` stops that stack. `--dry-run` prints the commands.
   Docker refuses a second network on the stack's range; `fixture` refuses a value that overlaps
   `MDB_NETWORK_SUBNET`, and pins each pooler at the same offset from the top of the fixture's range
   as gen-compose does for the stack's. Check 66 renders both and proves they do not overlap.
+  One fixture serves every test run of a checkout (each run gets its own project database), so
+  runs never collide; a second dbpantry checkout on the same host sets its own
+  `MDB_FIXTURE_NETWORK_SUBNET` and `MDB_FIXTURE_PORT_BASE`, as it does for the stack. The harness's
+  scratch stacks pick a random fixture range and free fixture ports for the same reason.
   Until 2026-11-17 it ran as the stack's project, so `fixture up` replaced every application's
   engine with a tmpfs one and `fixture down` stopped them.
 
