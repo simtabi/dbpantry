@@ -105,7 +105,7 @@ func copyFile(src, dst string) (kit.Entry, error) {
 	if st.Mode().Perm()&0o111 != 0 {
 		mode = 0o755
 	}
-	if err := os.WriteFile(dst, b, mode); err != nil { // #nosec G306 -- kit files are public source
+	if err := os.WriteFile(dst, b, mode); err != nil { // #nosec G306 G703 -- kit files are public source; dst is out joined with a path fs.ValidPath accepted
 		return kit.Entry{}, err
 	}
 	sum, err := kit.Sum(bytes.NewReader(b))

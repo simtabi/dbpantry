@@ -71,6 +71,24 @@ Profiles are the engine names — `pg`, `mysql`, `mariadb`, `mongodb`,
 `cassandra`, `ferretdb` — plus `ui`, `pooler`, `backup`, `metrics` and `prod`.
 See [Configuration](configuration.md).
 
+## Run from the binary alone
+
+`make kit && make dbpantry` builds `build/<os>/dbpantry` with the kit inside it:
+the scripts, compose files, engines and image sources. Copied anywhere and run
+where there is no checkout, it extracts the kit to
+`~/.config/dbpantry/kit/<version>` and keeps the instance (`.env`, `secrets/`,
+`certs/`, `backups/`) in `~/.config/dbpantry`:
+
+```bash
+dbpantry init
+dbpantry start --profiles pg --project myapp
+```
+
+The kit is checked against its checksums on every run and extracted again if
+anything in it changed. `--home DIR` or `DBPANTRY_HOME` use another home. Images
+are still built locally on the first `up`, from the image sources in the kit
+(design.md D-85).
+
 ## Verify the install
 
 ```bash

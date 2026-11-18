@@ -332,6 +332,11 @@ if mdb_runtime_ready; then
     # A subshell that cd's and then runs, rather than `cd && cmd`: the latter
     # reads as if-then-else to shellcheck (SC2015) and the trailing || would
     # fire on a cd failure too.
+    # The first line, "rendered", says Compose answered at all: a stack that
+    # publishes nothing (MDB_PUBLISH=none, the default) renders no ports, and
+    # an empty answer used to be read as "Compose unavailable", sending the
+    # check to the env-file fallback below, which flags HAProxy's 5432 and
+    # refused a fresh init on any machine running PostgreSQL (check 78).
     resolved="$( { cd "$ROOT" || exit 0; mdb_compose ${prof_args[@]+"${prof_args[@]}"} config --format json 2>/dev/null; } \
         | python3 -c '
 import json,sys
@@ -339,6 +344,7 @@ try:
     cfg = json.load(sys.stdin)
 except Exception:
     sys.exit(0)
+print("rendered")
 for svc in (cfg.get("services") or {}).values():
     for p in (svc.get("ports") or []):
         pub = p.get("published")
@@ -349,7 +355,12 @@ fi
 
 # Fall back to the env file when compose or python is unavailable: a partial
 # check beats none, and this path still catches every explicitly-set port.
-if [[ -z "$resolved" ]]; then
+rendered=0
+if [[ "$resolved" == rendered* ]]; then
+    rendered=1
+    resolved="${resolved#rendered}"
+fi
+if (( ! rendered )); then
     resolved="$(grep -E '^MDB_[A-Z0-9_]*(HOST_)?PORT=' "$ENV_FILE" 2>/dev/null | cut -d= -f2- | while IFS= read -r v; do mdb_env_unquote "$v"; done || true)"
 fi
 
