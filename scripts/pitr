@@ -23,7 +23,7 @@ cd "$ROOT" || exit 1
 log() { printf '[pitr] %s\n' "$*"; }
 die() { printf '[pitr] ERROR: %s\n' "$*" >&2; exit 1; }
 
-ENV_FILE="${MDB_ENV_FILE:-$ROOT/.env}"
+ENV_FILE="${MDB_ENV_FILE:-$MDB_HOME/.env}"
 [[ -f "$ENV_FILE" ]] || ENV_FILE="$ROOT/.env.example"
 get() { mdb_env_get "$1" "$ENV_FILE"; }
 
@@ -66,7 +66,7 @@ binlog_dir() {
     local d; d="$(get MDB_BINLOG_DIR)"
     printf '%s' "${d:-/var/lib/mdb-binlog}"
 }
-root_pw() { tr -d '\n' < "$ROOT/secrets/${ENGINE}_root_password.txt"; }
+root_pw() { tr -d '\n' < "$MDB_HOME/secrets/${ENGINE}_root_password.txt"; }
 
 pitr_enabled || die "PITR is off for $ENGINE. Set MDB_${upper}_PITR=true and restart:
        neither archive_mode nor log_bin can be enabled without one, so this is

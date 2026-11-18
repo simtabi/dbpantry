@@ -26,6 +26,26 @@ grep -A3 MDB_PGBOUNCER_POOL_MODE .env.example
 | UIs | Adminer, pgAdmin, the Caddy front door, basic auth |
 | Scale and HA | Patroni, etcd, HAProxy, synchronous commit |
 
+## Where the instance lives
+
+`.env` sits in the instance home, with everything else `make init` and
+`make up` create: `secrets/`, `certs/`, `backups/`, the generated compose
+files (`compose.engines.yml`, `compose.proxy.yml`, `compose.prod.engines.yml`)
+and the rendered config (`config/caddy/Caddyfile`, `servers.json`,
+`layer4.caddy`). The home is the checkout unless `MDB_HOME` names another
+directory. Set it in the environment, not in `.env`, because it is where
+`.env` is looked for:
+
+```bash
+MDB_HOME=~/.config/dbpantry make init
+MDB_HOME=~/.config/dbpantry make up
+```
+
+With a separate home nothing is written into the checkout, which stays the
+kit: the scripts, compose files, engines and image sources. Engine overrides
+(`overrides/<engine>/`) stay in the kit. Check 77 boots a stack this way and
+fails if any file in the kit changes (design.md D-84).
+
 ## Naming
 
 ```

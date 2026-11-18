@@ -8,7 +8,11 @@ SHELL := bash
 .SHELLFLAGS := -euo pipefail -c
 .DEFAULT_GOAL := help
 
-ENV_FILE ?= .env
+# The instance home (design.md D-84): .env, secrets/, certs/, backups/ and the
+# generated files live there. It is this checkout unless MDB_HOME names
+# another directory, so a checkout behaves as it always has.
+HOME_DIR := $(or $(MDB_HOME),.)
+ENV_FILE ?= $(if $(MDB_HOME),$(MDB_HOME)/.env,.env)
 
 # One value from the env file, unquoted the way Compose unquotes it
 # (scripts/env-lib.sh): KEY="a b" reads as a b, not "a b".
@@ -187,22 +191,22 @@ psql: $(DBPANTRY) ## PostgreSQL shell (socket-first)
 .PHONY: mysql
 mysql: $(DBPANTRY) ## MySQL shell (socket-first)
 	@$(DBPANTRY) shell mysql -- mysql --protocol=socket -uroot \
-		-p"$$(cat secrets/mysql_root_password.txt)"
+		-p"$$(cat $(HOME_DIR)/secrets/mysql_root_password.txt)"
 
 .PHONY: mariadb
 mariadb: $(DBPANTRY) ## MariaDB shell (socket-first)
 	@$(DBPANTRY) shell mariadb -- mariadb --protocol=socket -uroot \
-		-p"$$(cat secrets/mariadb_root_password.txt)"
+		-p"$$(cat $(HOME_DIR)/secrets/mariadb_root_password.txt)"
 
 .PHONY: mongo
 mongo: $(DBPANTRY) ## MongoDB shell (mongosh, authenticated)
 	@$(DBPANTRY) shell mongodb -- mongosh \
-		"mongodb://$(or $(USER_NAME),root):$$(cat secrets/mongodb_root_password.txt)@127.0.0.1:27017/?authSource=admin"
+		"mongodb://$(or $(USER_NAME),root):$$(cat $(HOME_DIR)/secrets/mongodb_root_password.txt)@127.0.0.1:27017/?authSource=admin"
 
 .PHONY: cassandra
 cassandra: $(DBPANTRY) ## Cassandra shell (cqlsh, authenticated)
 	@$(DBPANTRY) shell cassandra -- cqlsh -u $(or $(USER_NAME),cassandra) \
-		-p "$$(cat secrets/cassandra_root_password.txt)"
+		-p "$$(cat $(HOME_DIR)/secrets/cassandra_root_password.txt)"
 
 .PHONY: scan
 scan: $(DBPANTRY) ## Scan built images for vulnerabilities (honours .trivyignore.yaml)

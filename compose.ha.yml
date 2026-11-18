@@ -67,8 +67,8 @@ x-patroni: &patroni
     MDB_PG_SYNC_MODE: ${MDB_PG_SYNC_MODE:-false}
     MDB_TZ: ${MDB_TZ:-UTC}
   volumes:
-    - ./certs:/certs:ro
-    - ./secrets:/run/secrets:ro
+    - ${MDB_HOME:-.}/certs:/certs:ro
+    - ${MDB_HOME:-.}/secrets:/run/secrets:ro
   # Patroni shuts PostgreSQL down itself, and a demotion or a checkpoint is not
   # something to interrupt after Docker's 10s default.
   stop_grace_period: ${MDB_STOP_GRACE:-60s}
@@ -142,8 +142,8 @@ services:
       PATRONI_NAME: patroni1
     volumes:
       - patroni1_data:/var/lib/postgresql/patroni
-      - ./certs:/certs:ro
-      - ./secrets:/run/secrets:ro
+      - ${MDB_HOME:-.}/certs:/certs:ro
+      - ${MDB_HOME:-.}/secrets:/run/secrets:ro
 
   patroni2:
     <<: *patroni
@@ -154,8 +154,8 @@ services:
       PATRONI_NAME: patroni2
     volumes:
       - patroni2_data:/var/lib/postgresql/patroni
-      - ./certs:/certs:ro
-      - ./secrets:/run/secrets:ro
+      - ${MDB_HOME:-.}/certs:/certs:ro
+      - ${MDB_HOME:-.}/secrets:/run/secrets:ro
 
   patroni3:
     <<: *patroni
@@ -166,8 +166,8 @@ services:
       PATRONI_NAME: patroni3
     volumes:
       - patroni3_data:/var/lib/postgresql/patroni
-      - ./certs:/certs:ro
-      - ./secrets:/run/secrets:ro
+      - ${MDB_HOME:-.}/certs:/certs:ro
+      - ${MDB_HOME:-.}/secrets:/run/secrets:ro
 
   haproxy:
     image: docker.io/library/haproxy:3.0-alpine@sha256:7c8dac975b9def049d6585b7efe865486acaa7b6ec5e74eec45f08fde8bb2ad4
@@ -247,8 +247,8 @@ services:
     tmpfs:
       - /etc/pgbouncer:exec,mode=0700,uid=100,gid=100
     volumes:
-      - ./secrets:/run/secrets:ro
-      - ./certs:/certs:ro
+      - ${MDB_HOME:-.}/secrets:/run/secrets:ro
+      - ${MDB_HOME:-.}/certs:/certs:ro
     # Published like HAProxy's ports, on MDB_BIND_ADDR (loopback by default).
     ports:
       - "${MDB_BIND_ADDR:-127.0.0.1}:${MDB_HA_POOLER_HOST_PORT:-6432}:6432"

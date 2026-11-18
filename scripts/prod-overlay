@@ -23,7 +23,7 @@ OVERLAY=(compose.prod.yml compose.prod.engines.yml)
 
 check=0
 if [[ "${1:-}" == "--check" ]]; then check=1; shift; fi
-file="${1:-$ROOT/.env}"
+file="${1:-$MDB_HOME/.env}"
 [[ -f "$file" ]] || { printf 'prod-overlay: %s does not exist\n' "$file" >&2; exit 2; }
 
 current="$(mdb_env_get COMPOSE_FILE "$file")"
@@ -40,7 +40,7 @@ if (( check )); then
 fi
 
 if (( ${#missing[@]} == 0 )); then
-    printf 'prod-overlay: %s already applies the prod overlay\n' "${file#"$ROOT"/}"
+    printf 'prod-overlay: %s already applies the prod overlay\n' "${file#"$MDB_HOME"/}"
     exit 0
 fi
 
@@ -69,4 +69,4 @@ tmp="$(mktemp "${file}.XXXXXX")"
 awk -v n="$last" -v v="COMPOSE_FILE=$new" 'NR==n {print v; next} {print}' "$file" > "$tmp"
 chmod --reference="$file" "$tmp" 2>/dev/null || chmod "$(stat -f '%Lp' "$file" 2>/dev/null || echo 600)" "$tmp"
 mv "$tmp" "$file"
-printf 'prod-overlay: %s COMPOSE_FILE now includes %s\n' "${file#"$ROOT"/}" "${missing[*]}"
+printf 'prod-overlay: %s COMPOSE_FILE now includes %s\n' "${file#"$MDB_HOME"/}" "${missing[*]}"

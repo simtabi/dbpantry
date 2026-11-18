@@ -24,15 +24,15 @@ cd "$ROOT" || exit 1
 log() { printf '[certs-renew] %s\n' "$*"; }
 die() { printf '[certs-renew] ERROR: %s\n' "$*" >&2; exit 1; }
 
-[[ -s certs/ca.crt ]] || die "no toolkit CA yet; run 'make certs' first"
+[[ -s "$MDB_HOME/certs/ca.crt" ]] || die "no toolkit CA yet; run 'make certs' first"
 
-before="$(openssl x509 -in certs/pg/server.crt -noout -enddate 2>/dev/null | cut -d= -f2 || echo unknown)"
+before="$(openssl x509 -in "$MDB_HOME/certs/pg/server.crt" -noout -enddate 2>/dev/null | cut -d= -f2 || echo unknown)"
 log "current pg certificate expires: $before"
 
 # Re-issue the server certificates, keeping the existing CA.
 scripts/certs --renew || die "certificate re-issue failed"
 
-after="$(openssl x509 -in certs/pg/server.crt -noout -enddate 2>/dev/null | cut -d= -f2 || echo unknown)"
+after="$(openssl x509 -in "$MDB_HOME/certs/pg/server.crt" -noout -enddate 2>/dev/null | cut -d= -f2 || echo unknown)"
 log "new pg certificate expires: $after"
 
 # The certificates are mounted read-only into the engines, so the new files are
@@ -54,7 +54,7 @@ if running pg; then
 fi
 
 if running mysql; then
-    pw="$(cat secrets/mysql_root_password.txt)"
+    pw="$(cat "$MDB_HOME/secrets/mysql_root_password.txt")"
     mdb_svc_exec mysql /usr/local/lib/mdb/30-certs.sh >/dev/null 2>&1 || true
     mdb_svc_exec mysql mysql -uroot -p"$pw" --protocol=socket \
         -e "ALTER INSTANCE RELOAD TLS;" >/dev/null 2>&1 \
@@ -64,7 +64,7 @@ if running mysql; then
 fi
 
 if running mariadb; then
-    pw="$(cat secrets/mariadb_root_password.txt)"
+    pw="$(cat "$MDB_HOME/secrets/mariadb_root_password.txt")"
     mdb_svc_exec mariadb /usr/local/lib/mdb/30-certs.sh >/dev/null 2>&1 || true
     mdb_svc_exec mariadb mariadb -uroot -p"$pw" --protocol=socket \
         -e "FLUSH SSL;" >/dev/null 2>&1 \

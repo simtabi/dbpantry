@@ -226,8 +226,8 @@ func (a *app) toolsCmd() *cobra.Command {
 			}
 			return a.runSteps(c, script("scripts/runtime", "ctr", "run", "--rm", "-it",
 				"--network", project+"_net",
-				"-v", filepath.Join(root, "certs")+":/certs:ro",
-				"-v", filepath.Join(root, "backups")+":/work/backups",
+				"-v", filepath.Join(a.home(root), "certs")+":/certs:ro",
+				"-v", filepath.Join(a.home(root), "backups")+":/work/backups",
 				image))
 		},
 	}

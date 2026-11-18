@@ -28,10 +28,10 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # shellcheck source=backend-lib.sh
 . "$ROOT/scripts/backend-lib.sh"
-ENV_FILE="${MDB_ENV_FILE:-$ROOT/.env}"
+ENV_FILE="${MDB_ENV_FILE:-$MDB_HOME/.env}"
 [[ -f "$ENV_FILE" ]] || ENV_FILE="$ROOT/.env.example"
 
-BACKUP_DIR="$(mdb_backup_dir "$ROOT" "$ENV_FILE")"
+BACKUP_DIR="$(mdb_backup_dir "$MDB_HOME" "$ENV_FILE")"
 
 get() { mdb_env_get "$1" "$ENV_FILE"; }
 log() { printf '[backup] %s\n' "$*"; }
@@ -77,8 +77,8 @@ secret() {
         [[ -r "/run/secrets/$file" ]] || die "secret not readable: /run/secrets/$file"
         tr -d '\n' < "/run/secrets/$file"
     else
-        [[ -r "$ROOT/secrets/$file" ]] || die "secret not readable: secrets/$file"
-        tr -d '\n' < "$ROOT/secrets/$file"
+        [[ -r "$MDB_HOME/secrets/$file" ]] || die "secret not readable: secrets/$file"
+        tr -d '\n' < "$MDB_HOME/secrets/$file"
     fi
 }
 

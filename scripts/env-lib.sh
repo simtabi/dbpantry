@@ -13,6 +13,73 @@
 #
 # Sourced, never executed. bash 3.2 compatible.
 
+# --- the instance home (design.md D-84) --------------------------------------
+#
+# The KIT is what ships: scripts/, the compose files, engines/, images/,
+# config/ templates. The INSTANCE is what `make init` and `make up` create:
+# .env, secrets/, certs/, backups/, the generated compose files
+# (compose.engines.yml, compose.prod.engines.yml, compose.proxy.yml) and the
+# rendered config (config/caddy/Caddyfile, servers.json, layer4.caddy).
+#
+# MDB_HOME is where the instance lives. It defaults to the kit itself, so a
+# checkout behaves exactly as it always has. Set it to another directory (the
+# dbpantry binary sets ~/.config/dbpantry) and nothing is written into the kit.
+# It is always absolute: Compose interpolates ${MDB_HOME:-.} into bind-mount
+# sources, and a relative value would resolve against the project directory
+# (the kit), not the caller's directory.
+#
+# Exported only when the caller set it. A defaulted home is this kit's, and a
+# child script in ANOTHER kit -- the verify harness's scratch stacks are
+# copies of the checkout -- must default to its own, not inherit the
+# operator's .env and secrets/.
+#
+# The kit is this file's own checkout, never an inherited MDB_RT_ROOT: a
+# script run in a copy of the tree (check 71's render copy, a scratch stack)
+# inherits the harness's MDB_RT_ROOT, and a home that followed it would write
+# the copy's generated files into the operator's checkout.
+_mdb_kit_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." 2>/dev/null && pwd)"
+#
+# This file is sourced more than once in one process (backend-lib.sh sources
+# runtime-lib.sh, which sources it, and then sources it again), so a home this
+# file defaulted earlier is recognised and defaulted again, never mistaken on
+# the second pass for one the caller set and exported.
+if [[ -z "${MDB_HOME:-}" || "$MDB_HOME" == "${_mdb_home_defaulted:-}" ]]; then
+    MDB_HOME="$_mdb_kit_dir"
+    _mdb_home_defaulted="$MDB_HOME"
+else
+    if [[ "$MDB_HOME" != /* ]]; then
+        if [[ -d "$MDB_HOME" ]]; then MDB_HOME="$(cd "$MDB_HOME" && pwd)"; else MDB_HOME="$PWD/${MDB_HOME#./}"; fi
+    fi
+    MDB_HOME="${MDB_HOME%/}"
+    [[ -n "$MDB_HOME" ]] || MDB_HOME=/
+    export MDB_HOME
+fi
+
+# Does the instance live apart from the kit? Callers that must pass the home
+# to Compose explicitly (an --env-file, absolute -f paths) ask this. False in
+# a child that never sourced this file (an exported function in `bash -c`),
+# where MDB_HOME is unset unless the caller exported one.
+mdb_home_separate() {
+    [[ -n "${MDB_HOME:-}" && "$MDB_HOME" != "${_mdb_kit_dir:-${MDB_RT_ROOT:-}}" ]]
+}
+
+# The instance directory the libraries (runtime-lib.sh, the backends) use:
+# the home when it is separate, else MDB_RT_ROOT, as before D-84 (tests point
+# the runtime library at a fixture tree with its own .env and secrets/), else
+# the home. Scripts that resolve their own ROOT use $MDB_HOME directly.
+mdb_instance_dir() {
+    if mdb_home_separate; then
+        printf '%s\n' "$MDB_HOME"
+    else
+        printf '%s\n' "${MDB_RT_ROOT:-${MDB_HOME:-.}}"
+    fi
+}
+
+# The .env a reader uses when it is given none.
+mdb_env_default_file() {
+    printf '%s/.env\n' "$(mdb_instance_dir)"
+}
+
 # Strip one layer of dotenv quoting from a raw value.
 #   "a b"        -> a b        (\" \$ \` and \\ unescaped, as the shell does)
 #   'a b'        -> a b        (literal)
@@ -36,10 +103,10 @@ mdb_env_unquote() {
     printf '%s\n' "$v"
 }
 
-# The value of KEY in FILE (default: the checkout's .env): the last
+# The value of KEY in FILE (default: mdb_env_default_file): the last
 # assignment wins, as in Compose. Prints nothing when it is absent.
 mdb_env_get() {
-    local key="$1" file="${2:-${MDB_RT_ROOT:-.}/.env}" raw
+    local key="$1" file="${2:-$(mdb_env_default_file)}" raw
     [[ -f "$file" ]] || return 0
     raw="$(grep -E "^${key}=" "$file" 2>/dev/null | tail -1 || true)"
     [[ -n "$raw" ]] || return 0
@@ -89,7 +156,7 @@ mdb_env_needs_quotes() {
     _mdb_env_unsafe "$v"
 }
 
-export -f _mdb_env_unsafe mdb_env_unquote mdb_env_get mdb_env_quote mdb_env_needs_quotes 2>/dev/null || true
+export -f mdb_home_separate mdb_instance_dir mdb_env_default_file mdb_backup_dir _mdb_env_unsafe mdb_env_unquote mdb_env_get mdb_env_quote mdb_env_needs_quotes 2>/dev/null || true
 
 # The images dbpantry builds are named <prefix>/dbpantry-<component>:<tag>.
 # The prefix is MDB_IMAGE_PREFIX, or localhost when it is unset (design.md

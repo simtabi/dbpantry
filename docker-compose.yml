@@ -81,7 +81,7 @@ services:
     volumes:
       # Rendered by scripts/env-render so the UI opens with the server already
       # listed rather than asking for a hostname (SPEC section 7).
-      - ./config/caddy/servers.json:/pgadmin4/servers.json:ro
+      - ${MDB_HOME:-.}/config/caddy/servers.json:/pgadmin4/servers.json:ro
       - pgadmin_data:/var/lib/pgadmin
     # A compose SECRET rather than the ./secrets bind mount every other service
     # uses, because pgAdmin is the only one that reads a secret as a non-root
@@ -129,9 +129,9 @@ services:
     volumes:
       # Generated from the engine descriptors by scripts/gen-compose; empty
       # unless MDB_PUBLISH=proxy.
-      - ./config/caddy/layer4.caddy:/etc/caddy/layer4.caddy:ro
+      - ${MDB_HOME:-.}/config/caddy/layer4.caddy:/etc/caddy/layer4.caddy:ro
       # Rendered from config/caddy/Caddyfile.tmpl (dev) or Caddyfile.prod.tmpl (prod).
-      - ./config/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ${MDB_HOME:-.}/config/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
       # Persisted so the internal CA and any issued certificates survive a
       # restart; without this every `make up` would mint a new local CA and
       # browsers would warn again each time.
@@ -205,7 +205,7 @@ services:
       # silent crash loop. It went unnoticed because the container's healthcheck
       # was disabled: nothing ever asked whether it was running.
       - ./engines:/mdb/engines:ro
-      - ./secrets:/run/secrets:ro
+      - ${MDB_HOME:-.}/secrets:/run/secrets:ro
       # MDB_BACKUP_DIR, as scripts/backup resolves it on the host: relative to
       # this directory, ./backups by default. The long form because a short-form
       # source without ./ (the .env.example value is `backups`) is read as a named
@@ -215,7 +215,7 @@ services:
         target: /backups
         bind:
           create_host_path: true
-      - ./.env:/mdb/.env:ro
+      - ${MDB_HOME:-.}/.env:/mdb/.env:ro
     working_dir: /mdb
     networks: [mdb]
     logging: *default-logging
@@ -267,7 +267,7 @@ services:
       # silent crash loop. It went unnoticed because the container's healthcheck
       # was disabled: nothing ever asked whether it was running.
       - ./engines:/mdb/engines:ro
-      - ./secrets:/run/secrets:ro
+      - ${MDB_HOME:-.}/secrets:/run/secrets:ro
       # MDB_BACKUP_DIR, as scripts/backup resolves it on the host: relative to
       # this directory, ./backups by default. The long form because a short-form
       # source without ./ (the .env.example value is `backups`) is read as a named
@@ -277,7 +277,7 @@ services:
         target: /backups
         bind:
           create_host_path: true
-      - ./.env:/mdb/.env:ro
+      - ${MDB_HOME:-.}/.env:/mdb/.env:ro
     working_dir: /mdb
     networks: [mdb]
     logging: *default-logging
@@ -329,7 +329,7 @@ services:
       # silent crash loop. It went unnoticed because the container's healthcheck
       # was disabled: nothing ever asked whether it was running.
       - ./engines:/mdb/engines:ro
-      - ./secrets:/run/secrets:ro
+      - ${MDB_HOME:-.}/secrets:/run/secrets:ro
       # MDB_BACKUP_DIR, as scripts/backup resolves it on the host: relative to
       # this directory, ./backups by default. The long form because a short-form
       # source without ./ (the .env.example value is `backups`) is read as a named
@@ -339,7 +339,7 @@ services:
         target: /backups
         bind:
           create_host_path: true
-      - ./.env:/mdb/.env:ro
+      - ${MDB_HOME:-.}/.env:/mdb/.env:ro
     working_dir: /mdb
     networks: [mdb]
     logging: *default-logging
@@ -374,7 +374,7 @@ services:
       DATA_SOURCE_USER: postgres
       DATA_SOURCE_PASS_FILE: /run/secrets/pg_superuser_password.txt
     volumes:
-      - ./secrets:/run/secrets:ro
+      - ${MDB_HOME:-.}/secrets:/run/secrets:ro
     networks: [mdb]
     logging: *default-logging
     # Healthy when it serves metrics. The image is busybox-based, so wget is
@@ -400,7 +400,7 @@ services:
     environment:
       MYSQLD_EXPORTER_PASSWORD_FILE: /run/secrets/mysql_root_password.txt
     volumes:
-      - ./secrets:/run/secrets:ro
+      - ${MDB_HOME:-.}/secrets:/run/secrets:ro
     networks: [mdb]
     logging: *default-logging
     healthcheck:
@@ -437,4 +437,4 @@ volumes:
 # service for why it cannot.
 secrets:
   pgadmin_password:
-    file: ./secrets/pgadmin_password.txt
+    file: ${MDB_HOME:-.}/secrets/pgadmin_password.txt
