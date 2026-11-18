@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/simtabi/dbpantry/src/internal/endpoint"
@@ -38,7 +39,13 @@ var ErrNoProject = errors.New("no such project")
 
 // pages are the dashboard's pages, each a template of its own over the
 // shared layout. The key is the page's name; the menu marks it active.
-var pages = []string{"overview", "services", "images", "engines", "engine", "projects", "project", "backups", "connect"}
+var pages = []string{"overview", "services", "images", "engines", "engine", "projects", "project", "backups", "connect", "error"}
+
+// fresh is how old a reading of the stack may be before the next request
+// starts a new one. Reading the stack runs the runtime's CLI several times
+// and takes seconds on Docker Desktop and OrbStack (measured 3.7-5.5 s,
+// 2026-11-18), longer than the five-second refresh can wait for.
+const fresh = 2 * time.Second
 
 // page is what every page template is given.
 type page struct {
@@ -52,6 +59,53 @@ type page struct {
 	// Refresh is false on a page that must not reload itself (a project's
 	// page, whose password the reader may have revealed).
 	Refresh bool
+	// Code and Message describe the error page's error.
+	Code    int
+	Message string
+}
+
+// cached serves the latest reading at once and, when it is older than
+// fresh, starts one new reading in the background for the requests after
+// it (stale-while-revalidate). Only the first request, with no reading yet,
+// waits. The footer shows the reading's time, so its age is never hidden.
+// A failed reading is not kept: the last good one stays, and the next
+// request tries again; with no good reading the error is returned.
+func cached(read func(context.Context) (Snapshot, error), now func() time.Time) func(context.Context) (Snapshot, error) {
+	var mu sync.Mutex
+	var last Snapshot
+	var at time.Time
+	var running bool
+	refresh := func(ctx context.Context) (Snapshot, error) {
+		s, err := read(ctx)
+		mu.Lock()
+		defer mu.Unlock()
+		running = false
+		if err == nil {
+			last, at = s, now()
+		}
+		return s, err
+	}
+	return func(ctx context.Context) (Snapshot, error) {
+		mu.Lock()
+		if at.IsZero() {
+			mu.Unlock()
+			return refresh(ctx)
+		}
+		s := last
+		if now().Sub(at) >= fresh && !running {
+			running = true
+			// The reading outlives the request that started it, so it keeps
+			// the request's values but not its cancellation, and gets a
+			// deadline of its own.
+			bg, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
+			go func() {
+				defer cancel()
+				_, _ = refresh(bg)
+			}()
+		}
+		mu.Unlock()
+		return s, nil
+	}
 }
 
 // Handler serves the dashboard:
@@ -83,6 +137,7 @@ func Handler(src Sources, allowedHosts []string) (http.Handler, error) {
 	if err != nil {
 		return nil, err
 	}
+	readStack := cached(src.Snapshot, time.Now)
 
 	render := func(w http.ResponseWriter, r *http.Request, p page) {
 		var buf bytes.Buffer
@@ -95,12 +150,26 @@ func Handler(src Sources, allowedHosts []string) (http.Handler, error) {
 			return
 		}
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		// The footer's "read at" sits outside what a refresh replaces, so
+		// the page reads the reading's time from here.
+		if !p.S.Generated.IsZero() {
+			w.Header().Set("X-Generated", p.S.Generated.Format("15:04:05"))
+		}
+		if p.Code != 0 {
+			w.WriteHeader(p.Code)
+		}
 		_, _ = w.Write(buf.Bytes())
 	}
+	// fail draws an error page in the layout. It keeps the reading when
+	// there is one, so the header still says where the stack is.
+	fail := func(w http.ResponseWriter, r *http.Request, s Snapshot, code int, msg string) {
+		title := http.StatusText(code)
+		render(w, r, page{Page: "error", Title: title, S: s, Code: code, Message: msg})
+	}
 	snap := func(w http.ResponseWriter, r *http.Request) (Snapshot, bool) {
-		s, err := src.Snapshot(r.Context())
+		s, err := readStack(r.Context())
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			fail(w, r, Snapshot{}, http.StatusInternalServerError, "The stack could not be read: "+err.Error())
 			return s, false
 		}
 		return s, true
@@ -119,6 +188,12 @@ func Handler(src Sources, allowedHosts []string) (http.Handler, error) {
 		http.Redirect(w, r, "/assets/favicons/favicon.svg", http.StatusMovedPermanently)
 	})
 	mux.HandleFunc("GET /{$}", simple("overview", "Overview"))
+	mux.HandleFunc("GET /", func(w http.ResponseWriter, r *http.Request) {
+		s, ok := snap(w, r)
+		if ok {
+			fail(w, r, s, http.StatusNotFound, "Nothing lives at "+r.URL.Path+".")
+		}
+	})
 	mux.HandleFunc("GET /services", simple("services", "Services"))
 	mux.HandleFunc("GET /images", simple("images", "Images"))
 	mux.HandleFunc("GET /engines", simple("engines", "Engines"))
@@ -132,7 +207,7 @@ func Handler(src Sources, allowedHosts []string) (http.Handler, error) {
 		}
 		e := s.Engine(r.PathValue("engine"))
 		if e == nil {
-			http.NotFound(w, r)
+			fail(w, r, s, http.StatusNotFound, "There is no engine named "+r.PathValue("engine")+".")
 			return
 		}
 		render(w, r, page{Page: "engine", Title: e.Title, S: s, Engine: e, Refresh: true})
@@ -148,16 +223,16 @@ func Handler(src Sources, allowedHosts []string) (http.Handler, error) {
 		}
 		e := s.Engine(r.PathValue("engine"))
 		if e == nil {
-			http.NotFound(w, r)
+			fail(w, r, s, http.StatusNotFound, "There is no engine named "+r.PathValue("engine")+".")
 			return
 		}
 		p, err := src.Project(r.Context(), e.Engine, r.PathValue("name"))
 		if errors.Is(err, ErrNoProject) {
-			http.NotFound(w, r)
+			fail(w, r, s, http.StatusNotFound, "There is no project named "+r.PathValue("name")+" on "+e.Title+".")
 			return
 		}
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			fail(w, r, s, http.StatusInternalServerError, err.Error())
 			return
 		}
 		render(w, r, page{Page: "project", Title: p.Database, S: s, Engine: e, Project: &p})
@@ -205,7 +280,14 @@ func secure(next http.Handler, allowedHosts []string) http.Handler {
 // envBlock renders a paste-ready block as HTML, with each password value
 // wrapped so the page can blur it until the reader asks to see it. The
 // text itself is whole, so copying the block copies the password.
-func envBlock(block string) template.HTML {
+//
+// The script writes the toolkit CA's path as /path/to/dbpantry/certs/...,
+// since it cannot know where the block will be pasted; the dashboard knows
+// the checkout, so it shows the real path.
+func envBlock(block, root string) template.HTML {
+	if root != "" {
+		block = strings.ReplaceAll(block, "/path/to/dbpantry", root)
+	}
 	var b strings.Builder
 	for _, line := range strings.Split(strings.TrimRight(block, "\n"), "\n") {
 		key, val, ok := strings.Cut(line, "=")
@@ -282,6 +364,18 @@ var funcs = template.FuncMap{
 			return "yellow"
 		default:
 			return "red"
+		}
+	},
+	// status is an engine's state for a badge: running, stopped (in the
+	// profiles but not up) or off (not in the profiles).
+	"status": func(s Snapshot, engine string, enabled bool) string {
+		switch {
+		case s.Running(engine):
+			return "running"
+		case enabled:
+			return "stopped"
+		default:
+			return "off"
 		}
 	},
 	"join": strings.Join,

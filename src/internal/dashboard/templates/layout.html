@@ -124,6 +124,8 @@
 {{end}}
 
 
+{{define "engine-status"}}{{if eq . "running"}}<span class="badge bg-green-lt">running</span>{{else if eq . "stopped"}}<span class="badge bg-yellow-lt" title="In the profiles, but its service is not running">stopped</span>{{else}}<span class="badge bg-secondary-lt">not enabled</span>{{end}}{{end}}
+
 {{define "health-status"}}<span class="status status-{{health .Health}}"><span class="status-dot{{if eq .Health "starting"}} status-dot-animated{{end}}"></span>{{if eq .Health "none"}}running, no check{{else}}{{.Health}}{{end}}</span>{{end}}
 
 {{define "services-unavailable"}}

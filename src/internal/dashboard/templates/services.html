@@ -28,5 +28,27 @@
     {{end}}
     <div class="card-footer text-secondary small">Logs: <code>make logs</code> · status in the terminal: <code>make status</code> · stop everything (data is kept): <code>make down</code></div>
   </div>
+  {{if .S.Fixture}}
+  <div class="card mt-3">
+    <div class="card-header"><h3 class="card-title">Fixture <span class="text-secondary small mdb-mono ms-2">{{.S.FixtureProject}}</span></h3><div class="card-actions text-secondary small">disposable engines for test suites, on tmpfs</div></div>
+    <div class="table-responsive">
+      <table class="table table-vcenter card-table">
+        <thead><tr><th>Service</th><th>State</th><th>Health</th><th>Up for</th><th>Image</th></tr></thead>
+        <tbody>
+          {{range .S.Fixture}}
+          <tr>
+            <td class="mdb-mono fw-medium">{{.Name}}</td>
+            <td><span class="badge {{if eq .State "running"}}bg-green-lt{{else}}bg-red-lt{{end}}">{{.State}}</span></td>
+            <td>{{template "health-status" .}}</td>
+            <td class="text-secondary text-nowrap">{{since .Started}}</td>
+            <td class="mdb-mono text-secondary text-nowrap">{{.Image}}</td>
+          </tr>
+          {{end}}
+        </tbody>
+      </table>
+    </div>
+    <div class="card-footer text-secondary small">Started with <code>dbpantry fixture up</code>; <code>dbpantry fixture down</code> removes it and its data.</div>
+  </div>
+  {{end}}
 </div></div>
 {{end}}

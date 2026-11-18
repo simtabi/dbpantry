@@ -20,6 +20,9 @@
     fetch(window.location.pathname, { cache: 'no-store', headers: { 'X-Partial': '1' } })
       .then(function (r) {
         if (!r.ok) { throw new Error('HTTP ' + r.status); }
+        var at = r.headers.get('X-Generated');
+        var stamp = document.querySelector('[data-generated]');
+        if (at && stamp) { stamp.textContent = at; }
         return r.text();
       })
       .then(function (html) {
@@ -57,9 +60,11 @@
       var text = from ? from.textContent : '';
       var done = copy.querySelector('[data-copy-label]');
       var was = done ? done.textContent : '';
-      navigator.clipboard.writeText(text).then(function () {
-        if (done) { done.textContent = 'Copied'; setTimeout(function () { done.textContent = was; }, 1500); }
-      });
+      var say = function (msg) {
+        if (done) { done.textContent = msg; setTimeout(function () { done.textContent = was; }, 2000); }
+      };
+      if (!navigator.clipboard) { say('Select and copy'); return; }
+      navigator.clipboard.writeText(text).then(function () { say('Copied'); }, function () { say('Copy blocked'); });
     }
   });
 })();

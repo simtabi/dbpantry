@@ -251,6 +251,16 @@ waiving them.
   exist and is not a known generated file.
 
 ### Fixed
+
+- The dashboard, tested end to end against a live stack:
+  - Every page took 1 to 3 seconds, the five-second refresh included. Pages are now served at once from the latest reading of the stack, renewed in the background.
+  - The footer's "read at" time never moved after the first load; it now follows each refresh.
+  - Engines in the profiles showed their addresses even while the stack was down. Each engine and project now says running, stopped or not enabled.
+  - A missing page or engine answered with plain text; it now gets a dashboard error page.
+  - The fixture's containers appeared nowhere; the Services page now lists them.
+  - Project blocks showed `/path/to/dbpantry` for the CA; they now show the real path.
+  - A blocked clipboard failed silently; the copy button now says so.
+- `make up`'s summary said "1 networks"; a single item is now singular.
 - **Check 64 failed beside a running fixture**: its scratch stack's fixture claimed the default
   fixture subnet (172.29.0.0/16) and ports (55000+), which a live fixture on the host already held
   ("Pool overlaps with other one on this address space"). `scratch_stack` now gives the scratch

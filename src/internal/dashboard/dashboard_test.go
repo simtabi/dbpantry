@@ -12,7 +12,9 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -112,8 +114,8 @@ func TestDashboardServes(t *testing.T) {
 			t.Errorf("GET %s = %d, want the layout and %q", path, r.Code, want)
 		}
 	}
-	if n != len(pages)-2 { // overview and project are checked on their own
-		t.Fatalf("checked %d pages of %d", n, len(pages)-2)
+	if n != len(pages)-3 { // overview, project and error are checked on their own
+		t.Fatalf("checked %d pages of %d", n, len(pages)-3)
 	}
 	if r := serve(t, fixture, nil, "/engines/nope", ""); r.Code != http.StatusNotFound {
 		t.Errorf("an unknown engine is 404, got %d", r.Code)
@@ -279,5 +281,135 @@ func TestScanProjectsAndBackups(t *testing.T) {
 	}
 	if len(bs) != 2 || bs[0].File != "mysql_b_2.sql.gz" {
 		t.Errorf("backups, newest first, dumps only: %+v", bs)
+	}
+}
+
+func TestReadingsAreServedAtOnceAndRenewedInTheBackground(t *testing.T) {
+	var mu sync.Mutex
+	calls := 0
+	gate := make(chan struct{}, 4)
+	read := func(context.Context) (Snapshot, error) {
+		mu.Lock()
+		calls++
+		n := calls
+		mu.Unlock()
+		if n > 1 {
+			<-gate // a background reading waits until the test lets it finish
+		}
+		return Snapshot{Version: strconv.Itoa(n)}, nil
+	}
+	now := time.Now()
+	var clockMu sync.Mutex
+	clock := func() time.Time { clockMu.Lock(); defer clockMu.Unlock(); return now }
+	get := cached(read, clock)
+
+	if s, _ := get(context.Background()); s.Version != "1" {
+		t.Fatalf("the first request waits for the first reading, got %q", s.Version)
+	}
+	for range 3 {
+		if s, _ := get(context.Background()); s.Version != "1" {
+			t.Fatalf("a fresh reading is served as is, got %q", s.Version)
+		}
+	}
+	clockMu.Lock()
+	now = now.Add(fresh)
+	clockMu.Unlock()
+	for range 3 {
+		// Stale: served at once, and only one background reading starts.
+		if s, _ := get(context.Background()); s.Version != "1" {
+			t.Fatalf("a stale reading is still served at once, got %q", s.Version)
+		}
+	}
+	gate <- struct{}{}
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		if s, _ := get(context.Background()); s.Version == "2" {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("the background reading never replaced the stale one")
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if calls != 2 {
+		t.Errorf("three stale requests started %d readings, want 1 (2 in all)", calls-1)
+	}
+
+	failing := cached(func(context.Context) (Snapshot, error) { return Snapshot{}, errors.New("down") }, clock)
+	if _, err := failing(context.Background()); err == nil {
+		t.Error("with no good reading, a failure is returned")
+	}
+}
+
+func TestErrorsAreDashboardPages(t *testing.T) {
+	for path, want := range map[string]string{
+		"/nope":                 "Nothing lives at /nope",
+		"/engines/nope":         "There is no engine named nope",
+		"/projects/pg/nope":     "There is no project named nope on PostgreSQL",
+		"/projects/zz/whatever": "There is no engine named zz",
+	} {
+		r := serve(t, fixture, nil, path, "")
+		b := body(t, r)
+		if r.Code != http.StatusNotFound || !strings.Contains(b, want) || !strings.Contains(b, `id="navbar-menu"`) || !strings.Contains(b, "Back to the overview") {
+			t.Errorf("GET %s = %d, want a 404 dashboard page saying %q", path, r.Code, want)
+		}
+	}
+	broken := func(context.Context) (Snapshot, error) { return Snapshot{}, errors.New("no manifest") }
+	r := serve(t, broken, nil, "/services", "")
+	if b := body(t, r); r.Code != http.StatusInternalServerError || !strings.Contains(b, "The stack could not be read: no manifest") {
+		t.Errorf("a failed reading is a 500 dashboard page, got %d", r.Code)
+	}
+}
+
+func TestEnginesSayWhetherTheyRun(t *testing.T) {
+	stopped := func(ctx context.Context) (Snapshot, error) {
+		s, _ := fixture(ctx)
+		s.Services = nil // the stack is down; pg is still in the profiles
+		return s, nil
+	}
+	if b := body(t, serve(t, fixture, nil, "/", "")); !strings.Contains(b, `<span class="badge bg-green-lt">running</span>`) {
+		t.Error("a running engine is marked running")
+	}
+	for _, path := range []string{"/", "/engines", "/engines/pg"} {
+		if b := body(t, serve(t, stopped, nil, path, "")); !strings.Contains(b, ">stopped</span>") {
+			t.Errorf("%s: an enabled engine with no running service is not marked stopped", path)
+		}
+	}
+	if b := body(t, serve(t, stopped, nil, "/engines/pg", "")); !strings.Contains(b, "in the profiles but not running") {
+		t.Error("the engine page does not warn that the engine is down")
+	}
+	if b := body(t, serve(t, stopped, nil, "/projects/pg/settings", "")); !strings.Contains(b, "PostgreSQL is not running") {
+		t.Error("the project page does not warn that its engine is down")
+	}
+}
+
+func TestServicesShowTheFixture(t *testing.T) {
+	withFixture := func(ctx context.Context) (Snapshot, error) {
+		s, _ := fixture(ctx)
+		s.FixtureProject = "mdb-fixture"
+		s.Fixture = []Service{{Name: "pg", State: "running", Health: "healthy", Image: "localhost/dbpantry-pg:17"}}
+		return s, nil
+	}
+	if b := body(t, serve(t, withFixture, nil, "/services", "")); !strings.Contains(b, "mdb-fixture") || !strings.Contains(b, "dbpantry fixture down") {
+		t.Error("the services page does not show a running fixture")
+	}
+	if b := body(t, serve(t, fixture, nil, "/services", "")); strings.Contains(b, "dbpantry fixture down") {
+		t.Error("the fixture card is shown with no fixture")
+	}
+}
+
+func TestRefreshCarriesTheReadingTime(t *testing.T) {
+	r := serveReq(t, fixture, nil, "/services", "", map[string]string{"X-Partial": "1"})
+	if v := r.Header().Get("X-Generated"); len(v) != len("15:04:05") {
+		t.Errorf("X-Generated = %q, want the reading's hh:mm:ss for the footer", v)
+	}
+}
+
+func TestEnvBlockShowsTheRealCAPath(t *testing.T) {
+	got := string(envBlock("DB_SSLROOTCERT=/path/to/dbpantry/certs/ca.crt\n", "/srv/dbpantry"))
+	if !strings.Contains(got, "DB_SSLROOTCERT=/srv/dbpantry/certs/ca.crt") || strings.Contains(got, "/path/to") {
+		t.Errorf("the block keeps the placeholder path: %q", got)
 	}
 }

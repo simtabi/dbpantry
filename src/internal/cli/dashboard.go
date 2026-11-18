@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -31,6 +32,10 @@ const (
 	// same compose ps -q and inspect runtime-lib.sh uses, which Docker,
 	// Podman and nerdctl share: name, state, health, image, started.
 	containersScript = `. scripts/runtime-lib.sh && ids="$(mdb_compose --profile '*' ps -a -q 2>/dev/null)" && { [ -z "$ids" ] || mdb_ctr inspect -f '{{index .Config.Labels "com.docker.compose.service"}}{{"\t"}}{{.State.Status}}{{"\t"}}{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}{{"\t"}}{{.Config.Image}}{{"\t"}}{{.State.StartedAt}}' $ids; }`
+	// fixtureScript is containersScript for the fixture, whose compose
+	// project is $1: the runtime's own label filter, since the fixture is
+	// rendered from other compose files than the stack.
+	fixtureScript = `. scripts/runtime-lib.sh && ids="$(mdb_ctr ps -a -q --filter "label=com.docker.compose.project=$1" 2>/dev/null)" && { [ -z "$ids" ] || mdb_ctr inspect -f '{{index .Config.Labels "com.docker.compose.service"}}{{"\t"}}{{.State.Status}}{{"\t"}}{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}{{"\t"}}{{.Config.Image}}{{"\t"}}{{.State.StartedAt}}' $ids; }`
 	// imagesScript lists the stack's locally built images: ref, size, age.
 	imagesScript = `. scripts/env-lib.sh && . scripts/runtime-lib.sh && p="$(mdb_image_prefix)/dbpantry-" && mdb_ctr images --format '{{.Repository}}:{{.Tag}}{{"\t"}}{{.Size}}{{"\t"}}{{.CreatedSince}}' | grep -F "$p" || true`
 )
@@ -172,10 +177,55 @@ func (a *app) snapshot(ctx context.Context, root string, env []string, backupDir
 	if backend == "compose" {
 		script = containersScript
 	}
-	rows, err := a.records(ctx, root, env, script)
-	if err != nil {
-		snap.ServicesErr = err.Error()
+	fixtureProject := ""
+	if backend == "compose" {
+		if fx, _, err := fixtureEnv(m, s); err == nil {
+			fixtureProject = envValue(fx, "COMPOSE_PROJECT_NAME")
+		}
 	}
+
+	// The readings are independent and each runs the runtime's CLI, so they
+	// run at once: a page costs the slowest of them, not their sum.
+	var wg sync.WaitGroup
+	var rows, fixtureRows, imgs [][]string
+	var rowsErr, fixtureErr, imgsErr error
+	wg.Add(2)
+	go func() { defer wg.Done(); rows, rowsErr = a.records(ctx, root, env, script) }()
+	go func() { defer wg.Done(); imgs, imgsErr = a.records(ctx, root, env, imagesScript) }()
+	if fixtureProject != "" {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			fixtureRows, fixtureErr = a.records(ctx, root, env, fixtureScript, fixtureProject)
+		}()
+	}
+	wg.Wait()
+
+	if rowsErr != nil {
+		snap.ServicesErr = rowsErr.Error()
+	}
+	snap.Services = services(rows)
+	if fixtureErr == nil {
+		snap.Fixture = services(fixtureRows)
+		if len(snap.Fixture) > 0 {
+			snap.FixtureProject = fixtureProject
+		}
+	}
+	if imgsErr != nil {
+		snap.ImagesErr = imgsErr.Error()
+	}
+	for _, f := range imgs {
+		if len(f) == 3 {
+			snap.Images = append(snap.Images, dashboard.Image{Ref: f[0], Size: f[1], Created: f[2]})
+		}
+	}
+	return snap, nil
+}
+
+// services reads containersScript's or servicesScript's records, sorted by
+// name: name and health, or name, state, health, image and start time.
+func services(rows [][]string) []dashboard.Service {
+	var out []dashboard.Service
 	for _, f := range rows {
 		svc := dashboard.Service{Name: f[0]}
 		if len(f) == 2 {
@@ -186,30 +236,21 @@ func (a *app) snapshot(ctx context.Context, root string, env []string, backupDir
 				svc.Started = t
 			}
 		}
-		snap.Services = append(snap.Services, svc)
+		out = append(out, svc)
 	}
-	sort.Slice(snap.Services, func(i, j int) bool { return snap.Services[i].Name < snap.Services[j].Name })
-
-	imgs, err := a.records(ctx, root, env, imagesScript)
-	if err != nil {
-		snap.ImagesErr = err.Error()
-	}
-	for _, f := range imgs {
-		if len(f) == 3 {
-			snap.Images = append(snap.Images, dashboard.Image{Ref: f[0], Size: f[1], Created: f[2]})
-		}
-	}
-	return snap, nil
+	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
+	return out
 }
 
-// records runs one of the expressions above and splits its output into
-// tab-separated fields, every value sanitised (N19). Its error is what the
-// expression said on stderr.
-func (a *app) records(ctx context.Context, root string, env []string, expr string) ([][]string, error) {
+// records runs one of the expressions above, with args as its $1…, and
+// splits its output into tab-separated fields, every value sanitised (N19).
+// Its error is what the expression said on stderr.
+func (a *app) records(ctx context.Context, root string, env []string, expr string, args ...string) ([][]string, error) {
 	sctx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
 	var out, errOut bytes.Buffer
-	cmd := exec.CommandContext(sctx, "bash", "-c", expr) // #nosec G204 -- a fixed expression of this package
+	argv := append([]string{"-c", expr, "dashboard"}, args...)
+	cmd := exec.CommandContext(sctx, "bash", argv...) // #nosec G204 -- a fixed expression of this package; args are a compose project name
 	cmd.Dir, cmd.Env, cmd.Stdout, cmd.Stderr = root, env, &out, &errOut
 	if err := cmd.Run(); err != nil {
 		msg := strings.TrimSpace(errOut.String())
