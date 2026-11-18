@@ -35,6 +35,11 @@ generated_stand_in() {
     esac
 }
 
+# ${MDB_HOME:-.}/x -> ./x: the instance home, as a checkout without MDB_HOME
+# resolves it.
+# shellcheck disable=SC2016  # a literal ${MDB_HOME:-.}, matched not expanded
+home_as_dot() { sed 's#\${MDB_HOME:-\.}/#./#g' "$1"; }
+
 files=()
 for f in docker-compose.yml compose.*.yml; do
     [ -f "$f" ] && files+=("$f")
@@ -57,11 +62,13 @@ for f in "${files[@]}"; do
             printf '      %s: mount source %s does not exist\n' "$f" "$src" >&2
         fi
         missing=$(( missing + 1 ))
-    done < <({ grep -hE '^[[:space:]]*-[[:space:]]+"?\./[^:"]+:|^[[:space:]]*file:[[:space:]]+\./' "$f" \
+    # An instance path is spelled ${MDB_HOME:-.}/... (design.md D-84); a fresh
+    # clone has no MDB_HOME, so it mounts ./..., which is what is checked here.
+    done < <({ grep -hE '^[[:space:]]*-[[:space:]]+"?\./[^:"]+:|^[[:space:]]*file:[[:space:]]+\./' <(home_as_dot "$f") \
                 | sed -E 's/^[[:space:]]*(-|file:)[[:space:]]+"?//; s/[:"].*$//'
               # Long-form bind sources, including ${VAR:-./default}: the default
               # is what a fresh clone mounts (the backup sidecars' MDB_BACKUP_DIR).
-              grep -hE '^[[:space:]]*source:[[:space:]]+"?(\$\{[A-Z0-9_]+:-)?\./' "$f" \
+              grep -hE '^[[:space:]]*source:[[:space:]]+"?(\$\{[A-Z0-9_]+:-)?\./' <(home_as_dot "$f") \
                 | sed -E 's/^[[:space:]]*source:[[:space:]]+"?(\$\{[A-Z0-9_]+:-)?//; s/[}"].*$//'; })
 
     # context: ./dir followed by dockerfile: rel/path, resolved against the context.

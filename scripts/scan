@@ -73,7 +73,7 @@ for engine in "${targets[@]}"; do
     else
         engine_load "$engine" >/dev/null 2>&1 || continue
         upper="$(printf '%s' "$engine" | tr '[:lower:]-' '[:upper:]_')"
-        ver="$(mdb_env_get "MDB_${upper}_VERSION" .env)"
+        ver="$(mdb_env_get "MDB_${upper}_VERSION" "$MDB_HOME/.env")"
         ver="${ver:-$MDB_ENGINE_DEFAULT_VERSION}"
         img="$(mdb_image "$engine" "$ver")"
     fi

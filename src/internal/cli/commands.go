@@ -243,7 +243,7 @@ func (a *app) fixtureCmd() *cobra.Command {
 			return err
 		}
 		if !up {
-			return fixture.Cleanup(root)
+			return fixture.Cleanup(a.home(root))
 		}
 		return nil
 	}

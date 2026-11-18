@@ -353,8 +353,11 @@ func TestProjectPrincipalsMatchNewProject(t *testing.T) {
 	script := string(b)
 	for _, line := range []string{
 		`USER_NAME="${NAME}_user"`,
-		`SECRET_DIR="secrets"`,
-		`SECRET_DIR="secrets/fixture"`,
+		// Under the instance home (design.md D-84), and reported relative
+		// to it, so PasswordFile stays secrets/<file> whichever home is used.
+		`SECRET_DIR="$MDB_HOME/secrets"`,
+		`SECRET_DIR="$MDB_HOME/secrets/fixture"`,
+		`"$(json_str "${SECRET_FILE#"$MDB_HOME"/}")"`,
 		`SECRET_FILE="${SECRET_DIR}/${ENGINE}_${USER_NAME}_password.txt"`,
 		`RO_SECRET_FILE="${SECRET_DIR}/${ENGINE}_${USER_NAME}_readonly_password.txt"`,
 	} {

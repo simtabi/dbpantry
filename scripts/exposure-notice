@@ -18,7 +18,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 . "$ROOT/scripts/env-lib.sh"
 cd "$ROOT" || exit 0
 
-ENV_FILE="${MDB_ENV_FILE:-$ROOT/.env}"
+ENV_FILE="${MDB_ENV_FILE:-$MDB_HOME/.env}"
 [ -f "$ENV_FILE" ] || exit 0
 get() { mdb_env_get "$1" "$ENV_FILE"; }
 

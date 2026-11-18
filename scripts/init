@@ -18,12 +18,12 @@ cd "$ROOT" || exit 1
 PROD=0
 [[ "${1:-}" == "--prod" ]] && PROD=1
 
-TARGET="$ROOT/.env"
-(( PROD )) && TARGET="$ROOT/.env.prod"
+TARGET="$MDB_HOME/.env"
+(( PROD )) && TARGET="$MDB_HOME/.env.prod"
 [[ -n "${ENV_FILE:-}" ]] && TARGET="$ENV_FILE"
 
 if [[ -f "$TARGET" ]] && [[ "${FORCE:-0}" != "1" ]]; then
-    printf '%s already exists.\n' "${TARGET#"$ROOT"/}" >&2
+    printf '%s already exists.\n' "${TARGET#"$MDB_HOME"/}" >&2
     printf 'Refusing to overwrite it: the passwords in secrets/ are already in use\n' >&2
     printf 'by any database you have created. Re-run with FORCE=1 to replace it.\n' >&2
     exit 1
@@ -33,17 +33,17 @@ fi
 # 1. Environment file
 # -----------------------------------------------------------------------------
 cp "$ROOT/.env.example" "$TARGET"
-printf '✓ wrote %s\n' "${TARGET#"$ROOT"/}"
+printf '✓ wrote %s\n' "${TARGET#"$MDB_HOME"/}"
 
 # -----------------------------------------------------------------------------
 # 2. Secrets
 # -----------------------------------------------------------------------------
-mkdir -p "$ROOT/secrets"
-chmod 0700 "$ROOT/secrets"
+mkdir -p "$MDB_HOME/secrets"
+chmod 0700 "$MDB_HOME/secrets"
 
 gen_secret() {
     name="$1"
-    file="$ROOT/secrets/$name"
+    file="$MDB_HOME/secrets/$name"
     if [[ -s "$file" ]]; then
         printf '  %s already exists, keeping it\n' "$name"
         return 0
@@ -127,7 +127,7 @@ if (( PROD )); then
     # would simply move the failure later. The plaintext goes to secrets/ for
     # the operator; only the bcrypt hash reaches the env file.
     gen_secret ui_password.txt
-    ui_password="$(cat "$ROOT/secrets/ui_password.txt")"
+    ui_password="$(cat "$MDB_HOME/secrets/ui_password.txt")"
 
     # Found by SERVICE, not by a substring of the image name. The pattern used
     # to be /image: caddy:/, which stopped matching the moment the image became
@@ -172,10 +172,10 @@ if (( PROD )); then
     printf '\n'
     # shellcheck disable=SC2016  # backticks are prose here, not substitution
     printf '  STILL REQUIRED before `make up`:\n'
-    printf '    - MDB_CADDY_ACME_EMAIL in %s\n' "${TARGET#"$ROOT"/}"
+    printf '    - MDB_CADDY_ACME_EMAIL in %s\n' "${TARGET#"$MDB_HOME"/}"
     # PITR to an off-site repository is required in prod (SPEC section 18, 7b
     # and 7c), and these are the only parts init cannot generate.
-    printf '    - MDB_PGBACKREST_S3_BUCKET and _ENDPOINT in %s\n' "${TARGET#"$ROOT"/}"
+    printf '    - MDB_PGBACKREST_S3_BUCKET and _ENDPOINT in %s\n' "${TARGET#"$MDB_HOME"/}"
     printf '    - secrets/pgbackrest_s3_key.txt and secrets/pgbackrest_s3_secret.txt\n'
     printf '  Without it the prod Caddy config refuses to render, rather than\n'
     printf '  publishing a UI with no certificate.\n'

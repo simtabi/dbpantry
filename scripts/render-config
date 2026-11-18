@@ -9,9 +9,13 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# shellcheck source=env-lib.sh
+. "$ROOT/scripts/env-lib.sh"
 cd "$ROOT" || exit 1
 
-ENV_FILE="${MDB_ENV_FILE:-$ROOT/.env}"
+# Templates are read from the kit; what they render is the instance's
+# ($MDB_HOME, design.md D-84).
+ENV_FILE="${MDB_ENV_FILE:-$MDB_HOME/.env}"
 [[ -f "$ENV_FILE" ]] || ENV_FILE="$ROOT/.env.example"
 
 profiles="${COMPOSE_PROFILES:-$(mdb_env_get MDB_PROFILES "$ENV_FILE")}"
@@ -27,8 +31,8 @@ else
     caddy_template="config/caddy/Caddyfile.tmpl"
 fi
 
-MDB_ENV_FILE="$ENV_FILE" "$ROOT/scripts/env-render" "$caddy_template" "$ROOT/config/caddy/Caddyfile"
-MDB_ENV_FILE="$ENV_FILE" "$ROOT/scripts/env-render" "config/caddy/servers.json.tmpl" "$ROOT/config/caddy/servers.json"
+MDB_ENV_FILE="$ENV_FILE" "$ROOT/scripts/env-render" "$caddy_template" "$MDB_HOME/config/caddy/Caddyfile"
+MDB_ENV_FILE="$ENV_FILE" "$ROOT/scripts/env-render" "config/caddy/servers.json.tmpl" "$MDB_HOME/config/caddy/servers.json"
 
 # -----------------------------------------------------------------------------
 # Normalise the one secret whose mode must differ
@@ -39,6 +43,6 @@ MDB_ENV_FILE="$ENV_FILE" "$ROOT/scripts/env-render" "config/caddy/servers.json.t
 # on an existing checkout, so anyone who initialised before that change keeps an
 # 0600 file and a crash-looping pgAdmin. This runs on every make up and heals
 # it. secrets/ stays 0700, which is the actual guard on the host.
-if [[ -f "$ROOT/secrets/pgadmin_password.txt" ]]; then
-    chmod 0644 "$ROOT/secrets/pgadmin_password.txt"
+if [[ -f "$MDB_HOME/secrets/pgadmin_password.txt" ]]; then
+    chmod 0644 "$MDB_HOME/secrets/pgadmin_password.txt"
 fi

@@ -210,13 +210,16 @@ _mdb_k8s_superuser_secret() {
 # engine and overrides/<engine>/ as ConfigMaps. kubectl apply, so a rotation
 # is the same command. The CA key never leaves the checkout.
 _mdb_be_kubernetes_secrets_sync() {
-    local root="$MDB_RT_ROOT" ns f args=() eng d
+    # secrets/ and certs/ are the instance's (design.md D-84); overrides/
+    # ships with the kit.
+    local root="$MDB_RT_ROOT" home ns f args=() eng d
+    home="$(mdb_instance_dir)"
     ns="$(_mdb_k8s_ns)"
     _mdb_k8s_ctx >/dev/null || return
     if ! _mdb_k8s_kubectl get namespace "$ns" >/dev/null 2>&1; then
         _mdb_k8s_kubectl create namespace "$ns" >/dev/null || return
     fi
-    for f in "$root"/secrets/*.txt; do
+    for f in "$home"/secrets/*.txt; do
         [[ -f "$f" ]] && args+=(--from-file="$f")
     done
     (( ${#args[@]} )) || { _mdb_rt_err "secrets/ has no *.txt files; run make init"; return 1; }
@@ -225,16 +228,16 @@ _mdb_be_kubernetes_secrets_sync() {
     # CloudNativePG takes the superuser password as a basic-auth Secret, and
     # uses it byte for byte: without the file's trailing newline (as every
     # dbpantry client reads it), or nothing can log in.
-    if [[ -f "$root/secrets/pg_superuser_password.txt" ]]; then
-        _mdb_k8s_superuser_secret "$root/secrets/pg_superuser_password.txt" || return
+    if [[ -f "$home/secrets/pg_superuser_password.txt" ]]; then
+        _mdb_k8s_superuser_secret "$home/secrets/pg_superuser_password.txt" || return
     fi
     _mdb_k8s_backup_bundle || return
     for eng in $(_mdb_k8s_engines); do
-        d="$root/certs/$eng"
-        if [[ -f "$d/server.crt" && -f "$d/server.key" && -f "$root/certs/ca.crt" ]]; then
+        d="$home/certs/$eng"
+        if [[ -f "$d/server.crt" && -f "$d/server.key" && -f "$home/certs/ca.crt" ]]; then
             _mdb_k8s_kubectl create secret generic "dbpantry-certs-$eng" \
                 --from-file=server.crt="$d/server.crt" --from-file=server.key="$d/server.key" \
-                --from-file=ca.crt="$root/certs/ca.crt" --dry-run=client -o yaml \
+                --from-file=ca.crt="$home/certs/ca.crt" --dry-run=client -o yaml \
                 | _mdb_k8s_kubectl apply -f - >/dev/null || return
         fi
         d="$root/overrides/$eng"
@@ -257,11 +260,17 @@ _mdb_k8s_backup_bundle() {
     local root="$MDB_RT_ROOT" tmp f files=() rc
     [[ -f "$root/scripts/backup" ]] || return 0
     for f in scripts/backup scripts/backend-lib.sh scripts/runtime-lib.sh scripts/env-lib.sh \
-             scripts/engine-lib.sh scripts/backends scripts/runtimes engines .env; do
+             scripts/engine-lib.sh scripts/backends scripts/runtimes engines; do
         [[ -e "$root/$f" ]] && files+=("$f")
     done
     tmp="$(mktemp "${TMPDIR:-/tmp}/dbpantry-bundle.XXXXXX")" || return
-    ( cd "$root" && COPYFILE_DISABLE=1 tar -cf "$tmp" --no-xattrs --exclude '*.md' "${files[@]}" ) || { rm -f "$tmp"; return 1; }
+    # The kit's files, then the instance's .env (design.md D-84), both at the
+    # paths the job expects: -C switches directory for what follows it.
+    local -a home_files=()
+    local home
+    home="$(mdb_instance_dir)"
+    [[ -f "$home/.env" ]] && home_files=(-C "$home" .env)
+    ( cd "$root" && COPYFILE_DISABLE=1 tar -cf "$tmp" --no-xattrs --exclude '*.md' "${files[@]}" ${home_files[@]+"${home_files[@]}"} ) || { rm -f "$tmp"; return 1; }
     # Server-side apply: a client-side apply copies the whole object into the
     # last-applied annotation, and the bundle is past that 256 KiB limit.
     _mdb_k8s_kubectl create secret generic dbpantry-backup-bundle --from-file=bundle.tar="$tmp" \

@@ -39,7 +39,7 @@ PREFIX="$(mdb_image_prefix)"
 # The working dumps. backups/upgrade in the checkout unless MDB_UPGRADE_DIR names
 # another directory (the verify harness points it at a private temporary one, so
 # a check never writes or cleans the operator's backups/).
-WORK="${MDB_UPGRADE_DIR:-$ROOT/backups/upgrade}"
+WORK="${MDB_UPGRADE_DIR:-$MDB_HOME/backups/upgrade}"
 
 log() { printf '[upgrade] %s\n' "$*"; }
 die() { printf '[upgrade] ERROR: %s\n' "$*" >&2; exit 1; }
@@ -148,7 +148,7 @@ case "$ENGINE" in
         pw_env="$( [[ "$ENGINE" == mysql ]] && printf 'MYSQL_ROOT_PASSWORD' || printf 'MARIADB_ROOT_PASSWORD' )"
         client="$( [[ "$ENGINE" == mysql ]] && printf 'mysql' || printf 'mariadb' )"
         dumper="$( [[ "$ENGINE" == mysql ]] && printf 'mysqldump' || printf 'mariadb-dump' )"
-        root_pw="$(cat "secrets/${ENGINE}_root_password.txt")"
+        root_pw="$(cat "$MDB_HOME/secrets/${ENGINE}_root_password.txt")"
 
         mdb_ctr run -d --name "$old_c" -e "$pw_env=$root_pw" \
             -v "$vol_from:/var/lib/mysql" "$PREFIX/dbpantry-$ENGINE:$FROM" >/dev/null \
