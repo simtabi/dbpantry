@@ -101,6 +101,23 @@ while IFS= read -r df; do
 done < <(grep -rlE '^FROM .*\$\{GO_IMAGE\}' images --include=Dockerfile | sort)
 vinfo "GO_IMAGE: $go_users Dockerfile(s) agree with images/bases.tsv"
 
+# One Go version, stated once: src/go.mod's toolchain line is what the binary
+# builds with, and the bases row is what the images' gotools stage builds gosu,
+# rclone and postgres_exporter with. They drifted once: a standard-library fix
+# (GO-2026-6859, net/http) reached the binary at go1.27.4 while the images
+# stayed on golang:1.27.3, and nothing said so. So the row's image tag must
+# name the same release as the module's toolchain.
+mod_go="$(sed -nE 's/^toolchain go([0-9]+\.[0-9]+\.[0-9]+)$/\1/p' src/go.mod 2>/dev/null)"
+row_go="$(printf '%s' "$go_row" | sed -nE 's#^.*/golang:([0-9]+\.[0-9]+\.[0-9]+)-.*$#\1#p')"
+if [[ -z "$mod_go" ]]; then
+    vfail "src/go.mod has no 'toolchain goX.Y.Z' line to compare the images' Go with"
+elif [[ -z "$row_go" ]]; then
+    vfail "images/bases.tsv 'toolchain go' row is not a golang:X.Y.Z-* image: ${go_row:-<none>}"
+elif [[ "$mod_go" != "$row_go" ]]; then
+    vfail "images/bases.tsv builds the images on Go $row_go but src/go.mod builds dbpantry on Go $mod_go; move both to the same release"
+fi
+vinfo "Go toolchain: src/go.mod and images/bases.tsv both name $mod_go"
+
 (( violations == 0 )) || vfail "$violations unpinned image reference(s); CLAUDE.md requires pinned digests, no latest"
 
 vinfo "checked ${#candidates[@]} file(s); all image references pinned"
