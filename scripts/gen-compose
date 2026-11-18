@@ -208,7 +208,9 @@ for engine in $(engine_list); do
         if [ "${MDB_ENGINE_POOLING:-driver}" = "external" ] \
            && [ -n "${MDB_ENGINE_POOLER_IMAGE:-}" ] \
            && [ -f "$MDB_ENGINE_DIR/compose-pooler.yml" ]; then
-            printf '      MDB_%s_POOLER_ADDR: %s/32\n' "$upper" "$(pooler_addr $(( poolers + 1 )))"
+            # MDB_FIXTURE_<ENGINE>_POOLER_ADDR is set by `dbpantry fixture`,
+            # whose network has its own subnet; unset, this is the stack's.
+            printf '      MDB_%s_POOLER_ADDR: ${MDB_FIXTURE_%s_POOLER_ADDR:-%s/32}\n' "$upper" "$upper" "$(pooler_addr $(( poolers + 1 )))"
         fi
         emit_engine_env "$upper"
         # An engine may need variables of the image's own, not MDB_ ones.
@@ -336,7 +338,7 @@ for engine in $(engine_list); do
                     "$MDB_ENGINE_POOLER_BOOTSTRAP" "$MDB_ENGINE_POOLER_CMD"
             emit_ports "MDB_${upper}_POOLER_HOST_PORT" \
                 "$(( MDB_ENGINE_PORT_OFFSET + 100 ))" "${MDB_ENGINE_POOLER_PORT:-6432}"
-            printf '    networks:\n      mdb:\n        ipv4_address: %s\n' "$(pooler_addr $(( poolers + 1 )))"
+            printf '    networks:\n      mdb:\n        ipv4_address: ${MDB_FIXTURE_%s_POOLER_IP:-%s}\n' "$upper" "$(pooler_addr $(( poolers + 1 )))"
             printf '    logging:\n      driver: json-file\n'
             printf '      options:\n'
             printf '        max-size: ${MDB_LOG_MAX_SIZE:-10m}\n'
