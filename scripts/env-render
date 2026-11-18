@@ -20,7 +20,9 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-ENV_FILE="${MDB_ENV_FILE:-$ROOT/.env}"
+# shellcheck source=env-lib.sh
+. "$ROOT/scripts/env-lib.sh"
+ENV_FILE="${MDB_ENV_FILE:-$MDB_HOME/.env}"
 [[ -f "$ENV_FILE" ]] || ENV_FILE="$ROOT/.env.example"
 
 template="${1:-}"
@@ -76,7 +78,7 @@ if (( ${#missing[@]} )); then
     printf 'env-render: %s requires variables that are not set:\n' "$template" >&2
     for m in "${missing[@]}"; do printf '  %s\n' "$m" >&2; done
     # shellcheck disable=SC2016  # ${VAR:-default} is literal syntax being shown to the user
-    printf 'Set them in %s or give the template a ${VAR:-default}.\n' "${ENV_FILE#"$ROOT"/}" >&2
+    printf 'Set them in %s or give the template a ${VAR:-default}.\n' "${ENV_FILE#"$MDB_HOME"/}" >&2
     exit 1
 fi
 
@@ -107,9 +109,10 @@ render() {
 if [[ -n "$output" ]]; then
     tmp="$(mktemp)"
     render > "$tmp"
+    mkdir -p "$(dirname "$output")"
     mv "$tmp" "$output"
     chmod 0644 "$output"
-    printf 'rendered %s -> %s\n' "${template#"$ROOT"/}" "${output#"$ROOT"/}"
+    printf 'rendered %s -> %s\n' "${template#"$ROOT"/}" "${output#"$MDB_HOME"/}"
 else
     render
 fi

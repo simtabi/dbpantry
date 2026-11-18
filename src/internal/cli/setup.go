@@ -61,11 +61,9 @@ func (a *app) configCmd() *cobra.Command {
 		Short: "Add the prod overlay to COMPOSE_FILE in an env file (idempotent; for existing prod installs)",
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(c *cobra.Command, args []string) error {
-			file := ".env"
-			if len(args) == 1 {
-				file = args[0]
-			}
-			return a.runSteps(c, script("scripts/prod-overlay", file))
+			// No argument: the script's default, the instance's .env
+			// ($MDB_HOME/.env, design.md D-84).
+			return a.runSteps(c, script(append([]string{"scripts/prod-overlay"}, args...)...))
 		},
 	}
 	cmd.AddCommand(validate, render, overlay)

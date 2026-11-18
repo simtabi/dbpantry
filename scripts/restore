@@ -21,7 +21,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # shellcheck source=backend-lib.sh
 . "$ROOT/scripts/backend-lib.sh"
-ENV_FILE="${MDB_ENV_FILE:-$ROOT/.env}"
+ENV_FILE="${MDB_ENV_FILE:-$MDB_HOME/.env}"
 [[ -f "$ENV_FILE" ]] || ENV_FILE="$ROOT/.env.example"
 
 get() { mdb_env_get "$1" "$ENV_FILE"; }
@@ -59,7 +59,7 @@ secret() {
     if [[ "$IN_CONTAINER" == "1" ]]; then
         tr -d '\n' < "/run/secrets/$file"
     else
-        tr -d '\n' < "$ROOT/secrets/$file"
+        tr -d '\n' < "$MDB_HOME/secrets/$file"
     fi
 }
 

@@ -148,12 +148,14 @@ export MDB_RT_ROOT
 . "$(dirname "${BASH_SOURCE[0]}")/env-lib.sh"
 
 # COMPOSE_FILE and COMPOSE_PROFILES, as Compose v2 reads them: the environment
-# first, then the project's .env. Prints the value or nothing.
+# first, then the instance's .env (mdb_env_default_file). Prints the value or nothing.
 _mdb_rt_compose_var() {
     local key="$1" val
     eval "val=\${$key:-}"
-    if [[ -z "$val" && -f "$MDB_RT_ROOT/.env" ]]; then
-        val="$(mdb_env_get "$key" "$MDB_RT_ROOT/.env")"
+    local envf
+    envf="$(mdb_env_default_file)"
+    if [[ -z "$val" && -f "$envf" ]]; then
+        val="$(mdb_env_get "$key" "$envf")"
     fi
     printf '%s' "$val"
 }
@@ -169,6 +171,10 @@ mdb_compose() {
     mdb_runtime_init || return 125
     local -a _c _pre
     IFS=$' \t\n' read -r -a _c <<< "$MDB_COMPOSE_CMD"
+    if mdb_home_separate; then
+        _mdb_compose_home "$@"
+        return
+    fi
     if [[ "$MDB_COMPOSE_FLAVOR" != compose-v2 ]]; then
         local a has_f=0 has_p=0 files profiles f p
         for a in "$@"; do
@@ -189,6 +195,74 @@ mdb_compose() {
         fi
     fi
     "${_c[@]}" ${_pre[@]+"${_pre[@]}"} "$@"
+}
+
+# A compose file named relative to the kit, as an absolute path: the instance's
+# copy first (the generated compose.engines.yml, compose.proxy.yml and
+# compose.prod.engines.yml live there), then the kit's (docker-compose.yml and
+# the overlays). An absolute path is returned unchanged.
+_mdb_compose_file() {
+    case "$1" in
+        /*) printf '%s\n' "$1" ;;
+        *)  if [[ -f "$MDB_HOME/${1#./}" ]]; then printf '%s\n' "$MDB_HOME/${1#./}"
+            else printf '%s\n' "$MDB_RT_ROOT/${1#./}"; fi ;;
+    esac
+}
+
+# mdb_compose when the instance lives apart from the kit (design.md D-84).
+#
+# The project directory stays the kit, so build contexts (./images) and the
+# config files compose mounts from it resolve as in a checkout; Compose
+# resolves every relative path against the project directory, which is the
+# first -f file's directory. What moves is the instance: its .env reaches
+# Compose through an absolute --env-file (a relative one resolves against the
+# caller's directory, docs.docker.com/compose/env-file/), and every compose
+# file is passed as an absolute -f, found home-first, because a relative
+# COMPOSE_FILE entry would resolve against the kit, where the generated files
+# are not. Bind mounts of the instance read ${MDB_HOME:-.}, exported by
+# env-lib.sh.
+#
+# Only the global options before the subcommand are rewritten: after it, -f is
+# a subcommand flag (`logs -f` follows the log) and is passed through as is.
+_mdb_compose_home() {
+    local -a _hc_opts=() _hc_files=() _hc_rest=()
+    local a has_f=0 has_p=0 f p profiles
+    while (( $# )); do
+        a="$1"
+        case "$a" in
+            -f|--file)          shift; _hc_files+=("$(_mdb_compose_file "${1:-}")"); has_f=1 ;;
+            --file=*)           _hc_files+=("$(_mdb_compose_file "${a#--file=}")"); has_f=1 ;;
+            --profile)          _hc_opts+=("$a" "${2:-}"); shift; has_p=1 ;;
+            --profile=*)        _hc_opts+=("$a"); has_p=1 ;;
+            -p|--project-name|--env-file|--project-directory|--ansi|--progress|--parallel)
+                                _hc_opts+=("$a" "${2:-}"); shift ;;
+            -*)                 _hc_opts+=("$a") ;;
+            *)                  break ;;
+        esac
+        shift
+    done
+    _hc_rest=("$@")
+    if (( ! has_f )); then
+        for f in $(_mdb_rt_compose_var COMPOSE_FILE | tr ':' ' '); do
+            f="$(_mdb_compose_file "$f")"
+            [[ -f "$f" ]] && _hc_files+=("$f")
+        done
+    fi
+    if (( ! has_p )) && [[ "$MDB_COMPOSE_FLAVOR" != compose-v2 ]]; then
+        profiles="$(_mdb_rt_compose_var COMPOSE_PROFILES)"
+        for p in ${profiles//,/ }; do _hc_opts+=(--profile "$p"); done
+    fi
+    local -a _hc_pre=(--project-directory "$MDB_RT_ROOT")
+    [[ -f "$MDB_HOME/.env" ]] && _hc_pre+=(--env-file "$MDB_HOME/.env")
+    for f in ${_hc_files[@]+"${_hc_files[@]}"}; do _hc_pre+=(-f "$f"); done
+    local -a _c
+    IFS=$' \t\n' read -r -a _c <<< "$MDB_COMPOSE_CMD"
+    # The backup sidecars bind-mount ${MDB_BACKUP_DIR:-./backups}. A relative
+    # value (.env.example ships `backups`) would resolve against the kit, so it
+    # is handed to Compose absolute, resolved against the home as
+    # scripts/backup resolves it.
+    MDB_BACKUP_DIR="$(mdb_backup_dir "$MDB_HOME" "$MDB_HOME/.env")" \
+        "${_c[@]}" "${_hc_pre[@]}" ${_hc_opts[@]+"${_hc_opts[@]}"} ${_hc_rest[@]+"${_hc_rest[@]}"}
 }
 
 # Is the runtime installed AND answering? The replacement for `docker info`.
@@ -311,4 +385,5 @@ export -f mdb_runtime_init mdb_runtime_register mdb_project_name mdb_ctr mdb_com
     mdb_runtime_ready mdb_build mdb_runtime_rootless mdb_runtime_provider mdb_compose_up_wait \
     mdb_running_services mdb_service_running mdb_service_health mdb_service_healthy \
     mdb_project_volumes _mdb_rt_compose_var _mdb_rt_err _mdb_rt_hook _mdb_rt_resolve_compose \
+    _mdb_compose_home _mdb_compose_file \
     2>/dev/null || true

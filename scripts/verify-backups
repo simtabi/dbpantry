@@ -22,10 +22,10 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 . "$ROOT/scripts/backend-lib.sh"
 cd "$ROOT" || exit 1
 
-ENV_FILE="${MDB_ENV_FILE:-$ROOT/.env}"
+ENV_FILE="${MDB_ENV_FILE:-$MDB_HOME/.env}"
 [[ -f "$ENV_FILE" ]] || ENV_FILE="$ROOT/.env.example"
 
-BACKUP_DIR="$(mdb_backup_dir "$ROOT" "$ENV_FILE")"
+BACKUP_DIR="$(mdb_backup_dir "$MDB_HOME" "$ENV_FILE")"
 PREFIX="$(mdb_image_prefix)"
 
 get() { mdb_env_get "$1" "$ENV_FILE"; }

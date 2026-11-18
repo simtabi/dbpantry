@@ -24,8 +24,8 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # shellcheck source=env-lib.sh
 . "$ROOT/scripts/env-lib.sh"
-CERT_DIR="$ROOT/certs"
-ENV_FILE="${MDB_ENV_FILE:-$ROOT/.env}"
+CERT_DIR="$MDB_HOME/certs"
+ENV_FILE="${MDB_ENV_FILE:-$MDB_HOME/.env}"
 [[ -f "$ENV_FILE" ]] || ENV_FILE="$ROOT/.env.example"
 
 RENEW=0

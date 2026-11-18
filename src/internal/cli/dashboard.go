@@ -78,7 +78,7 @@ func (a *app) serveDashboard(c *cobra.Command, listen string) error {
 	if err != nil {
 		return err
 	}
-	backupDir, err := a.libValue(c.Context(), root, `. scripts/env-lib.sh && mdb_backup_dir "$PWD" "${MDB_ENV_FILE:-$PWD/.env}"`)
+	backupDir, err := a.libValue(c.Context(), root, `. scripts/env-lib.sh && mdb_backup_dir "$MDB_HOME" "${MDB_ENV_FILE:-$MDB_HOME/.env}"`)
 	if err != nil {
 		return err
 	}
@@ -166,7 +166,7 @@ func (a *app) snapshot(ctx context.Context, root string, env []string, backupDir
 			}
 		}
 	}
-	if snap.Projects, err = dashboard.ScanProjects(filepath.Join(root, "secrets"), names); err != nil {
+	if snap.Projects, err = dashboard.ScanProjects(filepath.Join(a.home(root), "secrets"), names); err != nil {
 		return dashboard.Snapshot{}, err
 	}
 	if snap.Backups, err = dashboard.ScanBackups(backupDir, names); err != nil {

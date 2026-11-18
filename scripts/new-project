@@ -33,7 +33,7 @@ cd "$ROOT" || exit 1
 # shellcheck source=engine-lib.sh
 . "$ROOT/scripts/engine-lib.sh"
 
-ENV_FILE="${MDB_ENV_FILE:-$ROOT/.env}"
+ENV_FILE="${MDB_ENV_FILE:-$MDB_HOME/.env}"
 [[ -f "$ENV_FILE" ]] || ENV_FILE="$ROOT/.env.example"
 
 get() { mdb_env_get "$1" "$ENV_FILE"; }
@@ -110,8 +110,8 @@ secret() {
         [[ -r "/run/secrets/$file" ]] || die "secret not readable: /run/secrets/$file"
         tr -d '\n' < "/run/secrets/$file"
     else
-        [[ -r "$ROOT/secrets/$file" ]] || die "secret not readable: secrets/$file"
-        tr -d '\n' < "$ROOT/secrets/$file"
+        [[ -r "$MDB_HOME/secrets/$file" ]] || die "secret not readable: secrets/$file"
+        tr -d '\n' < "$MDB_HOME/secrets/$file"
     fi
 }
 
@@ -144,12 +144,14 @@ gen_password() {
 # MDB_FIXTURE=1) keep their password files in secrets/fixture/, which
 # `fixture down` removes with the fixture's tmpfs data. The stack's projects
 # keep them in secrets/.
-SECRET_DIR="secrets"
-[[ "${MDB_FIXTURE:-0}" == "1" ]] && SECRET_DIR="secrets/fixture"
+# Under the instance home (design.md D-84). Reported relative to it, as
+# secrets/<file>, so the manifest reads the same whichever home is in use.
+SECRET_DIR="$MDB_HOME/secrets"
+[[ "${MDB_FIXTURE:-0}" == "1" ]] && SECRET_DIR="$MDB_HOME/secrets/fixture"
 SECRET_FILE="${SECRET_DIR}/${ENGINE}_${USER_NAME}_password.txt"
 RO_SECRET_FILE="${SECRET_DIR}/${ENGINE}_${USER_NAME}_readonly_password.txt"
 if (( SHOW )); then
-    [[ -s "$SECRET_FILE" ]] || die "no project '$NAME' on $ENGINE (no $SECRET_FILE); provision it with make new-project NAME=$NAME ENGINE=$ENGINE"
+    [[ -s "$SECRET_FILE" ]] || die "no project '$NAME' on $ENGINE (no ${SECRET_FILE#"$MDB_HOME"/}); provision it with make new-project NAME=$NAME ENGINE=$ENGINE"
     SECRET_ACTIONS=("existing" "$([[ -s "$RO_SECRET_FILE" ]] && echo existing || echo missing)")
 else
     gen_password "$SECRET_FILE"
@@ -230,7 +232,7 @@ if [[ "$(get MDB_MTLS)" == "true" ]] && engine_tls_always; then
     # --show reports a certificate that exists; it never issues one.
     have_cert=0
     if (( SHOW )); then
-        [[ -f "certs/clients/${USER_NAME}/client.crt" ]] && have_cert=1
+        [[ -f "$MDB_HOME/certs/clients/${USER_NAME}/client.crt" ]] && have_cert=1
     elif "$ROOT/scripts/certs" --client "$USER_NAME" >/dev/null; then
         have_cert=1
     else
@@ -264,8 +266,8 @@ if [[ "$FORMAT" == json ]]; then
     printf '{"engine":%s,"title":%s,"database":%s,"owner":%s,"readonly":%s,"extensions":[%s],"secrets":[{"role":%s,"file":%s,"action":%s},{"role":%s,"file":%s,"action":%s}],"tls_always":%s,"pooler":%s,"network":%s,"block":%s}\n' \
         "$(json_str "$ENGINE")" "$(json_str "${MDB_ENGINE_TITLE:-$ENGINE}")" "$(json_str "$DB")" \
         "$(json_str "$USER_NAME")" "$(json_str "${USER_NAME}_readonly")" "$exts" \
-        "$(json_str "$USER_NAME")" "$(json_str "$SECRET_FILE")" "$(json_str "${SECRET_ACTIONS[0]:-}")" \
-        "$(json_str "${USER_NAME}_readonly")" "$(json_str "$RO_SECRET_FILE")" "$(json_str "${SECRET_ACTIONS[1]:-}")" \
+        "$(json_str "$USER_NAME")" "$(json_str "${SECRET_FILE#"$MDB_HOME"/}")" "$(json_str "${SECRET_ACTIONS[0]:-}")" \
+        "$(json_str "${USER_NAME}_readonly")" "$(json_str "${RO_SECRET_FILE#"$MDB_HOME"/}")" "$(json_str "${SECRET_ACTIONS[1]:-}")" \
         "$(engine_tls_always && echo true || echo false)" "$pooler" "$(json_str "$NETWORK")" "$(json_str "$block")"
     exit 0
 fi
@@ -284,7 +286,7 @@ Your app container must join the toolkit network:
       name: ${NETWORK}
 
 Passwords also live in:
-  ${SECRET_FILE}
-  ${RO_SECRET_FILE}   (read-only role '${USER_NAME}_readonly')
+  ${SECRET_FILE#"$MDB_HOME"/}
+  ${RO_SECRET_FILE#"$MDB_HOME"/}   (read-only role '${USER_NAME}_readonly')
 ────────────────────────────────────────────────────────────────────────
 BLOCK

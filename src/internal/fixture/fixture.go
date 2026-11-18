@@ -203,9 +203,10 @@ const PoolerPortStep = 100
 
 // Cleanup removes the password files new-project wrote for the fixture's
 // projects. Their roles lived in the fixture's tmpfs and are gone once it is
-// down, so the files would only accumulate.
-func Cleanup(root string) error {
-	return os.RemoveAll(filepath.Join(root, "secrets", SecretsSubdir))
+// down, so the files would only accumulate. home is the instance home
+// (design.md D-84), the checkout unless MDB_HOME names another.
+func Cleanup(home string) error {
+	return os.RemoveAll(filepath.Join(home, "secrets", SecretsSubdir))
 }
 
 // Run executes a plan in order, stopping at the first failure.

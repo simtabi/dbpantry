@@ -14,7 +14,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # shellcheck source=backend-lib.sh
 . "$ROOT/scripts/backend-lib.sh"
-ENV_FILE="${MDB_ENV_FILE:-$ROOT/.env}"
+ENV_FILE="${MDB_ENV_FILE:-$MDB_HOME/.env}"
 QUIET=0
 [[ "${1:-}" == "--quiet" ]] && QUIET=1
 
@@ -452,7 +452,7 @@ if [[ ",${profiles},${COMPOSE_PROFILES:-}," == *",prod,"* ]]; then
             *":${_f}:"*) ;;
             *) err "the prod profile is on but COMPOSE_FILE does not include ${_f}, so engine ports stay
        published, TLS is not forced and no limits apply. Fix it (idempotent, edits only COMPOSE_FILE):
-         make prod-overlay ENV_FILE=${ENV_FILE#"$ROOT"/}" ;;
+         make prod-overlay ENV_FILE=${ENV_FILE#"$MDB_HOME"/}" ;;
         esac
     done
     if [[ "$(get MDB_PUBLISH_ENGINES)" == "true" ]]; then
@@ -494,7 +494,7 @@ if [[ ",${profiles},${COMPOSE_PROFILES:-}," == *",prod,"* ]]; then
     # 18, criterion 2) and it cannot invent someone's S3 keys. Same contract as
     # MDB_CADDY_ACME_EMAIL, which init-prod also surfaces as still-required.
     for f in pgbackrest_s3_key.txt pgbackrest_s3_secret.txt; do
-        [[ -s "$ROOT/secrets/$f" ]] && continue
+        [[ -s "$MDB_HOME/secrets/$f" ]] && continue
         if [[ "${MDB_CHECK_RENDERING:-0}" == "1" ]]; then
             note "still required before 'make up': secrets/$f (your object-store credentials)"
         else
@@ -531,7 +531,7 @@ while IFS= read -r line; do
     key="${line%%=*}"; value="$(mdb_env_unquote "${line#*=}")"
     [[ -z "$value" ]] && continue
     [[ "$value" == secrets/* ]] || continue
-    if [[ ! -f "$ROOT/$value" ]] && [[ -f "$ROOT/.env" ]] && [[ "$ENV_FILE" == "$ROOT/.env" ]]; then
+    if [[ ! -f "$MDB_HOME/$value" ]] && [[ -f "$MDB_HOME/.env" ]] && [[ "$ENV_FILE" == "$MDB_HOME/.env" ]]; then
         err "$key points at $value, which does not exist (run: make init)"
     fi
 done < <(grep -E '^MDB_[A-Z0-9_]*_FILE=' "$ENV_FILE" 2>/dev/null || true)
@@ -542,4 +542,4 @@ if (( errors )); then
     exit 1
 fi
 
-(( QUIET )) || printf '%s✓ check-env passed%s (%s)\n' "$GRN" "$OFF" "${ENV_FILE#"$ROOT"/}"
+(( QUIET )) || printf '%s✓ check-env passed%s (%s)\n' "$GRN" "$OFF" "${ENV_FILE#"$MDB_HOME"/}"

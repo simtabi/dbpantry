@@ -34,6 +34,11 @@ waiving them.
   `MDB_EXTRA_SANS`, then restart `pg-pooler`.
 
 ### Changed
+- **The instance can live outside the checkout.** `MDB_HOME`, set in the environment, names the
+  directory that holds `.env`, `secrets/`, `certs/`, `backups/`, the generated compose files and the
+  rendered config; with it set, nothing is written into the checkout. It defaults to the checkout,
+  so nothing changes unless you set it. Check 77 boots a stack with a separate home and fails if the
+  checkout changes (docs/guides/configuration.md, design.md D-84).
 - **`fixture up` runs beside the stack instead of replacing it.** It is now its own Compose project
   (`<project>-fixture`) on `MDB_FIXTURE_PORT_BASE` (default 55000), so a test suite's tmpfs engines
   no longer restart every application's database, and `fixture down` stops only the fixture. No

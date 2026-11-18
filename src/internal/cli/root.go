@@ -193,6 +193,12 @@ func (a *app) env(key string) string {
 	return ""
 }
 
+// home is the instance home for a checkout: $MDB_HOME, else the checkout
+// (design.md D-84).
+func (a *app) home(root string) string {
+	return config.Home(root, a.environ)
+}
+
 // root finds the checkout.
 func (a *app) root() (string, error) {
 	if a.rootFlag != "" {
