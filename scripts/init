@@ -32,6 +32,12 @@ fi
 # -----------------------------------------------------------------------------
 # 1. Environment file
 # -----------------------------------------------------------------------------
+# The home may not exist yet: the binary's ~/.config/dbpantry on first run
+# (design.md D-85). 0700, because it holds secrets/.
+if [[ ! -d "$(dirname "$TARGET")" ]]; then
+    mkdir -p "$(dirname "$TARGET")"
+    chmod 0700 "$(dirname "$TARGET")"
+fi
 cp "$ROOT/.env.example" "$TARGET"
 printf '✓ wrote %s\n' "${TARGET#"$MDB_HOME"/}"
 

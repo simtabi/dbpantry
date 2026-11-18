@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 
 	"github.com/knadh/koanf/providers/confmap"
@@ -103,4 +104,27 @@ func Home(root string, environ func() []string) string {
 		return abs
 	}
 	return h
+}
+
+// DefaultHome is where the dbpantry binary keeps an instance when it runs
+// from its built-in kit (design.md D-85): $XDG_CONFIG_HOME/dbpantry, else
+// ~/.config/dbpantry on every Unix, macOS included (the org's XDG rule), and
+// %AppData%\dbpantry on Windows.
+func DefaultHome(environ func() []string) string {
+	if environ == nil {
+		environ = os.Environ
+	}
+	if runtime.GOOS == "windows" {
+		if d := lookup(environ, "APPDATA"); d != "" {
+			return filepath.Join(d, "dbpantry")
+		}
+	}
+	if d := lookup(environ, "XDG_CONFIG_HOME"); d != "" && filepath.IsAbs(d) {
+		return filepath.Join(d, "dbpantry")
+	}
+	h := lookup(environ, "HOME")
+	if h == "" {
+		h, _ = os.UserHomeDir()
+	}
+	return filepath.Join(h, ".config", "dbpantry")
 }
