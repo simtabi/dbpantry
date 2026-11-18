@@ -85,3 +85,13 @@ func TestConnectTableListsEnabledEnginesOnly(t *testing.T) {
 		t.Error("no enabled engine, no table")
 	}
 }
+
+func TestUpSummaryCountsInTheRightNumber(t *testing.T) {
+	groups := []*ui.Node{
+		{Label: "Networks", Children: []*ui.Node{{}}},
+		{Label: "Containers", Children: []*ui.Node{{}, {}}},
+	}
+	if got := upSummary(groups); got != "1 network · 2 containers" {
+		t.Errorf("upSummary = %q", got)
+	}
+}

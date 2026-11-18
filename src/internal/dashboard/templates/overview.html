@@ -97,11 +97,12 @@
           <div class="card-header"><h3 class="card-title">Where to connect</h3><div class="card-actions"><a href="/engines">All engines</a></div></div>
           <div class="table-responsive">
             <table class="table table-vcenter card-table">
-              <thead><tr><th>Engine</th><th>From containers</th><th>From this machine</th><th>TLS</th></tr></thead>
+              <thead><tr><th>Engine</th><th>Status</th><th>From containers</th><th>From this machine</th><th>TLS</th></tr></thead>
               <tbody>
                 {{range .S.Endpoints.Endpoints}}{{if .Enabled}}
                 <tr>
                   <td><a href="/engines/{{.Engine}}" class="text-reset fw-medium">{{.Title}}</a></td>
+                  <td>{{template "engine-status" (status $.S .Engine .Enabled)}}</td>
                   <td class="mdb-mono text-nowrap">{{.Direct.Network.Host}}:{{.Direct.Network.Port}}</td>
                   <td class="mdb-mono text-nowrap">{{with .Direct.Published}}{{.Address}}:{{.Port}}{{else}}<span class="text-secondary">not published</span>{{end}}</td>
                   <td>{{if .TLSAlways}}<span class="badge bg-green-lt">always</span>{{else}}<span class="badge bg-secondary-lt">prod</span>{{end}}</td>
@@ -122,10 +123,10 @@
           {{else}}
           <div class="table-responsive">
             <table class="table table-vcenter card-table table-hover">
-              <thead><tr><th>Project</th><th>Engine</th><th>Owner role</th><th class="w-1"></th></tr></thead>
+              <thead><tr><th>Project</th><th>Engine</th><th>Engine status</th><th>Owner role</th><th class="w-1"></th></tr></thead>
               <tbody>
                 {{range .S.Projects}}
-                <tr><td class="fw-medium">{{.Name}}</td><td><span class="badge bg-primary-lt">{{.Engine}}</span></td><td class="mdb-mono">{{.Owner}}</td><td><a href="/projects/{{.Engine}}/{{.Name}}" class="btn btn-sm">Connection details</a></td></tr>
+                <tr><td class="fw-medium">{{.Name}}</td><td><span class="badge bg-primary-lt">{{.Engine}}</span></td><td>{{with $.S.Engine .Engine}}{{template "engine-status" (status $.S .Engine .Enabled)}}{{end}}</td><td class="mdb-mono">{{.Owner}}</td><td><a href="/projects/{{.Engine}}/{{.Name}}" class="btn btn-sm">Connection details</a></td></tr>
                 {{end}}
               </tbody>
             </table>

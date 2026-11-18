@@ -3,10 +3,13 @@
 <div class="page-header d-print-none"><div class="container-xl"><div class="row g-2 align-items-center">
   <div class="col">
     <div class="page-pretitle"><a href="/engines" class="text-reset">Engines</a> · {{$e.Family}}</div>
-    <h2 class="page-title">{{$e.Title}} <span class="badge ms-2 {{if $e.Enabled}}bg-green-lt{{else}}bg-secondary-lt{{end}}">{{if $e.Enabled}}enabled{{else}}not enabled{{end}}</span></h2>
+    <h2 class="page-title">{{$e.Title}} <span class="ms-2">{{template "engine-status" (status $s $e.Engine $e.Enabled)}}</span></h2>
   </div>
 </div></div></div>
 <div class="page-body"><div class="container-xl">
+  {{if and $e.Enabled (not ($s.Running $e.Engine))}}
+  <div class="alert alert-warning" role="alert"><div class="d-flex"><div>{{icon "alert"}}</div><div class="ms-2">{{$e.Title}} is in the profiles but not running, so nothing answers on these addresses. Start the stack with <code>make up</code>.</div></div></div>
+  {{end}}
   {{if not $e.Enabled}}
   <div class="alert alert-info" role="alert"><div class="d-flex"><div>{{icon "info"}}</div><div class="ms-2">{{$e.Title}} is not in the profiles, so nothing listens on these addresses. Start it with <code>make up PROFILES={{join $s.Endpoints.Profiles ","}},{{$e.Engine}}</code>.</div></div></div>
   {{end}}

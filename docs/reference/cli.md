@@ -37,14 +37,16 @@ A step that fails prints what its script said in full, below the tree. Anywhere 
 | Page | Shows |
 |---|---|
 | Overview | Services healthy, engines enabled, projects and images, the publish mode with what it means, the running services, where to connect, the projects |
-| Services | Every container: state, health, time up, image (state, uptime and image on the Compose backend; health on every backend) |
+| Services | Every container: state, health, time up, image (state, uptime and image on the Compose backend; health on every backend), and the fixture's containers when `fixture up` is running |
 | Images | The locally built `dbpantry-*` images, their size and age |
 | Engines, and one page per engine | Addresses from containers and from this machine, the pooler and whether it runs, TLS, boot budget, the extensions created per project, the principals and their password files, the engine's projects and backups |
 | Projects, and one page per project | The paste-ready `.env` block, the password blurred until shown, with copy buttons. Also the compose snippet that joins the network, the roles, password files, TLS, pooler and extensions |
 | Backups | The dumps in the backup directory, newest first |
 | Connect | The three publish modes and which is set, every engine's address, the network snippet, TLS and the toolkit CA, shells |
 
-The dashboard refreshes every five seconds by fetching the current page's content again; a project's page, which holds a password, does not. It serves the stack as JSON at `/api/status`, which carries no passwords. It answers only requests addressed to `localhost`, so another web page cannot read it through DNS rebinding. A project's page also refuses a cross-site request (`Sec-Fetch-Site`). `--listen` on another address works, with a warning, because the dashboard has no login. When the container runtime does not answer, the dashboard says services are unavailable rather than showing an empty stack.
+Each engine is marked running, stopped (in the profiles, but its service is not up) or not enabled, in "Where to connect", on the engine cards and pages, and beside every project. A project's page also warns when its engine is not running. A project's `.env` block shows the toolkit CA's real path in place of the script's `/path/to/dbpantry`.
+
+The dashboard refreshes every five seconds by fetching the current page's content again; a project's page, which holds a password, does not. Reading the stack runs the runtime's CLI several times and takes seconds, so pages are served from the latest reading at once. When that reading is more than two seconds old, one new reading starts in the background, and the footer shows the time of the reading on screen. A page that does not exist, or a stack that cannot be read, gets a dashboard error page (404 or 500), not plain text. It serves the stack as JSON at `/api/status`, which carries no passwords. It answers only requests addressed to `localhost`, so another web page cannot read it through DNS rebinding. A project's page also refuses a cross-site request (`Sec-Fetch-Site`). `--listen` on another address works, with a warning, because the dashboard has no login. When the container runtime does not answer, the dashboard says services are unavailable rather than showing an empty stack.
 
 A project's page reads its block through `scripts/new-project --show`, which provisions nothing and generates nothing; it prints the block of a project that already exists, from its password files.
 

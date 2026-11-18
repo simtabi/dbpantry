@@ -13,7 +13,7 @@
           <div class="d-flex align-items-center mb-3">
             <span class="avatar me-3 {{if .Enabled}}bg-green-lt{{end}}">{{icon "database"}}</span>
             <div><h3 class="card-title mb-0"><a href="/engines/{{.Engine}}" class="text-reset">{{.Title}}</a></h3><div class="text-secondary small">{{.Engine}} · {{.Family}}</div></div>
-            <span class="badge ms-auto {{if .Enabled}}bg-green-lt{{else}}bg-secondary-lt{{end}}">{{if .Enabled}}enabled{{else}}not enabled{{end}}</span>
+            <span class="ms-auto">{{template "engine-status" (status $s .Engine .Enabled)}}</span>
           </div>
           <div class="datagrid">
             <div class="datagrid-item"><div class="datagrid-title">From containers</div><div class="datagrid-content mdb-mono">{{.Direct.Network.Host}}:{{.Direct.Network.Port}}</div></div>

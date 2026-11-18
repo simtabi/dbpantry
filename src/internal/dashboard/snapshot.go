@@ -37,6 +37,11 @@ type Snapshot struct {
 	// unreachable, which is not the same as nothing running.
 	ServicesErr string
 
+	// FixtureProject is the fixture's compose project (`fixture up`, the
+	// disposable engines test suites use), and Fixture its containers.
+	FixtureProject string
+	Fixture        []Service
+
 	Projects []Project
 
 	BackupDir  string
@@ -120,6 +125,18 @@ func (s Snapshot) BackupBytes() int64 {
 		n += b.Size
 	}
 	return n
+}
+
+// Running reports whether an engine's service is up: running, and healthy
+// or without a health check. An engine can be enabled (in the profiles)
+// and still not be running, when the stack is down.
+func (s Snapshot) Running(engine string) bool {
+	for _, v := range s.Services {
+		if v.Name == engine && (v.State == "" || v.State == "running") && (v.Health == "healthy" || v.Health == "none") {
+			return true
+		}
+	}
+	return false
 }
 
 // Engine is the endpoint of the named engine, or nil.

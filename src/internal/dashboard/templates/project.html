@@ -11,14 +11,14 @@
   </div></div>
 </div></div></div>
 <div class="page-body"><div class="container-xl">
-  {{if not $e.Enabled}}
-  <div class="alert alert-warning" role="alert"><div class="d-flex"><div>{{icon "alert"}}</div><div class="ms-2">{{$e.Title}} is not running, so this project cannot be reached right now. Start it with <code>make up PROFILES={{$e.Engine}}</code>.</div></div></div>
+  {{if not ($s.Running $e.Engine)}}
+  <div class="alert alert-warning" role="alert"><div class="d-flex"><div>{{icon "alert"}}</div><div class="ms-2">{{$e.Title}} is not running, so this project cannot be reached right now. Start it with <code>{{if $e.Enabled}}make up{{else}}make up PROFILES={{join $s.Endpoints.Profiles ","}},{{$e.Engine}}{{end}}</code>.</div></div></div>
   {{end}}
   <div class="row row-cards">
     <div class="col-lg-7">
       <div class="card">
         <div class="card-header"><h3 class="card-title">Paste into your app's .env</h3><div class="card-actions text-secondary small">the password is blurred until you show it</div></div>
-        <div class="card-body p-0"><pre id="env-block" class="mdb-env m-0">{{envblock $p.Block}}</pre></div>
+        <div class="card-body p-0"><pre id="env-block" class="mdb-env m-0">{{envblock $p.Block $s.Root}}</pre></div>
       </div>
       <div class="card mt-3">
         <div class="card-header"><h3 class="card-title">Your app's compose file joins the network</h3><div class="card-actions"><button type="button" class="btn btn-sm" data-copy="#compose-snippet">{{icon "copy"}} <span data-copy-label>Copy</span></button></div></div>

@@ -111,7 +111,11 @@ func renderedFiles(n *ui.Node, out string) {
 func upSummary(groups []*ui.Node) string {
 	var parts []string
 	for _, g := range groups {
-		parts = append(parts, fmt.Sprintf("%d %s", len(g.Children), strings.ToLower(g.Label)))
+		kind := strings.ToLower(g.Label)
+		if len(g.Children) == 1 {
+			kind = strings.TrimSuffix(kind, "s")
+		}
+		parts = append(parts, fmt.Sprintf("%d %s", len(g.Children), kind))
 	}
 	return strings.Join(parts, " · ")
 }

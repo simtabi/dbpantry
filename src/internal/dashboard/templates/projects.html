@@ -9,12 +9,13 @@
     {{else}}
     <div class="table-responsive">
       <table class="table table-vcenter card-table table-hover">
-        <thead><tr><th>Project</th><th>Engine</th><th>Owner role</th><th>Read-only role</th><th>Password file</th><th class="w-1"></th></tr></thead>
+        <thead><tr><th>Project</th><th>Engine</th><th>Engine status</th><th>Owner role</th><th>Read-only role</th><th>Password file</th><th class="w-1"></th></tr></thead>
         <tbody>
           {{range .S.Projects}}
           <tr>
             <td class="fw-medium">{{.Name}}</td>
             <td><span class="badge bg-primary-lt">{{.Engine}}</span></td>
+            <td>{{with $.S.Engine .Engine}}{{template "engine-status" (status $.S .Engine .Enabled)}}{{end}}</td>
             <td class="mdb-mono">{{.Owner}}</td>
             <td class="mdb-mono">{{.Readonly}}</td>
             <td class="mdb-mono text-secondary text-nowrap" title="{{.OwnerSecret}}{{with .ReadonlySecret}} · {{.}}{{end}}">{{.OwnerSecret}}</td>
