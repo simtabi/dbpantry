@@ -1,0 +1,32 @@
+{{define "content"}}
+<div class="page-header d-print-none"><div class="container-xl"><div class="row g-2 align-items-center">
+  <div class="col"><div class="page-pretitle">Containers</div><h2 class="page-title">Services</h2></div>
+  <div class="col-auto ms-auto"><span class="text-secondary">{{.S.Backend}} backend</span></div>
+</div></div></div>
+<div class="page-body"><div class="container-xl">
+  <div class="card">
+    {{if .S.ServicesErr}}<div class="card-body">{{template "services-unavailable" .S.ServicesErr}}</div>
+    {{else if not .S.Services}}
+    <div class="empty"><div class="empty-icon">{{icon "server"}}</div><p class="empty-title">Nothing is running</p><p class="empty-subtitle text-secondary">Start the stack with <code>make up PROFILES=&lt;engines&gt;</code>.</p></div>
+    {{else}}
+    <div class="table-responsive">
+      <table class="table table-vcenter card-table">
+        <thead><tr><th>Service</th><th>State</th><th>Health</th><th>Up for</th><th>Image</th></tr></thead>
+        <tbody>
+          {{range .S.Services}}
+          <tr>
+            <td class="mdb-mono fw-medium">{{.Name}}</td>
+            <td>{{if .State}}<span class="badge {{if eq .State "running"}}bg-green-lt{{else}}bg-red-lt{{end}}">{{.State}}</span>{{else}}<span class="text-secondary">–</span>{{end}}</td>
+            <td>{{template "health-status" .}}</td>
+            <td class="text-secondary text-nowrap">{{since .Started}}</td>
+            <td class="mdb-mono text-secondary text-nowrap">{{if .Image}}{{.Image}}{{else}}–{{end}}</td>
+          </tr>
+          {{end}}
+        </tbody>
+      </table>
+    </div>
+    {{end}}
+    <div class="card-footer text-secondary small">Logs: <code>make logs</code> · status in the terminal: <code>make status</code> · stop everything (data is kept): <code>make down</code></div>
+  </div>
+</div></div>
+{{end}}

@@ -28,15 +28,7 @@ connect. --profile test boots them on tmpfs with durability off instead
 		RunE: func(c *cobra.Command, _ []string) error {
 			switch overlay {
 			case "":
-				return a.runSteps(c,
-					script("scripts/check-env", "--quiet"),
-					script("scripts/render-config"),
-					step{Args: []string{"scripts/gen-compose"}, Quiet: true},
-					// up -d --wait on Compose v2; podman-compose and nerdctl
-					// compose have no --wait, so scripts/runtime polls health.
-					script("scripts/runtime", "up"),
-					script("scripts/exposure-notice"),
-				)
+				return a.up(c)
 			case "test":
 				if !a.dryRun {
 					_, _ = a.stdout.Write([]byte("TEST PROFILE: data lives on tmpfs and is DISCARDED on stop.\n"))
@@ -60,12 +52,34 @@ connect. --profile test boots them on tmpfs with durability off instead
 	return cmd
 }
 
+// up boots the stack: drawn as a tree on a terminal, the scripts' own
+// output anywhere else. `start` runs it too.
+func (a *app) up(c *cobra.Command) error {
+	if a.formatted() {
+		return a.upFormatted(c)
+	}
+	return a.runSteps(c,
+		script("scripts/check-env", "--quiet"),
+		script("scripts/render-config"),
+		step{Args: []string{"scripts/gen-compose"}, Quiet: true},
+		// up -d --wait on Compose v2; podman-compose and nerdctl
+		// compose have no --wait, so scripts/runtime polls health.
+		script("scripts/runtime", "up"),
+		script("scripts/exposure-notice"),
+	)
+}
+
 func (a *app) downCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "down",
 		Short: "Stop the stack (never touches data; deleting volumes is destroy)",
 		Args:  cobra.NoArgs,
-		RunE:  func(c *cobra.Command, _ []string) error { return a.runSteps(c, script("scripts/runtime", "down")) },
+		RunE: func(c *cobra.Command, _ []string) error {
+			if a.formatted() {
+				return a.downFormatted(c)
+			}
+			return a.runSteps(c, script("scripts/runtime", "down"))
+		},
 	}
 }
 

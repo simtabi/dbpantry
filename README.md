@@ -39,7 +39,15 @@ make up PROFILES=pg,mysql,mongodb,ui
 1. Confirm the harness is sound: `make verify-structure`.
 2. Start only the engines a project needs (profiles are opt-in, one per engine):
    `make up PROFILES=pg,ui`.
-3. Check what is running: `make status`.
+3. Check what is running: `make status`, or in a browser with `make dashboard`
+   (`http://127.0.0.1:8484/`).
+
+Or do all of it in one command: boot the engines, provision a project on each, and
+open the dashboard:
+
+```bash
+make start PROFILES=pg,mysql PROJECTS=myapp
+```
 
 ### Usage
 
@@ -59,6 +67,7 @@ make backup ENGINE=pg DB=myapp     # one database
 make verify-backups                # restore them into throwaway containers
 ```
 
+Every project's paste-ready connection block is also on its page in the dashboard.
 The full walkthrough is in [Getting started](docs/guides/getting-started.md); everything
 else is in the [documentation index](#documentation).
 
