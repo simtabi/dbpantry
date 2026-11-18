@@ -105,7 +105,9 @@ Superusers cannot authenticate through a pooler, so admin work uses `direct`.
 ### Principals
 
 Principals are paths, never values. `admin` is the engine's root secret,
-`/run/secrets/<root_secret>`. `--project NAME` adds the two roles `make new-project NAME=<name>`
+`/run/secrets/<root_secret>`, with its login name from the descriptor's `MDB_ENGINE_ADMIN_USER`
+(`postgres` for PostgreSQL, `root` for MySQL and MariaDB, `cassandra`, and `root` for MongoDB unless
+`MDB_MONGODB_ROOT_USER` overrides it); an engine without the key reports the file only. `--project NAME` adds the two roles `make new-project NAME=<name>`
 creates: `app` (user `<name>_user`, `/run/secrets/<engine>_<name>_user_password.txt`) and `read-only`
 (user `<name>_user_readonly`, `/run/secrets/<engine>_<name>_user_readonly_password.txt`). On the host
 the same files are `secrets/<engine>_<name>_user[_readonly]_password.txt`. The files exist once the

@@ -141,6 +141,10 @@ waiving them.
 - **`make start`: everything in one command.** It boots `PROFILES`, provisions `PROJECTS=name[:engine],…` on every engine in them, then serves the dashboard. Every step is idempotent; `NO_DASHBOARD=1` stops after provisioning.
 - **`make dashboard`**: a read-only web dashboard on `http://127.0.0.1:8484/`, built with Tabler 1.7.5's CSS and JavaScript embedded in the binary. Tabler's two-row header and icon menu lead to Overview, Services (state, health, uptime, image), Images, Engines (one page each: addresses, pooler, TLS, extensions, principals), Projects, Backups and Connect. Each project's page has its paste-ready `.env` block, the password blurred until shown, with copy buttons. Pages refresh every five seconds, and the same data, without passwords, is at `/api/status`.
 - `scripts/new-project --format json`: the provisioning result as one JSON object. `--show` prints an existing project's block without provisioning or generating anything.
+- `dbpantry endpoints` names each engine's admin user (`postgres`, `root`, `cassandra`; MongoDB's
+  `MDB_MONGODB_ROOT_USER` overrides it), from a new optional descriptor key `MDB_ENGINE_ADMIN_USER`.
+  laranail-test-db's `principal: admin` needs it. A Go test reads the family scripts, so the descriptor
+  cannot name a login the toolkit never uses.
 - `make new-project NAME=x FIXTURE=1` (`project new --fixture`) provisions in the fixture, with password
   files under `secrets/fixture/`, which `fixture down` removes; `make endpoints FIXTURE=1` (`endpoints
   --fixture`) reports the fixture's ports and those files. A test run that names its own project gets
