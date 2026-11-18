@@ -34,6 +34,12 @@ waiving them.
   `MDB_EXTRA_SANS`, then restart `pg-pooler`.
 
 ### Changed
+- **The `dbpantry` binary runs with no checkout.** It carries the kit (scripts, compose files, engines,
+  image sources) and, run where there is no checkout, extracts it to `~/.config/dbpantry/kit/<version>`,
+  verified by checksum on every run, with the instance in `~/.config/dbpantry`. `--home` or
+  `DBPANTRY_HOME` choose another home. `make kit` generates the embedded copy (design.md D-85).
+- **`check-env` no longer refuses a fresh init on a machine running PostgreSQL** when the stack publishes
+  no ports: it used to fall back to every port in the env file, HAProxy's 5432 included, though HA was off.
 - **The instance can live outside the checkout.** `MDB_HOME`, set in the environment, names the
   directory that holds `.env`, `secrets/`, `certs/`, `backups/`, the generated compose files and the
   rendered config; with it set, nothing is written into the checkout. It defaults to the checkout,

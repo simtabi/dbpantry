@@ -24,11 +24,18 @@ cp "$DBPANTRY_BIN" "$work/bin/dbpantry"
 # The caller's PATH, as a user has it: check-env asks Compose which ports the
 # stack would publish, and without a container CLI it falls back to every
 # *_PORT in the env file, HAProxy's included, which a busy host holds.
-bare() { ( cd "$work/bin" && env -i PATH="$PATH" HOME="$work/home" TMPDIR="${TMPDIR:-/tmp}" \
-    ./dbpantry "$@" ); }
+# The container CLI's own configuration too: HOME is a fresh directory, and
+# Docker finds its context (OrbStack's socket, say) under ~/.docker, so it is
+# named explicitly, as are a DOCKER_HOST and CONTAINER_RUNTIME the caller set.
+docker_cfg="${DOCKER_CONFIG:-$HOME/.docker}"
+bare() { ( cd "$work/bin" && env -i PATH="$PATH" HOME="$work/home" TMPDIR="${TMPDIR:-/tmp}" ${PROFILES:+PROFILES="$PROFILES"} \
+    DOCKER_CONFIG="$docker_cfg" ${DOCKER_HOST:+DOCKER_HOST="$DOCKER_HOST"} \
+    ${CONTAINER_RUNTIME:+CONTAINER_RUNTIME="$CONTAINER_RUNTIME"} ./dbpantry "$@" ); }
 
-# 1. init from the bare binary.
-out="$(bare init 2>&1)" || vfail "dbpantry init from the bare binary failed:
+# 1. init from the bare binary. With the pg profile only: the default adds ui,
+# whose Adminer publishes 8080, and init's check-env rightly refuses a port
+# this host may hold. What is tested here is the binary, not the host.
+out="$(PROFILES=pg bare init 2>&1)" || vfail "dbpantry init from the bare binary failed:
 $(printf '%s\n' "$out" | tail -15 | sed 's/^/       /')"
 home="$work/home/.config/dbpantry"
 kitdir="$(find "$home/kit" -mindepth 1 -maxdepth 1 -type d ! -name '.*' 2>/dev/null | head -1)"
@@ -47,7 +54,10 @@ vinfo "init from the bare binary: kit of $n files at ~/.config/dbpantry/kit/${ki
 # elsewhere in HOME.
 left="$(ls -A "$work/bin")"
 [[ "$left" == dbpantry ]] || vfail "the binary's directory gained files: $(printf '%s' "$left" | tr '\n' ' ')"
-others="$(cd "$work/home" && find . -mindepth 1 -maxdepth 2 ! -path ./.config ! -path ./.config/dbpantry)"
+# ~/Library is macOS's own: it creates Library/Containers there for the
+# container CLI that check-env runs, whatever HOME holds. dbpantry writes none.
+others="$(cd "$work/home" && find . -mindepth 1 -maxdepth 2 ! -path ./.config ! -path ./.config/dbpantry \
+    ! -path ./Library ! -path './Library/*')"
 [[ -z "$others" ]] || vfail "files were written in HOME outside ~/.config/dbpantry: $others"
 vinfo "nothing was written beside the binary or elsewhere in HOME"
 

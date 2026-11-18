@@ -92,7 +92,7 @@ func TestEnsureRestoresATamperedKit(t *testing.T) {
 		{"edited file", func() error {
 			return os.WriteFile(filepath.Join(dir, "scripts", "env-lib.sh"), []byte("# edited\n"), 0o644) // #nosec G306 -- test file
 		}},
-		{"lost executable bit", func() error { return os.Chmod(filepath.Join(dir, "scripts", "init"), 0o644) }},
+		{"lost executable bit", func() error { return os.Chmod(filepath.Join(dir, "scripts", "init"), 0o644) }}, // #nosec G302 -- a kit file's own mode, in a test directory
 		{"deleted file", func() error { return os.Remove(filepath.Join(dir, ".env.example")) }},
 		{"other manifest", func() error {
 			return os.WriteFile(filepath.Join(dir, ManifestName), []byte("0644 "+strings.Repeat("0", 64)+" x\n"), 0o644) // #nosec G306 -- test file
