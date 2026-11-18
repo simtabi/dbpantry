@@ -23,30 +23,7 @@ pooler mirrors credentials at start (ProxySQL) and is running, it is then
 restarted so the new user can log in through it (N8); --no-pooler-sync skips that.`,
 		Args: cobra.NoArgs,
 		RunE: func(c *cobra.Command, _ []string) error {
-			argv := append([]string{"scripts/new-project", "--name", name}, strArg(c, "engine", eng)...)
-			st := script(argv...)
-			if fx {
-				m, root, err := a.manifest()
-				if err != nil {
-					return err
-				}
-				s, err := a.settings(root)
-				if err != nil {
-					return err
-				}
-				if st.Env, _, err = fixtureEnv(m, s); err != nil {
-					return err
-				}
-			}
-			if err := a.runSteps(c, st); err != nil {
-				return err
-			}
-			// A fixture's pooler is not synced: syncPooler acts on the stack's
-			// compose project, and a test suite connects to the engine directly.
-			if noSync || eng == "" || fx {
-				return nil
-			}
-			return a.syncPooler(c, eng, true)
+			return a.newProject(c, name, eng, noSync, fx)
 		},
 	}
 	newCmd.Flags().StringVar(&name, "name", "", "the project (database) name")
@@ -55,6 +32,45 @@ restarted so the new user can log in through it (N8); --no-pooler-sync skips tha
 	newCmd.Flags().BoolVar(&fx, "fixture", false, "provision in the fixture (`fixture up`), with password files under secrets/fixture/; give each test run its own --name for an isolated database")
 	cmd.AddCommand(newCmd)
 	return cmd
+}
+
+// newProject provisions one project with scripts/new-project, drawn as a
+// tree and tables on a terminal, then syncs a mirroring pooler. An empty
+// engine is the script's default. With fixture, it provisions in the
+// fixture (fixtureEnv: its compose project and MDB_FIXTURE=1, so the
+// password files go under secrets/fixture/) and skips the pooler sync,
+// which acts on the stack's compose project; a test suite connects to the
+// engine directly. `start` runs it too.
+func (a *app) newProject(c *cobra.Command, name, eng string, noSync, fixture bool) error {
+	argv := []string{"scripts/new-project", "--name", name}
+	if eng != "" {
+		argv = append(argv, "--engine", eng)
+	}
+	var env []string
+	if fixture {
+		m, root, err := a.manifest()
+		if err != nil {
+			return err
+		}
+		s, err := a.settings(root)
+		if err != nil {
+			return err
+		}
+		if env, _, err = fixtureEnv(m, s); err != nil {
+			return err
+		}
+	}
+	if a.formatted() {
+		if _, err := a.projectFormatted(c, argv, env); err != nil {
+			return err
+		}
+	} else if err := a.runSteps(c, step{Args: argv, Env: env}); err != nil {
+		return err
+	}
+	if noSync || eng == "" || fixture {
+		return nil
+	}
+	return a.syncPooler(c, eng, true)
 }
 
 func (a *app) backupCmd() *cobra.Command {

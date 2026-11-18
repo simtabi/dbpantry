@@ -1,0 +1,30 @@
+{{define "content"}}
+<div class="page-header d-print-none"><div class="container-xl"><div class="row g-2 align-items-center">
+  <div class="col"><div class="page-pretitle">Provisioned with make new-project</div><h2 class="page-title">Projects</h2></div>
+</div></div></div>
+<div class="page-body"><div class="container-xl">
+  <div class="card">
+    {{if not .S.Projects}}
+    <div class="empty"><div class="empty-icon">{{icon "folders"}}</div><p class="empty-title">No projects yet</p><p class="empty-subtitle text-secondary">Provision one with <code>make new-project NAME=myapp ENGINE=&lt;engine&gt;</code>, or with the stack: <code>make start PROJECTS=myapp</code>.</p></div>
+    {{else}}
+    <div class="table-responsive">
+      <table class="table table-vcenter card-table table-hover">
+        <thead><tr><th>Project</th><th>Engine</th><th>Owner role</th><th>Read-only role</th><th>Password file</th><th class="w-1"></th></tr></thead>
+        <tbody>
+          {{range .S.Projects}}
+          <tr>
+            <td class="fw-medium">{{.Name}}</td>
+            <td><span class="badge bg-primary-lt">{{.Engine}}</span></td>
+            <td class="mdb-mono">{{.Owner}}</td>
+            <td class="mdb-mono">{{.Readonly}}</td>
+            <td class="mdb-mono text-secondary text-nowrap" title="{{.OwnerSecret}}{{with .ReadonlySecret}} · {{.}}{{end}}">{{.OwnerSecret}}</td>
+            <td><a href="/projects/{{.Engine}}/{{.Name}}" class="btn btn-sm btn-primary">{{icon "key"}} Connection details</a></td>
+          </tr>
+          {{end}}
+        </tbody>
+      </table>
+    </div>
+    {{end}}
+  </div>
+</div></div>
+{{end}}

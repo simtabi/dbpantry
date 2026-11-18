@@ -43,7 +43,7 @@ exit "${STUB_EXIT:-0}"
 		"scripts/profiles":       "#!/usr/bin/env bash\nprintf '%s\\n' \"$1\"\n",
 		"scripts/engine-lib.sh":  "",
 		"scripts/runtime-lib.sh": "mdb_project_name() { echo mdbstub; }\nmdb_service_running() { [[ \"$1\" == mysql-pooler ]]; }\n",
-		"scripts/env-lib.sh":     "mdb_image_prefix() { echo localhost; }\n",
+		"scripts/env-lib.sh":     "mdb_image_prefix() { echo localhost; }\nmdb_backup_dir() { printf '%s/backups' \"$1\"; }\n",
 	}
 	for name, body := range files {
 		if err := os.WriteFile(filepath.Join(root, name), []byte(body), 0o700); err != nil { // #nosec G306 -- a stub in a test directory

@@ -1,0 +1,22 @@
+{{define "content"}}
+<div class="page-header d-print-none"><div class="container-xl"><div class="row g-2 align-items-center">
+  <div class="col"><div class="page-pretitle">{{.S.BackupDir}}</div><h2 class="page-title">Backups</h2></div>
+  <div class="col-auto ms-auto"><span class="text-secondary">{{len .S.Backups}} files · {{bytes .S.BackupBytes}}</span></div>
+</div></div></div>
+<div class="page-body"><div class="container-xl">
+  <div class="card">
+    {{if .S.BackupsErr}}<div class="card-body"><div class="alert alert-warning mb-0" role="alert">{{.S.BackupsErr}}</div></div>
+    {{else if not .S.Backups}}
+    <div class="empty"><div class="empty-icon">{{icon "archive"}}</div><p class="empty-title">No backups yet</p><p class="empty-subtitle text-secondary">Take one with <code>make backup-all</code>, then check it restores with <code>make verify-backups</code>.</p></div>
+    {{else}}
+    <div class="table-responsive">
+      <table class="table table-vcenter card-table">
+        <thead><tr><th>File</th><th>Engine</th><th class="text-end">Size</th><th class="text-end">Taken</th></tr></thead>
+        <tbody>{{range .S.Backups}}<tr><td class="mdb-mono">{{.File}}</td><td><span class="badge bg-primary-lt">{{.Engine}}</span></td><td class="text-end">{{bytes .Size}}</td><td class="text-end text-secondary" title="{{.Modified}}">{{ago .Modified}}</td></tr>{{end}}</tbody>
+      </table>
+    </div>
+    {{end}}
+    <div class="card-footer text-secondary small">Restore one: <code>make restore ENGINE=&lt;engine&gt; DB=&lt;db&gt; FILE=&lt;file&gt;</code></div>
+  </div>
+</div></div>
+{{end}}

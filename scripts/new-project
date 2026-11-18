@@ -13,7 +13,15 @@
 # engine-specific now lives in the family hooks, so a new engine gets
 # new-project by existing rather than by someone remembering to add a case.
 #
-# Usage: scripts/new-project --name myapp [--engine pg|mysql|mariadb|mongodb|cassandra|ferretdb]
+# Usage: scripts/new-project --name myapp [--engine pg|mysql|mariadb|mongodb|cassandra|ferretdb] [--format text|json]
+#
+# --format json prints one JSON object on stdout instead of the text block, and
+# sends every log line (the hooks' too) to stderr. `dbpantry project new` reads
+# it to draw its tables; the text output is unchanged.
+#
+# --show provisions nothing and generates nothing: it prints the block for a
+# project that already exists, from its password files (the dashboard's project
+# page). It fails when the project has no password file on that engine.
 
 set -euo pipefail
 
@@ -29,7 +37,9 @@ ENV_FILE="${MDB_ENV_FILE:-$ROOT/.env}"
 [[ -f "$ENV_FILE" ]] || ENV_FILE="$ROOT/.env.example"
 
 get() { mdb_env_get "$1" "$ENV_FILE"; }
-log() { printf '[new-project] %s\n' "$*"; }
+FORMAT=text
+SHOW=0
+log() { if [[ "$FORMAT" == json ]]; then printf '[new-project] %s\n' "$*" >&2; else printf '[new-project] %s\n' "$*"; fi; }
 die() { printf '[new-project] ERROR: %s\n' "$*" >&2; exit 1; }
 
 NAME=""
@@ -38,11 +48,14 @@ while (( $# )); do
     case "$1" in
         --name)   NAME="${2:-}"; shift 2 ;;
         --engine) ENGINE="${2:-}"; shift 2 ;;
+        --format) FORMAT="${2:-}"; shift 2 ;;
+        --show)   SHOW=1; shift ;;
         *) die "unknown argument: $1" ;;
     esac
 done
 
 [[ -n "$NAME" ]] || die "specify --name <project>"
+[[ "$FORMAT" == text || "$FORMAT" == json ]] || die "--format is text or json, not '$FORMAT'"
 
 # Identifiers go into SQL and CQL, so they are constrained rather than escaped.
 # A name that needs quoting is a name that will cause trouble in a connection
@@ -112,15 +125,18 @@ compress_ext() { printf ''; }
 # The owner and the read-only role get DIFFERENT passwords. They are separate
 # principals, and a shared credential means leaking the read-only one leaks the
 # writable one too.
+SECRET_ACTIONS=()
 gen_password() {
     local file="$1"
     if [[ -s "$file" ]]; then
         log "reusing the existing password in $file"
+        SECRET_ACTIONS+=("reused")
     else
         mkdir -p "$(dirname "$file")"
         openssl rand -base64 96 | LC_ALL=C tr -dc 'A-Za-z0-9' | cut -c1-40 > "$file"
         chmod 0600 "$file"
         log "generated $file"
+        SECRET_ACTIONS+=("generated")
     fi
 }
 
@@ -132,10 +148,15 @@ SECRET_DIR="secrets"
 [[ "${MDB_FIXTURE:-0}" == "1" ]] && SECRET_DIR="secrets/fixture"
 SECRET_FILE="${SECRET_DIR}/${ENGINE}_${USER_NAME}_password.txt"
 RO_SECRET_FILE="${SECRET_DIR}/${ENGINE}_${USER_NAME}_readonly_password.txt"
-gen_password "$SECRET_FILE"
-gen_password "$RO_SECRET_FILE"
+if (( SHOW )); then
+    [[ -s "$SECRET_FILE" ]] || die "no project '$NAME' on $ENGINE (no $SECRET_FILE); provision it with make new-project NAME=$NAME ENGINE=$ENGINE"
+    SECRET_ACTIONS=("existing" "$([[ -s "$RO_SECRET_FILE" ]] && echo existing || echo missing)")
+else
+    gen_password "$SECRET_FILE"
+    gen_password "$RO_SECRET_FILE"
+fi
 PASSWORD="$(cat "$SECRET_FILE")"
-RO_PASSWORD="$(cat "$RO_SECRET_FILE")"
+RO_PASSWORD="$(cat "$RO_SECRET_FILE" 2>/dev/null || true)"
 
 # -----------------------------------------------------------------------------
 # Provision
@@ -143,82 +164,124 @@ RO_PASSWORD="$(cat "$RO_SECRET_FILE")"
 upper="$(printf '%s' "$ENGINE" | tr '[:lower:]-' '[:upper:]_')"
 EXTENSIONS="$(get "MDB_${upper}_INIT_EXTENSIONS")"
 
-hook_provision_project "$DB" "$USER_NAME" "$PASSWORD" "$EXTENSIONS" "$RO_PASSWORD" \
+# In JSON mode stdout carries only the object, so the hook's notices go to stderr.
+if (( SHOW )); then
+    :
+elif [[ "$FORMAT" == json ]]; then
+    hook_provision_project "$DB" "$USER_NAME" "$PASSWORD" "$EXTENSIONS" "$RO_PASSWORD" >&2
+else
+    hook_provision_project "$DB" "$USER_NAME" "$PASSWORD" "$EXTENSIONS" "$RO_PASSWORD"
+fi \
     || die "provisioning failed on $ENGINE; is it running? (make up PROFILES=$ENGINE)"
 
-log "provisioned '$DB' on $ENGINE, owned by '$USER_NAME'"
-[[ -n "$EXTENSIONS" ]] && log "extensions requested: $EXTENSIONS"
+if (( ! SHOW )); then
+    log "provisioned '$DB' on $ENGINE, owned by '$USER_NAME'"
+    [[ -n "$EXTENSIONS" ]] && log "extensions requested: $EXTENSIONS"
+fi
 
 # -----------------------------------------------------------------------------
 # The paste-ready block (SPEC section 14)
 # -----------------------------------------------------------------------------
 # Values go through mdb_env_quote: anything with whitespace or a special
 # character is double-quoted, so the block pastes into any .env unchanged.
-cat <<BLOCK
-
-────────────────────────────────────────────────────────────────────────
-Paste into your .env:
-
-DB_CONNECTION=$(mdb_env_quote "${MDB_ENGINE_DRIVER}")
+#
+# The block is built once and either printed between the rules (text) or
+# carried in the JSON object (json), so both say exactly the same.
+block="DB_CONNECTION=$(mdb_env_quote "${MDB_ENGINE_DRIVER}")
 DB_HOST=$(mdb_env_quote "${ENGINE}")
 DB_PORT=$(mdb_env_quote "${MDB_ENGINE_PORT}")
 DB_DATABASE=$(mdb_env_quote "${DB}")
 DB_USERNAME=$(mdb_env_quote "${USER_NAME}")
 DB_PASSWORD=$(mdb_env_quote "${PASSWORD}")
-BLOCK
+"
 
 if engine_tls_always; then
-    cat <<'BLOCK'
-
+    block+="
 # TLS is always on for this engine. verify-full is the only mode that checks
 # the hostname, so it is the only one worth using; point it at the toolkit CA:
 DB_SSLMODE=verify-full
 DB_SSLROOTCERT=/path/to/dbpantry/certs/ca.crt
-BLOCK
+"
 else
-    cat <<'BLOCK'
-
+    block+="
 # In the prod profile the server refuses plaintext TCP, so point your client
 # at the toolkit CA:
 DB_SSL_CA=/path/to/dbpantry/certs/ca.crt
-BLOCK
+"
 fi
 
+POOLER_HOST=""
+POOLER_PORT=""
 if engine_has_external_pooler; then
-    cat <<BLOCK
-
+    POOLER_HOST="${ENGINE}-pooler"
+    POOLER_PORT="${MDB_ENGINE_POOLER_PORT:-6432}"
+    block+="
 # A pooler is available and is REQUIRED in production for this engine. With
 # \`make up PROFILES=${ENGINE},pooler\`, connect through it instead:
-#   DB_HOST=${ENGINE}-pooler
-#   DB_PORT=${MDB_ENGINE_POOLER_PORT:-6432}
-BLOCK
+#   DB_HOST=${POOLER_HOST}
+#   DB_PORT=${POOLER_PORT}
+"
 fi
 
 # Mutual TLS (design.md D-74): the role gets a client certificate whose CN is
 # its own name, which is what PostgreSQL checks on a direct connection and what
 # the pooler requires before it asks for the password.
 if [[ "$(get MDB_MTLS)" == "true" ]] && engine_tls_always; then
-    if "$ROOT/scripts/certs" --client "$USER_NAME" >/dev/null; then
-        cat <<BLOCK
-
+    # --show reports a certificate that exists; it never issues one.
+    have_cert=0
+    if (( SHOW )); then
+        [[ -f "certs/clients/${USER_NAME}/client.crt" ]] && have_cert=1
+    elif "$ROOT/scripts/certs" --client "$USER_NAME" >/dev/null; then
+        have_cert=1
+    else
+        log "WARNING: could not issue a client certificate for '$USER_NAME'; run: scripts/certs --client $USER_NAME"
+    fi
+    if (( have_cert )); then
+        block+="
 # MDB_MTLS is on: present this role's client certificate as well. Copy the
 # three files to the application server; the key never leaves it again.
 DB_SSLCERT=/path/to/dbpantry/certs/clients/${USER_NAME}/client.crt
 DB_SSLKEY=/path/to/dbpantry/certs/clients/${USER_NAME}/client.key
-BLOCK
-    else
-        log "WARNING: could not issue a client certificate for '$USER_NAME'; run: scripts/certs --client $USER_NAME"
+"
     fi
+fi
+
+NETWORK="${COMPOSE_PROJECT_NAME:-mdb}_net"
+
+if [[ "$FORMAT" == json ]]; then
+    # Every value is a constrained identifier, a path, or the block, so
+    # escaping backslash, quote, newline and tab is the whole of JSON's rule
+    # that applies here.
+    json_str() {
+        local v="$1"
+        v="${v//\\/\\\\}"; v="${v//\"/\\\"}"; v="${v//$'\n'/\\n}"; v="${v//$'\t'/\\t}"
+        printf '"%s"' "$v"
+    }
+    exts="" sep=""
+    for e in ${EXTENSIONS//,/ }; do exts+="${sep}$(json_str "$e")"; sep=","; done
+    pooler="null"
+    [[ -n "$POOLER_HOST" ]] && pooler="{\"host\":$(json_str "$POOLER_HOST"),\"port\":$(json_str "$POOLER_PORT")}"
+    printf '{"engine":%s,"title":%s,"database":%s,"owner":%s,"readonly":%s,"extensions":[%s],"secrets":[{"role":%s,"file":%s,"action":%s},{"role":%s,"file":%s,"action":%s}],"tls_always":%s,"pooler":%s,"network":%s,"block":%s}\n' \
+        "$(json_str "$ENGINE")" "$(json_str "${MDB_ENGINE_TITLE:-$ENGINE}")" "$(json_str "$DB")" \
+        "$(json_str "$USER_NAME")" "$(json_str "${USER_NAME}_readonly")" "$exts" \
+        "$(json_str "$USER_NAME")" "$(json_str "$SECRET_FILE")" "$(json_str "${SECRET_ACTIONS[0]:-}")" \
+        "$(json_str "${USER_NAME}_readonly")" "$(json_str "$RO_SECRET_FILE")" "$(json_str "${SECRET_ACTIONS[1]:-}")" \
+        "$(engine_tls_always && echo true || echo false)" "$pooler" "$(json_str "$NETWORK")" "$(json_str "$block")"
+    exit 0
 fi
 
 cat <<BLOCK
 
+────────────────────────────────────────────────────────────────────────
+Paste into your .env:
+
+${block}
 Your app container must join the toolkit network:
 
   networks:
     default:
       external: true
-      name: ${COMPOSE_PROJECT_NAME:-mdb}_net
+      name: ${NETWORK}
 
 Passwords also live in:
   ${SECRET_FILE}
