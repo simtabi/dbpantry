@@ -247,6 +247,11 @@ waiving them.
   exist and is not a known generated file.
 
 ### Fixed
+- **Check 64 failed beside a running fixture**: its scratch stack's fixture claimed the default
+  fixture subnet (172.29.0.0/16) and ports (55000+), which a live fixture on the host already held
+  ("Pool overlaps with other one on this address space"). `scratch_stack` now gives the scratch
+  fixture a random 10.150-199 /24 and a free `MDB_FIXTURE_PORT_BASE`, as it already did for the stack.
+  The docs say a second checkout sets its own fixture range and ports. Found by the CLI UI/UX session.
 - **`fixture up` failed whenever the stack was running** ("Pool overlaps with other one on this address
   space"): the fixture's network asked for the stack's subnet. It now uses `MDB_FIXTURE_NETWORK_SUBNET`
   (default `172.29.0.0/16`), refused when it overlaps `MDB_NETWORK_SUBNET`, and gen-compose writes each
