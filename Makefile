@@ -65,7 +65,22 @@ define build_dbpantry
 	@printf 'built %s\n' "$(DBPANTRY)" >&2
 endef
 
-$(DBPANTRY): $(DBPANTRY_SOURCES)
+# The kit the binary embeds (design.md D-85): what the scripts need to run with
+# no checkout. Tracked files only, so nothing generated, secret or local (.env,
+# secrets/, the generated compose files) can reach it; the verify harness stays
+# out. `make kit` copies them into src/internal/kit/files with a MANIFEST of
+# modes and checksums, and the binary is rebuilt whenever one of them changes.
+KIT_PATHS := scripts docker-compose.yml compose.*.yml engines images config overrides deploy rls .env.example .trivyignore.yaml LICENSE
+KIT_FILES := $(shell git ls-files -- $(KIT_PATHS) 2>/dev/null | grep -v '^scripts/verify/')
+KIT_MANIFEST := src/internal/kit/files/MANIFEST
+
+$(KIT_MANIFEST): $(KIT_FILES) src/internal/kit/kitgen/main.go src/internal/kit/kit.go
+	@printf '%s\n' $(KIT_FILES) | $(GO) -C src run ./internal/kit/kitgen -repo .. -out internal/kit/files
+
+.PHONY: kit
+kit: $(KIT_MANIFEST) ## Copy the kit into src/internal/kit/files for the binary to embed
+
+$(DBPANTRY): $(DBPANTRY_SOURCES) $(KIT_MANIFEST)
 	$(build_dbpantry)
 
 # Profile selection, in precedence order: PROFILES= on the command line for a
@@ -315,7 +330,7 @@ self-update: $(DBPANTRY) ## Update the toolkit itself, never project data
 # -----------------------------------------------------------------------------
 
 .PHONY: dbpantry
-dbpantry: ## Build the dbpantry binary into build/<os>/dbpantry (always; other targets build it when src/ changed)
+dbpantry: $(KIT_MANIFEST) ## Build the dbpantry binary into build/<os>/dbpantry (always; other targets build it when src/ changed)
 	$(build_dbpantry)
 
 .PHONY: go-ci
@@ -330,8 +345,8 @@ go-vet: ## go vet the module
 	@$(GO) -C src vet ./...
 
 .PHONY: go-test
-go-test: ## Go tests with the race detector
-	@$(GO) -C src test -race -count=1 ./...
+go-test: $(KIT_MANIFEST) ## Go tests with the race detector (on the generated kit)
+	@DBPANTRY_KIT_REQUIRED=1 $(GO) -C src test -race -count=1 ./...
 
 .PHONY: go-lint
 go-lint: ## golangci-lint, built with this Go so it understands the stdlib it reads

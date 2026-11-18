@@ -97,6 +97,11 @@ need_dbpantry() {
     local dir
     dir="$(mktemp -d "${TMPDIR:-/tmp}/mdb-verify-bin.XXXXXX")" || vfail "mktemp failed"
     add_cleanup "rm -rf '$dir'"
+    # The kit first (design.md D-85), so the binary embeds the scripts as they
+    # are now, not as the last `make kit` left them. It writes only
+    # src/internal/kit/files, which is gitignored build output.
+    make -C "$MDB_ROOT" --no-print-directory kit >&2 \
+        || vfail "could not generate the embedded kit (make kit)"
     CGO_ENABLED=0 go -C "$MDB_ROOT/src" build -o "$dir/dbpantry" ./cmd/dbpantry >&2 \
         || vfail "could not build the dbpantry binary (go -C src build ./cmd/dbpantry)"
     DBPANTRY_BIN="$dir/dbpantry"
