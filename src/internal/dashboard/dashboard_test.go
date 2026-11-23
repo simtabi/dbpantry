@@ -686,6 +686,33 @@ func TestJobDrawerRendersRunSnapshots(t *testing.T) {
 	}
 }
 
+// Steps is the drawer's default view for every job, including commands that
+// print no run snapshot, and a job started without a dialog must release the
+// page-busy hold it took (it used to take two and release one, leaving the bar
+// up and live refresh paused).
+func TestJobDrawerDefaultsToStepsAndReleasesBusy(t *testing.T) {
+	js, err := os.ReadFile(filepath.Join("resources", "assets", "js", "manage.js")) // #nosec G304 -- fixed path in this package
+	if err != nil {
+		t.Fatal(err)
+	}
+	src := string(js)
+	for _, want := range []string{
+		"function effectiveView() { return pickedView || 'steps'; }",
+		"function fallbackRun()",
+		"setBusyLabel('Starting ' + a.title",
+		"issuesEl.classList.toggle('is-some'",
+	} {
+		if !strings.Contains(src, want) {
+			t.Errorf("manage.js lacks %q", want)
+		}
+	}
+	for _, gone := range []string{"b.disabled = !run", "setPageBusy(true, 'Starting ' + a.title"} {
+		if strings.Contains(src, gone) {
+			t.Errorf("manage.js still carries %q", gone)
+		}
+	}
+}
+
 // Connect's compose and CA snippets use .mdb-env; Tabler paints <pre> light,
 // so without an explicit body colour those cards look empty and Copy looks broken.
 func TestConnectSnippetsAreVisible(t *testing.T) {
