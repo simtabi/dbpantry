@@ -198,8 +198,24 @@ func TestDashboardServes(t *testing.T) {
 	if strings.Contains(eng, `mdb-addon-engine-head`) {
 		t.Error("compact add-on manage on the engine page must not repeat the engine head")
 	}
-	if !strings.Contains(eng, `mdb-engine-hero`) || !strings.Contains(eng, `mdb-engine-addr-tile`) {
-		t.Error("engine page must use the hero status strip and address tiles")
+	if !strings.Contains(eng, `mdb-engine-hero`) || !strings.Contains(eng, `mdb-engine-addr-list`) || !strings.Contains(eng, `mdb-engine-addr-row`) {
+		t.Error("engine page must use the hero status strip and compact address rows")
+	}
+	if strings.Contains(eng, `mdb-engine-addr-tile`) {
+		t.Error("engine Where to connect must not use the old unbalanced address tiles")
+	}
+	if !strings.Contains(eng, `id="mdb-engine-addons"`) || !strings.Contains(eng, `data-bs-target="#mdb-engine-addons"`) {
+		t.Error("engine Add-ons must open in a slide-in panel, not a heavy inline card")
+	}
+	if strings.Contains(eng, `card mb-3 mdb-engine-addons`) {
+		t.Error("engine page must not keep the inline Add-ons card beside Where to connect")
+	}
+	jsDash, err := os.ReadFile(filepath.Join("resources", "assets", "js", "dashboard.js")) // #nosec G304 -- fixed path in this package
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(jsDash), ".offcanvas.show") {
+		t.Error("Live refresh must skip while an offcanvas (engine Add-ons) is open")
 	}
 	if ov := body(t, serve(t, fixture, nil, "/", "")); !strings.Contains(ov, `data-dbpantry-splash`) || !strings.Contains(ov, `/assets/js/pageloader.js`) || !strings.Contains(ov, `data-dbpantry-loading`) {
 		t.Error("layout must ship the data-dbpantry-* splash and pageloader.js")

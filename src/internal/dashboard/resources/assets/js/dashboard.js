@@ -226,7 +226,12 @@
 
   var openMenuCount = 0;
   function menusOpen() {
-    return openMenuCount > 0 || !!document.querySelector('.dropdown-menu.show');
+    // Skip Live refresh while a menu, slide-in or modal is open — replacing
+    // #content would wipe page-local offcanvases (engine Add-ons) mid-use.
+    return openMenuCount > 0
+      || !!document.querySelector('.dropdown-menu.show')
+      || !!document.querySelector('.offcanvas.show')
+      || !!document.querySelector('.modal.show');
   }
   window.mdbMenusOpen = menusOpen;
 
