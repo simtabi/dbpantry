@@ -63,6 +63,11 @@ waiving them.
   classes) bound by `data-dbpantry-*`; determinate `%` and stage labels; defaults favour a fast
   DOM/`#content` reveal (optional full `window` load / fonts via attributes).
 
+### Changed
+- **Engine page layout rebalanced (D-101).** “Where to connect” is compact label/value rows
+  beside Projects (`row-deck`); Add-ons open in a slide-in panel with on/total badge, not a
+  tall inline card. Live refresh skips while any offcanvas or modal is open.
+
 ### Fixed
 - **Pretty CLI tree looked padded and dotted (D-105).** Removed the left gutter and title blank,
   dropped the continuing `│` column under nested steps, and tightened blanks between the tree,

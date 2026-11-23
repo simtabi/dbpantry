@@ -794,12 +794,15 @@
 .mdb-engine-hero-stopped { border-left-color: var(--tblr-yellow); }
 .mdb-engine-hero-orphan { border-left-color: var(--tblr-azure); }
 .mdb-engine-hero-off { border-left-color: var(--tblr-secondary); }
-.mdb-engine-addr-tile {
-  height: 100%;
-  padding: .85rem 1rem;
-  border: 1px solid var(--tblr-border-color);
-  border-radius: var(--tblr-border-radius);
-  background: var(--tblr-bg-surface);
+/* Compact connect rows (engine page): one label / value / action per line so
+   the card matches Projects height instead of a tall 2×2 tile grid. */
+.mdb-engine-addr-list .mdb-engine-addr-row {
+  display: grid;
+  grid-template-columns: minmax(7.5rem, 11rem) minmax(0, 1fr) 2rem;
+  gap: .75rem 1rem;
+  align-items: center;
+  padding-top: .7rem;
+  padding-bottom: .7rem;
 }
 .mdb-engine-addr-label {
   font-size: .72rem;
@@ -807,18 +810,58 @@
   letter-spacing: .04em;
   text-transform: uppercase;
   color: var(--tblr-secondary);
-  margin-bottom: .35rem;
+  margin-bottom: 0;
+  line-height: 1.3;
 }
 .mdb-engine-addr-value {
-  font-size: .95rem;
+  font-size: .92rem;
   word-break: break-word;
+  min-width: 0;
+}
+.mdb-engine-addr-spacer {
+  width: 2rem;
+  height: 1px;
+}
+.mdb-engine-addr-ext .mdb-engine-addr-value {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .25rem;
+  align-items: center;
+}
+.mdb-engine-side {
+  display: flex;
+  flex-direction: column;
+}
+.mdb-engine-side .empty {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+.mdb-engine-addons-drawer {
+  --tblr-offcanvas-width: min(28rem, 100vw);
+}
+.mdb-engine-addons-drawer .mdb-engine-addons-body {
+  max-height: none;
+  overflow: auto;
 }
 .mdb-engine-addons-body {
   max-height: 22rem;
   overflow: auto;
 }
 .mdb-addon-manage-compact .mdb-addon-engine-meta {
-  display: none; /* On/Total lives in the card subtitle on the engine page */
+  display: none; /* On/Total lives in the slide-in header / trigger badge */
+}
+@media (max-width: 575.98px) {
+  .mdb-engine-addr-list .mdb-engine-addr-row {
+    grid-template-columns: 1fr auto;
+    grid-template-rows: auto auto;
+  }
+  .mdb-engine-addr-list .mdb-engine-addr-label {
+    grid-column: 1 / -1;
+  }
+  .mdb-engine-addr-list .mdb-engine-addr-value {
+    grid-column: 1;
+  }
 }
 /* Application splash / page loader (data-dbpantry-*). */
 html[data-dbpantry-loading="1"] .page,
