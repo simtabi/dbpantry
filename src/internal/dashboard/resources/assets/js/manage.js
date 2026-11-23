@@ -759,6 +759,7 @@
     var wrap = progressWrap();
     var bar = drawerEl && drawerEl.querySelector('[data-job-progress]');
     if (!wrap || !bar) { return; }
+    wrap.classList.remove('d-none');
     var span = bar.querySelector('span');
     var pctEl = drawerEl.querySelector('[data-job-pct]');
     var etaEl = drawerEl.querySelector('[data-job-eta]');
@@ -769,7 +770,8 @@
       if (span) { span.style.width = ''; }
       bar.removeAttribute('aria-valuenow');
       if (pctEl) { pctEl.textContent = ''; }
-      if (etaEl) { etaEl.textContent = ''; }
+      // Keep ETA / elapsed text while the indeterminate bar animates.
+      if (etaEl) { etaEl.textContent = eta || ''; }
       return;
     }
     var n = Math.min(100, Math.round(pct));
@@ -778,6 +780,27 @@
     bar.setAttribute('aria-valuenow', String(n));
     if (pctEl) { pctEl.textContent = n + '%'; }
     if (etaEl) { etaEl.textContent = eta || ''; }
+  }
+
+  // durationSeconds parses pretty Duration tails (850ms, 4.2s, 25s, 1m05s).
+  function durationSeconds(meta) {
+    var s = String(meta || '').trim();
+    if (!s) { return 0; }
+    var m;
+    if ((m = /^(\d+(?:\.\d+)?)ms$/.exec(s))) { return 0; }
+    if ((m = /^(\d+(?:\.\d+)?)s$/.exec(s))) { return parseFloat(m[1]); }
+    if ((m = /^(\d+)m(\d{2})s$/.exec(s))) { return parseInt(m[1], 10) * 60 + parseInt(m[2], 10); }
+    if ((m = /^(\d+)h(\d{2})m$/.exec(s))) { return parseInt(m[1], 10) * 3600 + parseInt(m[2], 10) * 60; }
+    return 0;
+  }
+
+  // treeResourceKey turns "├─ ✔ mdblive-pg-1" into a stable coalesce id.
+  function treeResourceKey(plain) {
+    var body = String(plain || '').replace(/^[└├│─\s]+/, '').replace(/^[✔✖⚠○…▸–\s]+/, '').trim();
+    if (!body) { return ''; }
+    var cut = body.indexOf('  ');
+    if (cut > 0) { body = body.slice(0, cut); }
+    return 'tree:' + body.replace(/\s+$/, '');
   }
 
   // classifyJobLine turns a CLI/pretty stream line into a row kind the
@@ -801,13 +824,52 @@
     if (m) { return { kind: 'fail', text: 'fail', meta: (m[1] || '').trim() }; }
     m = /^\s{2}○\s+skip\b(.*)$/.exec(plain);
     if (m) { return { kind: 'plain', text: 'skip', meta: (m[1] || '').trim() }; }
+    if (/[█░]/.test(plain) && /%\b/.test(plain)) {
+      var p2 = /(\d{1,3})%\b/.exec(plain);
+      var e2 = /~([^\s]+)\s+left/.exec(plain) || /(estimating…)/.exec(plain);
+      return {
+        kind: 'progress',
+        text: plain.trim(),
+        pct: p2 ? parseInt(p2[1], 10) : null,
+        eta: e2 ? e2[0] : '',
+        coalesceKey: 'progress:' + plain.trim().replace(/\d+%?/g, '#')
+      };
+    }
+    if (/^[└├│─\s]+/.test(plain) && /[└├│]/.test(plain)) {
+      var treeBody = plain.replace(/^[└├│─\s]+/, '');
+      var treeKind = 'tree';
+      if (/^✖/.test(treeBody)) { treeKind = 'fail'; }
+      else if (/^⚠/.test(treeBody)) { treeKind = 'warn'; }
+      else if (/^✔/.test(treeBody) || /\bDone\b/i.test(treeBody)) { treeKind = 'done'; }
+      else if (/^[…▸⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]/.test(treeBody)) { treeKind = 'running'; }
+      var treeMeta = '';
+      var treePct = null;
+      var treeEta = '';
+      var tm = /\s{2,}(.+)$/.exec(treeBody);
+      if (tm) {
+        treeMeta = tm[1].trim();
+        var tpm = /(\d{1,3})%\b/.exec(treeMeta);
+        if (tpm) { treePct = parseInt(tpm[1], 10); }
+        var tem = /~([^\s]+)\s+left/.exec(treeMeta) || /(estimating…)/.exec(treeMeta);
+        if (tem) { treeEta = tem[0]; }
+      }
+      return {
+        kind: treeKind,
+        text: plain,
+        meta: treePct == null ? treeMeta : '',
+        pct: treePct,
+        eta: treeEta,
+        indent: true,
+        coalesceKey: treeResourceKey(plain)
+      };
+    }
     if (/^\s{6}\S/.test(plain) || /^\s{4,}\S/.test(plain)) {
       var detail = plain.replace(/^\s+/, '');
       var dk = 'tree';
       if (/^FAIL:/.test(detail) || /^✖/.test(detail)) { dk = 'fail'; }
       else if (/^⚠|SC\d{4}/.test(detail)) { dk = 'warn'; }
       else if (/^✓|pass\b/i.test(detail)) { dk = 'done'; }
-      return { kind: dk, text: detail, indent: true };
+      return { kind: dk, text: detail, indent: true, coalesceKey: treeResourceKey(detail) };
     }
     m = /^([✔✖⚠○…▸]|[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏])\s+(.+?)(?:\s{2,}(.+))?$/.exec(plain);
     if (m) {
@@ -829,19 +891,6 @@
       var dm = /\b(\d+(?:\.\d+)?(?:ms|s)|\d+m\d{2}s|\d+h\d{2}m)\b/.exec(rest);
       if (dm && pct == null) { dur = dm[1]; }
       return { kind: kind, text: label, meta: dur || rest, pct: pct, eta: eta, step: true };
-    }
-    if (/[█░]/.test(plain) && /%\b/.test(plain)) {
-      var p2 = /(\d{1,3})%\b/.exec(plain);
-      var e2 = /~([^\s]+)\s+left/.exec(plain) || /(estimating…)/.exec(plain);
-      return {
-        kind: 'progress',
-        text: plain,
-        pct: p2 ? parseInt(p2[1], 10) : null,
-        eta: e2 ? e2[0] : ''
-      };
-    }
-    if (/^[└├│─\s]+/.test(plain) && /[└├│]/.test(plain)) {
-      return { kind: 'tree', text: plain };
     }
     m = /^(Container|Service|Network|Volume)\s+(\S+)\s+(Restarting|Starting|Stopping|Started|Stopped|Created|Removed|Healthy|Running|Error|Failed)\b(.*)$/i.exec(plain);
     if (m) {
@@ -876,14 +925,44 @@
     return '';
   }
 
+  function findJobRow(out, key) {
+    if (!key || !out) { return null; }
+    if (jobActiveStep && jobActiveStep.getAttribute('data-job-key') === key) {
+      return jobActiveStep;
+    }
+    return out.querySelector('.mdb-job-line[data-job-key="' + key.replace(/"/g, '') + '"]');
+  }
+
+  function setRowProgress(row, pct, longRunning) {
+    if (!row) { return; }
+    var bar = row.querySelector('.mdb-job-row-bar');
+    if (pct == null && !longRunning) {
+      if (bar) { bar.remove(); }
+      return;
+    }
+    if (!bar) {
+      bar = el('div', { 'class': 'mdb-job-row-bar', role: 'progressbar', 'aria-valuemin': '0', 'aria-valuemax': '100' });
+      bar.appendChild(el('span'));
+      row.appendChild(bar);
+    }
+    var fill = bar.querySelector('span');
+    if (pct == null) {
+      bar.classList.remove('is-known');
+      bar.removeAttribute('aria-valuenow');
+      if (fill) { fill.style.width = ''; }
+      return;
+    }
+    var n = Math.min(100, Math.round(pct));
+    bar.classList.add('is-known');
+    bar.setAttribute('aria-valuenow', String(n));
+    if (fill) { fill.style.width = n + '%'; }
+  }
+
   function appendJobLine(parsed) {
     var out = drawerEl.querySelector('#mdb-job-output');
     if (!out || !parsed) { return; }
     var key = parsed.coalesceKey || (parsed.step ? parsed.text : null);
-    var row = null;
-    if (key && jobActiveStep && jobActiveStep.getAttribute('data-job-key') === key) {
-      row = jobActiveStep;
-    }
+    var row = findJobRow(out, key);
     if (!row) {
       row = el('div', { 'class': 'mdb-job-line' });
       row.appendChild(el('span', { 'class': 'mdb-job-mark' }));
@@ -892,7 +971,7 @@
       out.appendChild(row);
       if (key) {
         row.setAttribute('data-job-key', key);
-        jobActiveStep = row;
+        if (parsed.step || parsed.kind === 'running') { jobActiveStep = row; }
       }
     }
     row.className = 'mdb-job-line mdb-job-' + parsed.kind + (parsed.indent ? ' mdb-job-indent' : '');
@@ -909,13 +988,20 @@
     meta.textContent = parsed.meta || '';
     updateJobLineCount();
     if (parsed.kind === 'done' || parsed.kind === 'fail') {
-      jobActiveStep = null;
+      if (jobActiveStep === row) { jobActiveStep = null; }
+      setRowProgress(row, null, false);
     }
+    var longRunning = parsed.kind === 'running' && durationSeconds(parsed.meta) >= 3;
+    setRowProgress(row, parsed.pct, longRunning);
     if (parsed.pct != null) {
       setProgress(parsed.pct, parsed.eta, parsed.text);
     } else if (parsed.kind === 'running' && parsed.step) {
       var stepEl = drawerEl.querySelector('[data-job-step]');
       if (stepEl) { stepEl.textContent = parsed.text; }
+      // After 3s without a compose %, show the header bar as indeterminate.
+      if (longRunning) { setProgress(null, parsed.meta ? ('elapsed ' + parsed.meta) : '', parsed.text); }
+    } else if (parsed.kind === 'progress' && parsed.pct != null) {
+      setProgress(parsed.pct, parsed.eta, drawerEl.querySelector('[data-job-step]') && drawerEl.querySelector('[data-job-step]').textContent);
     }
   }
 

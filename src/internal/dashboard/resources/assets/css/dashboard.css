@@ -468,6 +468,32 @@
 .mdb-job-progress-line .mdb-job-mark {
   display: none;
 }
+/* Per-row bar for steps that run past 3s or report a compose %. */
+.mdb-job-row-bar {
+  grid-column: 1 / -1;
+  height: .28rem;
+  margin: .15rem 0 .05rem;
+  overflow: hidden;
+  border-radius: var(--tblr-border-radius);
+  background: rgba(88, 166, 255, .15);
+}
+.mdb-job-row-bar > span {
+  display: block;
+  height: 100%;
+  width: 35%;
+  background: #58a6ff;
+  border-radius: inherit;
+  animation: mdb-job-row-bar-indeterminate 1.2s ease-in-out infinite;
+}
+.mdb-job-row-bar.is-known > span {
+  width: 0;
+  animation: none;
+  transition: width .25s ease;
+}
+@keyframes mdb-job-row-bar-indeterminate {
+  0% { transform: translateX(-120%); }
+  100% { transform: translateX(320%); }
+}
 .mdb-job-spin {
   display: inline-block;
   width: .7rem;

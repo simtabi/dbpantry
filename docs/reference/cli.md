@@ -17,7 +17,7 @@ Phase 2 of the Go port (the refactor plan's §10) puts the binary in front of th
 | `--no-input` | Never prompt: a command that needs a typed confirmation and has no `--confirm` exits 7 without running anything |
 | `--no-color` | No colour (`NO_COLOR=1` for the scripts) |
 | `--plain` | Print the scripts' own output even on a terminal, with no step tree, progress bars or tables |
-| `--pretty` | Draw the step tree, progress bars and tables even when output is not a terminal (dashboard jobs, `less -R`). Off a terminal it streams one-line progress with percentage and ETA, then prints the final tree once |
+| `--pretty` | Draw the step tree, progress bars and tables even when output is not a terminal (dashboard jobs, `less -R`). Off a terminal it streams one-line progress with percentage and ETA (elapsed buckets every 3s when % is not yet known), streams nested tree lines as Compose reports them, prints each finished step as it completes, then prints the final tree once |
 | `-o FORMAT` | Per command. The formats are `table`, `plain`, `json`, `ndjson`, `csv`, `tsv` and `yaml`; a command refuses one it cannot write with exit 64. With `-o json` a failure is a JSON object on stderr: `{"error": {"code": "usage", "exit": 64, "message": "..."}}` |
 
 Abbreviations are refused (`dbpantry vers` exits 64), and so is an unknown subcommand. A typed confirmation is answered with `--confirm=<name>`, never with `--yes`. `secrets rotate --yes` is the one exception: it is the `make rotate-secrets YES=1` that already existed. Values printed in a table have terminal control sequences removed.

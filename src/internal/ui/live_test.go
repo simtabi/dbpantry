@@ -90,3 +90,61 @@ func TestLiveTerminalOnlyFinalIsNotEnough(t *testing.T) {
 		t.Fatalf("Stop = %q", got)
 	}
 }
+
+func TestLiveStreamsTreeLinesOffTerminal(t *testing.T) {
+	// Nested ├─ / └─ rows must stream mid-flight so the job drawer shows
+	// under-the-hood compose work before Stop.
+	var buf bytes.Buffer
+	var phase atomic.Int32
+	live := NewLive(&buf, false, func(int, time.Time) []string {
+		if phase.Load() == 0 {
+			return []string{"dbpantry › up", "… Start the stack"}
+		}
+		return []string{
+			"dbpantry › up",
+			"… Start the stack",
+			"├─ Containers",
+			"└─ … mdblive-pg-1",
+		}
+	})
+	live.SetSummary(func(int, time.Time) string { return "… Start the stack" })
+	live.Start()
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if strings.Contains(buf.String(), "Start the stack") {
+			break
+		}
+		time.Sleep(40 * time.Millisecond)
+	}
+	phase.Store(1)
+	deadline = time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if strings.Contains(buf.String(), "mdblive-pg-1") {
+			break
+		}
+		time.Sleep(40 * time.Millisecond)
+	}
+	live.Stop()
+	out := buf.String()
+	if !strings.Contains(out, "├─ Containers") || !strings.Contains(out, "mdblive-pg-1") {
+		t.Fatalf("expected nested tree mid-flight, got %q", out)
+	}
+}
+
+func TestStreamStableBucketsElapsedEveryThreeSeconds(t *testing.T) {
+	if streamStable("… Start the stack  1s") != streamStable("… Start the stack  2s") {
+		t.Fatal("sub-3s elapsed must share one stream key")
+	}
+	if streamStable("… Start the stack  3s") == streamStable("… Start the stack  1s") {
+		t.Fatal("3s elapsed must advance the stream so the drawer can show a progress bar")
+	}
+	if streamStable("… Start the stack  3s") != streamStable("… Start the stack  5s") {
+		t.Fatal("3s–5s must share the same 3s bucket")
+	}
+	if streamStable("… Start the stack  50%") == streamStable("… Start the stack  51%") {
+		t.Fatal("percentage changes must always stream")
+	}
+	if treeStreamKey("├─ ✔ mdblive-pg-1  1.0s") != "tree:mdblive-pg-1" {
+		t.Fatalf("treeStreamKey = %q", treeStreamKey("├─ ✔ mdblive-pg-1  1.0s"))
+	}
+}

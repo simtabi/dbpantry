@@ -612,7 +612,8 @@ func TestProjectsShowWhatTheEnginesSay(t *testing.T) {
 }
 
 // Job drawer markFor must not paint "·" on tree/plain rows — that was the
-// dotted left gutter beside ├─ / └─ lines (design.md D-105).
+// dotted left gutter beside ├─ / └─ lines (design.md D-105). Long steps also
+// get a row progress bar and coalesced tree keys for under-the-hood compose work.
 func TestJobDrawerMarkOmitsTreeDot(t *testing.T) {
 	js, err := os.ReadFile(filepath.Join("resources", "assets", "js", "manage.js")) // #nosec G304 -- fixed path in this package
 	if err != nil {
@@ -625,12 +626,21 @@ func TestJobDrawerMarkOmitsTreeDot(t *testing.T) {
 	if strings.Contains(src, "return '·'") || strings.Contains(src, `return "·"`) {
 		t.Error("markFor must not fall through to a middle-dot mark")
 	}
+	if !strings.Contains(src, "durationSeconds") || !strings.Contains(src, "treeResourceKey") || !strings.Contains(src, "mdb-job-row-bar") {
+		t.Error("drawer must parse elapsed ≥3s into a row progress bar and coalesce tree resources")
+	}
+	if !strings.Contains(src, ">= 3") {
+		t.Error("progress bars kick in after 3 seconds without waiting for Stop")
+	}
 	css, err := os.ReadFile(filepath.Join("resources", "assets", "css", "dashboard.css")) // #nosec G304 -- fixed path in this package
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !strings.Contains(string(css), ".mdb-job-tree .mdb-job-mark") || !strings.Contains(string(css), "display: none") {
 		t.Error("tree/plain rows must collapse the empty mark column in CSS")
+	}
+	if !strings.Contains(string(css), ".mdb-job-row-bar") {
+		t.Error("CSS must style per-row progress bars for long steps")
 	}
 }
 
