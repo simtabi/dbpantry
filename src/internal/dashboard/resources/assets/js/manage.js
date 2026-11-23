@@ -787,20 +787,59 @@
     var s = String(meta || '').trim();
     if (!s) { return 0; }
     var m;
-    if ((m = /^(\d+(?:\.\d+)?)ms$/.exec(s))) { return 0; }
+    if ((m = /^(\d+(?:\.\d+)?)ms$/.exec(s))) { return parseFloat(m[1]) / 1000; }
     if ((m = /^(\d+(?:\.\d+)?)s$/.exec(s))) { return parseFloat(m[1]); }
     if ((m = /^(\d+)m(\d{2})s$/.exec(s))) { return parseInt(m[1], 10) * 60 + parseInt(m[2], 10); }
     if ((m = /^(\d+)h(\d{2})m$/.exec(s))) { return parseInt(m[1], 10) * 3600 + parseInt(m[2], 10) * 60; }
     return 0;
   }
 
-  // treeResourceKey turns "├─ ✔ mdblive-pg-1" into a stable coalesce id.
-  function treeResourceKey(plain) {
-    var body = String(plain || '').replace(/^[└├│─\s]+/, '').replace(/^[✔✖⚠○…▸–\s]+/, '').trim();
-    if (!body) { return ''; }
-    var cut = body.indexOf('  ');
-    if (cut > 0) { body = body.slice(0, cut); }
-    return 'tree:' + body.replace(/\s+$/, '');
+  function metaDurationOnly(rest) {
+    var s = String(rest || '').trim();
+    if (!s) { return ''; }
+    var dm = /\b(\d+(?:\.\d+)?(?:ms|s)|\d+m\d{2}s|\d+h\d{2}m)\b/.exec(s);
+    return dm ? dm[1] : '';
+  }
+
+  // splitTreeLine → { branch, name, kind, meta, pct, eta } without duplicating
+  // status glyphs into both the mark column and the message.
+  function splitTreeLine(plain) {
+    var branchM = /^([ \t]*[└├]─?\s*)/.exec(plain);
+    var branch = branchM ? branchM[1] : '';
+    var rest = plain.slice(branch.length);
+    var iconM = /^([✔✖⚠○…▸–]|[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏])\s+/.exec(rest);
+    var icon = iconM ? iconM[1] : '';
+    if (iconM) { rest = rest.slice(iconM[0].length); }
+    var name = rest;
+    var tail = '';
+    var cut = rest.search(/\s{2,}/);
+    if (cut >= 0) {
+      name = rest.slice(0, cut).replace(/\s+$/, '');
+      tail = rest.slice(cut).trim();
+    }
+    name = name.replace(/\s+$/, '');
+    var kind = 'tree';
+    if (icon === '✖') { kind = 'fail'; }
+    else if (icon === '⚠') { kind = 'warn'; }
+    else if (icon === '✔') { kind = 'done'; }
+    else if (icon === '○' || icon === '–') { kind = 'plain'; }
+    else if (icon) { kind = 'running'; }
+    var pct = null;
+    var eta = '';
+    var pm = /(\d{1,3})%\b/.exec(tail);
+    if (pm) { pct = parseInt(pm[1], 10); }
+    var em = /~([^\s]+)\s+left/.exec(tail) || /(estimating…)/.exec(tail);
+    if (em) { eta = em[0]; }
+    return {
+      kind: kind,
+      text: (branch + name).replace(/\s+$/, ''),
+      meta: pct == null ? metaDurationOnly(tail) : '',
+      pct: pct,
+      eta: eta,
+      indent: true,
+      tree: true,
+      coalesceKey: 'tree:' + name
+    };
   }
 
   // classifyJobLine turns a CLI/pretty stream line into a row kind the
@@ -813,7 +852,6 @@
     if (/^dbpantry\s*[›>]/.test(plain) || (/^dbpantry\s/.test(plain) && plain.indexOf('·') >= 0)) {
       return { kind: 'title', text: plain.replace(/^dbpantry\s*[›>]?\s*/, 'dbpantry › ') };
     }
-    // Verify harness: → 01-name  description
     m = /^→\s+(\S+)\s{2,}(.*)$/.exec(plain) || /^→\s+(\S+)\s+(.*)$/.exec(plain);
     if (m) {
       return { kind: 'title', text: m[1], meta: (m[2] || '').trim(), step: true, coalesceKey: 'check:' + m[1] };
@@ -824,57 +862,35 @@
     if (m) { return { kind: 'fail', text: 'fail', meta: (m[1] || '').trim() }; }
     m = /^\s{2}○\s+skip\b(.*)$/.exec(plain);
     if (m) { return { kind: 'plain', text: 'skip', meta: (m[1] || '').trim() }; }
+    // ASCII progress bars drive the header only — never a clutter row of ░█.
     if (/[█░]/.test(plain) && /%\b/.test(plain)) {
       var p2 = /(\d{1,3})%\b/.exec(plain);
       var e2 = /~([^\s]+)\s+left/.exec(plain) || /(estimating…)/.exec(plain);
+      var counts = /(\d+)\s*\/\s*(\d+)/.exec(plain);
+      var pct = p2 ? parseInt(p2[1], 10) : null;
+      // 0% with 0 done is "not started yet" — keep the header indeterminate.
+      if (pct === 0 && counts && counts[1] === '0') { pct = null; }
       return {
         kind: 'progress',
-        text: plain.trim(),
-        pct: p2 ? parseInt(p2[1], 10) : null,
-        eta: e2 ? e2[0] : '',
-        coalesceKey: 'progress:' + plain.trim().replace(/\d+%?/g, '#')
+        silent: true,
+        pct: pct,
+        eta: e2 ? e2[0] : (pct == null ? 'estimating…' : '')
       };
     }
     if (/^[└├│─\s]+/.test(plain) && /[└├│]/.test(plain)) {
-      var treeBody = plain.replace(/^[└├│─\s]+/, '');
-      var treeKind = 'tree';
-      if (/^✖/.test(treeBody)) { treeKind = 'fail'; }
-      else if (/^⚠/.test(treeBody)) { treeKind = 'warn'; }
-      else if (/^✔/.test(treeBody) || /\bDone\b/i.test(treeBody)) { treeKind = 'done'; }
-      else if (/^[…▸⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]/.test(treeBody)) { treeKind = 'running'; }
-      var treeMeta = '';
-      var treePct = null;
-      var treeEta = '';
-      var tm = /\s{2,}(.+)$/.exec(treeBody);
-      if (tm) {
-        treeMeta = tm[1].trim();
-        var tpm = /(\d{1,3})%\b/.exec(treeMeta);
-        if (tpm) { treePct = parseInt(tpm[1], 10); }
-        var tem = /~([^\s]+)\s+left/.exec(treeMeta) || /(estimating…)/.exec(treeMeta);
-        if (tem) { treeEta = tem[0]; }
-      }
-      return {
-        kind: treeKind,
-        text: plain,
-        meta: treePct == null ? treeMeta : '',
-        pct: treePct,
-        eta: treeEta,
-        indent: true,
-        coalesceKey: treeResourceKey(plain)
-      };
+      return splitTreeLine(plain);
     }
     if (/^\s{6}\S/.test(plain) || /^\s{4,}\S/.test(plain)) {
       var detail = plain.replace(/^\s+/, '');
-      var dk = 'tree';
-      if (/^FAIL:/.test(detail) || /^✖/.test(detail)) { dk = 'fail'; }
-      else if (/^⚠|SC\d{4}/.test(detail)) { dk = 'warn'; }
-      else if (/^✓|pass\b/i.test(detail)) { dk = 'done'; }
-      return { kind: dk, text: detail, indent: true, coalesceKey: treeResourceKey(detail) };
+      if (/^[█░]/.test(detail) && /%\b/.test(detail)) {
+        return classifyJobLine(detail);
+      }
+      return splitTreeLine(plain.replace(/^\s+/, '├─ '));
     }
     m = /^([✔✖⚠○…▸]|[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏])\s+(.+?)(?:\s{2,}(.+))?$/.exec(plain);
     if (m) {
       var icon = m[1];
-      var label = m[2].trim();
+      var label = m[2].replace(/\s+$/, '').trim();
       var rest = (m[3] || '').trim();
       var kind = 'running';
       if (icon === '✔') { kind = 'done'; }
@@ -887,10 +903,15 @@
       if (pm) { pct = parseInt(pm[1], 10); }
       var em = /~([^\s]+)\s+left/.exec(rest) || /(estimating…)/.exec(rest);
       if (em) { eta = em[0]; }
-      var dur = '';
-      var dm = /\b(\d+(?:\.\d+)?(?:ms|s)|\d+m\d{2}s|\d+h\d{2}m)\b/.exec(rest);
-      if (dm && pct == null) { dur = dm[1]; }
-      return { kind: kind, text: label, meta: dur || rest, pct: pct, eta: eta, step: true };
+      if (pct === 0 && /\b0\s*\/\s*\d+/.test(rest)) { pct = null; }
+      return {
+        kind: kind,
+        text: label,
+        meta: pct == null ? metaDurationOnly(rest) : '',
+        pct: pct,
+        eta: eta,
+        step: true
+      };
     }
     m = /^(Container|Service|Network|Volume)\s+(\S+)\s+(Restarting|Starting|Stopping|Started|Stopped|Created|Removed|Healthy|Running|Error|Failed)\b(.*)$/i.exec(plain);
     if (m) {
@@ -900,10 +921,13 @@
         : 'running';
       return { kind: ck, text: m[1] + ' ' + m[2], meta: m[3] + (m[4] || ''), step: true, coalesceKey: m[1] + ' ' + m[2] };
     }
+    if (/^-{2,}\s*.+\s+said\s*-{2,}/.test(plain) || /^─+/.test(plain)) {
+      return { kind: 'title', text: plain.replace(/^─+\s*|\s*─+$/g, '').trim() };
+    }
     if (/^summary\b/i.test(plain) || /^\s*\d+\s+passed/.test(plain)) {
       return { kind: 'title', text: plain.trim() };
     }
-    if (/\b(error|failed|fatal)\b/i.test(plain)) {
+    if (/^\{.*"error"/.test(plain) || /\b(error|failed|fatal)\b/i.test(plain)) {
       return { kind: 'fail', text: plain };
     }
     if (/\b(warn(ing)?)\b/i.test(plain) || /^⚠/.test(plain)) {
@@ -917,11 +941,6 @@
     if (kind === 'fail') { return '✖'; }
     if (kind === 'warn') { return '⚠'; }
     if (kind === 'title') { return '›'; }
-    // Tree lines already carry ├─ / └─ / ✔ in the text; a mark column of
-    // "·" was the dotted left gutter in the job drawer (design.md D-105).
-    if (kind === 'tree' || kind === 'plain' || kind === 'progress' || kind === 'running') {
-      return '';
-    }
     return '';
   }
 
@@ -930,7 +949,11 @@
     if (jobActiveStep && jobActiveStep.getAttribute('data-job-key') === key) {
       return jobActiveStep;
     }
-    return out.querySelector('.mdb-job-line[data-job-key="' + key.replace(/"/g, '') + '"]');
+    try {
+      return out.querySelector('.mdb-job-line[data-job-key="' + CSS.escape(key) + '"]');
+    } catch (err) {
+      return out.querySelector('.mdb-job-line[data-job-key="' + key.replace(/"/g, '') + '"]');
+    }
   }
 
   function setRowProgress(row, pct, longRunning) {
@@ -958,9 +981,37 @@
     if (fill) { fill.style.width = n + '%'; }
   }
 
+  // settleJobRows flips leftover spinners when the job ends so a failed
+  // compose tree cannot keep animating under ✖ Start the stack.
+  function settleJobRows(asFail) {
+    var out = drawerEl && drawerEl.querySelector('#mdb-job-output');
+    if (!out) { return; }
+    out.querySelectorAll('.mdb-job-running').forEach(function (row) {
+      row.classList.remove('mdb-job-running');
+      row.classList.add(asFail ? 'mdb-job-fail' : 'mdb-job-done');
+      var mark = row.querySelector('.mdb-job-mark');
+      if (mark) {
+        mark.textContent = '';
+        mark.textContent = asFail ? '✖' : '✔';
+      }
+      setRowProgress(row, null, false);
+    });
+    out.querySelectorAll('.mdb-job-progress').forEach(function (row) { row.remove(); });
+    jobActiveStep = null;
+    updateJobLineCount();
+  }
+
   function appendJobLine(parsed) {
     var out = drawerEl.querySelector('#mdb-job-output');
     if (!out || !parsed) { return; }
+    if (parsed.silent || parsed.kind === 'progress') {
+      if (parsed.pct != null) {
+        setProgress(parsed.pct, parsed.eta, (drawerEl.querySelector('[data-job-step]') || {}).textContent || '');
+      } else if (parsed.eta) {
+        setProgress(null, parsed.eta, (drawerEl.querySelector('[data-job-step]') || {}).textContent || '');
+      }
+      return;
+    }
     var key = parsed.coalesceKey || (parsed.step ? parsed.text : null);
     var row = findJobRow(out, key);
     if (!row) {
@@ -974,7 +1025,9 @@
         if (parsed.step || parsed.kind === 'running') { jobActiveStep = row; }
       }
     }
-    row.className = 'mdb-job-line mdb-job-' + parsed.kind + (parsed.indent ? ' mdb-job-indent' : '');
+    row.className = 'mdb-job-line mdb-job-' + parsed.kind
+      + (parsed.indent || parsed.tree ? ' mdb-job-indent' : '')
+      + (parsed.tree ? ' mdb-job-tree-row' : '');
     var mark = row.querySelector('.mdb-job-mark');
     var msg = row.querySelector('.mdb-job-msg');
     var meta = row.querySelector('.mdb-job-meta');
@@ -991,17 +1044,16 @@
       if (jobActiveStep === row) { jobActiveStep = null; }
       setRowProgress(row, null, false);
     }
-    var longRunning = parsed.kind === 'running' && durationSeconds(parsed.meta) >= 3;
-    setRowProgress(row, parsed.pct, longRunning);
-    if (parsed.pct != null) {
-      setProgress(parsed.pct, parsed.eta, parsed.text);
+    var longRunning = parsed.kind === 'running' && parsed.step && durationSeconds(parsed.meta) >= 3;
+    if (parsed.kind === 'running' && parsed.step) {
+      setRowProgress(row, parsed.pct, longRunning);
+    }
+    if (parsed.pct != null && parsed.pct > 0) {
+      setProgress(parsed.pct, parsed.eta, parsed.step ? parsed.text : (drawerEl.querySelector('[data-job-step]') || {}).textContent || '');
     } else if (parsed.kind === 'running' && parsed.step) {
       var stepEl = drawerEl.querySelector('[data-job-step]');
       if (stepEl) { stepEl.textContent = parsed.text; }
-      // After 3s without a compose %, show the header bar as indeterminate.
       if (longRunning) { setProgress(null, parsed.meta ? ('elapsed ' + parsed.meta) : '', parsed.text); }
-    } else if (parsed.kind === 'progress' && parsed.pct != null) {
-      setProgress(parsed.pct, parsed.eta, drawerEl.querySelector('[data-job-step]') && drawerEl.querySelector('[data-job-step]').textContent);
     }
   }
 
@@ -1033,9 +1085,15 @@
     var wrap = progressWrap();
     if (wrap) {
       wrap.classList.remove('d-none', 'is-done', 'is-fail');
-      if (job.state === 'succeeded') { wrap.classList.add('is-done'); setProgress(100, '', 'Finished'); }
-      else if (job.state === 'failed' || job.state === 'cancelled') { wrap.classList.add('is-fail'); setProgress(100, '', job.state === 'cancelled' ? 'Aborted' : 'Failed'); }
-      else if (job.state === 'paused') { setProgress(null, '', 'Paused'); }
+      if (job.state === 'succeeded') {
+        wrap.classList.add('is-done');
+        setProgress(100, '', 'Finished');
+        settleJobRows(false);
+      } else if (job.state === 'failed' || job.state === 'cancelled') {
+        wrap.classList.add('is-fail');
+        setProgress(100, '', job.state === 'cancelled' ? 'Aborted' : 'Failed');
+        settleJobRows(true);
+      } else if (job.state === 'paused') { setProgress(null, '', 'Paused'); }
       else { setProgress(null); }
       if (job.state !== 'running' && job.state !== 'paused' && job.state !== 'succeeded' && job.state !== 'failed' && job.state !== 'cancelled') {
         wrap.classList.add('d-none');
