@@ -185,8 +185,9 @@ func TestFailedStepStaysSettledAfterAWatchRefresh(t *testing.T) {
 	sc.update(func() { stack.Start(now) })
 	stop := sc.watch(func() {
 		g := &ui.Node{Label: "Containers", State: ui.Running}
-		g.Add("mdb-pg-1", ui.Done).Status = "Healthy"
-		mysql := g.Add("mdb-mysql-1", ui.Running)
+		// stackview pads names so the status column lines up.
+		g.Add(ui.Pad("mdb-pg-1", 16), ui.Done).Status = "Healthy"
+		mysql := g.Add(ui.Pad("mdb-mysql-1", 16), ui.Running)
 		mysql.Detail, mysql.Status = "Waiting", "Waiting"
 		mysql.Started = now
 		stack.Children = []*ui.Node{g}
@@ -226,6 +227,23 @@ func TestFailedStepStaysSettledAfterAWatchRefresh(t *testing.T) {
 	}
 	if last.Failure == nil || last.Failure.Service != "mysql" {
 		t.Errorf("the failure points at the unhealthy service's log: %+v", last.Failure)
+	}
+}
+
+func TestNamesTokenMatchesWholeContainerNames(t *testing.T) {
+	for _, c := range []struct {
+		s, name string
+		want    bool
+	}{
+		{"container mdb-mysql-1 is unhealthy", "mdb-mysql-1", true},
+		{"container mdb-pg-10 is unhealthy", "mdb-pg-1", false},
+		{"dependency failed to start: mdb-pg-1.", "mdb-pg-1", true},
+		{"xmdb-pg-1 exited", "mdb-pg-1", false},
+		{"anything", "", false},
+	} {
+		if got := namesToken(c.s, c.name); got != c.want {
+			t.Errorf("namesToken(%q, %q) = %v", c.s, c.name, got)
+		}
 	}
 }
 
