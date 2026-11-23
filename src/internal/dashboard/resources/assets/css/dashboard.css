@@ -258,7 +258,6 @@
   background: rgba(0, 0, 0, .2);
 }
 .mdb-job-console-title { font-weight: 600; color: #c9d1d9; letter-spacing: .02em; text-transform: uppercase; }
-.mdb-job-indent .mdb-job-msg { padding-left: 1rem; color: #8b949e; }
 .mdb-job-progress-wrap {
   padding: .5rem 1rem .65rem;
   border-bottom: 1px solid var(--tblr-border-color);
@@ -408,17 +407,18 @@
 /* Structured job stream: step rows coalesce spinner frames; colours mark state. */
 .mdb-job-viewer {
   white-space: normal;
-  padding: .5rem 0;
+  padding: .85rem 0 1.1rem;
   display: flex;
   flex-direction: column;
-  gap: 0;
+  gap: .15rem;
+  line-height: 1.45;
 }
 .mdb-job-line {
   display: grid;
-  grid-template-columns: 1.5rem minmax(0, 1fr) auto;
-  gap: .55rem;
-  align-items: start;
-  padding: .28rem 1rem;
+  grid-template-columns: 1.35rem minmax(0, 1fr) auto;
+  gap: .45rem .65rem;
+  align-items: center;
+  padding: .4rem 1.1rem;
   border-left: 3px solid transparent;
   color: #c9d1d9;
   animation: mdb-job-line-in .18s ease-out;
@@ -426,22 +426,28 @@
 .mdb-job-line:hover { background: rgba(255, 255, 255, .04); }
 .mdb-job-mark {
   font-weight: 700;
-  line-height: 1.45;
+  line-height: 1.2;
   text-align: center;
+  width: 1.35rem;
 }
 .mdb-job-msg {
   white-space: pre-wrap;
   word-break: break-word;
   min-width: 0;
   font-family: var(--tblr-font-monospace);
-  font-size: .78rem;
+  font-size: .8rem;
+  line-height: 1.45;
 }
 .mdb-job-meta {
   color: #8b949e;
   font-family: var(--tblr-font-monospace);
   font-size: .72rem;
   white-space: nowrap;
-  padding-top: .1rem;
+  line-height: 1.45;
+}
+.mdb-job-indent .mdb-job-msg {
+  padding-left: .15rem;
+  color: #a8b3bf;
 }
 .mdb-job-running { border-left-color: #3d8bfd; }
 .mdb-job-running .mdb-job-mark { color: #58a6ff; }
@@ -451,21 +457,25 @@
 .mdb-job-fail .mdb-job-mark { color: #f0705a; }
 .mdb-job-warn { border-left-color: #e6b350; background: rgba(230, 179, 80, .06); }
 .mdb-job-warn .mdb-job-mark { color: #e6b350; }
-.mdb-job-title { border-left-color: #7fbcc8; color: #e6edf3; font-weight: 600; }
+.mdb-job-title {
+  border-left-color: #7fbcc8;
+  color: #e6edf3;
+  font-weight: 600;
+  margin-top: .35rem;
+  padding-top: .55rem;
+  padding-bottom: .55rem;
+}
 .mdb-job-title .mdb-job-mark { color: #7fbcc8; }
-.mdb-job-progress-line { border-left-color: #3d8bfd; color: #8b949e; }
-.mdb-job-tree { border-left-color: #30363d; color: #8b949e; }
-.mdb-job-plain { border-left-color: #30363d; }
-/* Tree/plain rows already carry ├─ / └─ in the message; hide the empty
-   mark column so the drawer does not keep a dotted gutter (D-105). */
 .mdb-job-tree,
-.mdb-job-plain,
-.mdb-job-progress-line {
+.mdb-job-tree-row { border-left-color: #30363d; }
+.mdb-job-plain { border-left-color: #30363d; }
+/* Group/plain rows with no status glyph: collapse the empty mark column. */
+.mdb-job-tree:not(.mdb-job-running):not(.mdb-job-done):not(.mdb-job-fail):not(.mdb-job-warn),
+.mdb-job-plain {
   grid-template-columns: minmax(0, 1fr) auto;
 }
-.mdb-job-tree .mdb-job-mark,
-.mdb-job-plain .mdb-job-mark,
-.mdb-job-progress-line .mdb-job-mark {
+.mdb-job-tree:not(.mdb-job-running):not(.mdb-job-done):not(.mdb-job-fail):not(.mdb-job-warn) .mdb-job-mark,
+.mdb-job-plain .mdb-job-mark {
   display: none;
 }
 /* Per-row bar for steps that run past 3s or report a compose %. */

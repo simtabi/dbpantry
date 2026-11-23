@@ -94,6 +94,29 @@ func TestTreeDrawsBranchesStatesAndTimes(t *testing.T) {
 	}
 }
 
+func TestAbandonRunningStopsSpinnersUnderAFailedStep(t *testing.T) {
+	now := time.Now()
+	root := &Node{Label: "Start the stack", State: Failed, Started: now.Add(-2 * time.Second), Ended: now}
+	group := root.Add("Containers", Running)
+	leaf := group.Add("mdb-mysql-1", Running)
+	leaf.Detail = "Waiting"
+	leaf.Progress = &Progress{Done: 0, Total: 1, Started: now}
+	root.AbandonRunning(now)
+	if group.State != Failed || leaf.State != Failed {
+		t.Fatalf("running descendants must become failed, got group=%v leaf=%v", group.State, leaf.State)
+	}
+	if leaf.Progress != nil {
+		t.Fatal("abandoned leaves must drop progress so Stop cannot draw a 0% bar")
+	}
+	got := strings.Join((Style{}).Tree([]*Node{root}, 0, 0, now), "\n")
+	if strings.ContainsAny(got, "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏") || strings.Contains(got, "…") {
+		t.Fatalf("failed tree must not keep spinners:\n%s", got)
+	}
+	if !strings.Contains(got, "✖ mdb-mysql-1") {
+		t.Fatalf("abandoned leaf should show ✖:\n%s", got)
+	}
+}
+
 func TestTreeTruncatesToWidth(t *testing.T) {
 	n := &Node{Label: strings.Repeat("x", 50), State: Done}
 	for _, l := range (Style{Color: true}).Tree([]*Node{n}, 20, 0, time.Now()) {

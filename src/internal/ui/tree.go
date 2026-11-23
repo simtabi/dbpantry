@@ -40,6 +40,26 @@ func (n *Node) Finish(st State, detail string, now time.Time) {
 	}
 }
 
+// AbandonRunning marks every still-running or pending descendant as failed so
+// a Stop frame after an error does not keep spinning under a failed parent
+// (dashboard job drawer was left with live spinners after ✖ Start the stack).
+func (n *Node) AbandonRunning(now time.Time) {
+	if n == nil {
+		return
+	}
+	for _, c := range n.Children {
+		switch c.State {
+		case Running, Pending:
+			c.State, c.Ended = Failed, now
+			c.Progress = nil
+			if c.Detail == "" {
+				c.Detail = "stopped"
+			}
+		}
+		c.AbandonRunning(now)
+	}
+}
+
 // Tree draws nodes as an indented tree, one string per line, at most width
 // cells each (0 for no limit). frame animates the spinners.
 func (s Style) Tree(nodes []*Node, width, frame int, now time.Time) []string {

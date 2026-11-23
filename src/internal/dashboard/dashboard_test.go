@@ -636,14 +636,14 @@ func TestJobDrawerMarkOmitsTreeDot(t *testing.T) {
 		t.Fatal(err)
 	}
 	src := string(js)
-	if !strings.Contains(src, "kind === 'tree' || kind === 'plain'") {
-		t.Error("markFor must treat tree/plain as mark-less (D-105 job drawer)")
-	}
 	if strings.Contains(src, "return '·'") || strings.Contains(src, `return "·"`) {
 		t.Error("markFor must not fall through to a middle-dot mark")
 	}
-	if !strings.Contains(src, "durationSeconds") || !strings.Contains(src, "treeResourceKey") || !strings.Contains(src, "mdb-job-row-bar") {
-		t.Error("drawer must parse elapsed ≥3s into a row progress bar and coalesce tree resources")
+	if !strings.Contains(src, "durationSeconds") || !strings.Contains(src, "splitTreeLine") || !strings.Contains(src, "settleJobRows") {
+		t.Error("drawer must split tree lines, settle leftover spinners, and parse elapsed")
+	}
+	if !strings.Contains(src, "silent: true") || !strings.Contains(src, "mdb-job-row-bar") {
+		t.Error("ASCII progress bars must update the header silently; long steps keep a row bar")
 	}
 	if !strings.Contains(src, ">= 3") {
 		t.Error("progress bars kick in after 3 seconds without waiting for Stop")
@@ -652,11 +652,14 @@ func TestJobDrawerMarkOmitsTreeDot(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(css), ".mdb-job-tree .mdb-job-mark") || !strings.Contains(string(css), "display: none") {
-		t.Error("tree/plain rows must collapse the empty mark column in CSS")
+	if !strings.Contains(string(css), ".mdb-job-tree-row") || !strings.Contains(string(css), ".mdb-job-plain .mdb-job-mark") {
+		t.Error("tree-row / plain CSS must keep status marks without a dotted gutter")
 	}
 	if !strings.Contains(string(css), ".mdb-job-row-bar") {
 		t.Error("CSS must style per-row progress bars for long steps")
+	}
+	if !strings.Contains(string(css), "padding: .85rem 0 1.1rem") {
+		t.Error("job viewer must keep comfortable top/bottom padding")
 	}
 }
 

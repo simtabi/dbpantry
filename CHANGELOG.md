@@ -69,6 +69,9 @@ waiving them.
   tall inline card. Live refresh skips while any offcanvas or modal is open.
 
 ### Fixed
+- **Job drawer kept spinning after fail and painted a dead 0% bar.** Failed steps abandon
+  running children; the drawer settles leftover spinners, strips double ✔ from tree rows,
+  drives the header from ASCII bars without dumping ░ rows, and tightens line spacing.
 - **Pretty CLI tree looked padded and dotted (D-105).** Removed the left gutter and title blank,
   dropped the continuing `│` column under nested steps, and tightened blanks between the tree,
   Connect table and Next hints so `up` / `down` / `project new` read flush and natural. Done

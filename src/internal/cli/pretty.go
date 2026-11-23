@@ -208,12 +208,17 @@ func (s *screen) run(ctx context.Context, root string, env []string, node *ui.No
 	label, started := node.Label, node.Started
 	if err != nil {
 		node.Finish(ui.Failed, "", ended)
+		// Stop unfinished compose children so the final tree (and drawer)
+		// cannot keep spinning under a failed step.
+		node.AbandonRunning(ended)
+		node.Progress = nil
 	} else {
 		node.Finish(ui.Done, "", ended)
+		node.Progress = nil
 	}
 	s.mu.Unlock()
 	// Off a terminal, print the finished step so the drawer flips the
-	// spinner to ✔ immediately. Stop still prints the full tree once; the
+	// spinner to ✔/✖ immediately. Stop still prints the full tree once; the
 	// drawer coalesces by label. Nested under-the-hood rows stream from Live.
 	if !s.live.Terminal() {
 		icon := s.st.Icon(ui.Done, 0)
