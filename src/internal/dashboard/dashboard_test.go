@@ -33,7 +33,7 @@ func fixture(context.Context) (Snapshot, error) {
 		Extensions: map[string][]string{"pg": {"vector"}},
 		Images:     []Image{{Ref: "localhost/dbpantry-pg:17", Size: "1.2GB", Created: "2 hours ago"}},
 		Endpoints: endpoint.Document{Publish: "none", Profiles: []string{"pg", "ui"}, Endpoints: []endpoint.Endpoint{
-			{Engine: "pg", Title: "PostgreSQL", Enabled: true, TLSAlways: true, Direct: endpoint.Access{Network: endpoint.Address{Host: "pg", Port: 5432}}},
+			{Engine: "pg", Title: "PostgreSQL", Enabled: true, TLSAlways: true, RotateSecrets: true, Direct: endpoint.Access{Network: endpoint.Address{Host: "pg", Port: 5432}}},
 		}},
 		Services: []Service{{Name: "pg", Health: "healthy", State: "running", Image: "localhost/dbpantry-pg:17", Started: time.Now().Add(-time.Hour)}, {Name: "caddy", Health: "none"}},
 		Projects: []Project{{Engine: "pg", Name: "settings", Owner: "settings_user", Readonly: "settings_user_readonly", OwnerSecret: "secrets/pg_settings_user_password.txt"}}, // #nosec G101 -- a file path, not a credential
@@ -151,7 +151,7 @@ func TestDashboardServes(t *testing.T) {
 	for path, want := range map[string]string{
 		"/services": "localhost/dbpantry-pg:17", "/images": "1.2GB", "/engines": "Details and principals",
 		"/engines/pg": "vector", "/projects": "settings_user_readonly", "/backups": "pg_settings_20261117T000000Z.dump",
-		"/connect": "How to connect", "/operations": "Rotate every password", "/config": "Configuration",
+		"/connect": "How to connect", "/operations": "Rotate passwords", "/config": "Configuration",
 		"/status": "Live badge legend", "/jobs": "No jobs yet", "/services/pg/logs": `data-logs="pg"`,
 		"/help": "Documentation", "/about": "MIT License",
 		"/databases": "Provision wizard", "/addons": "mdb-addon-wizard", "/system": "This machine",
@@ -197,6 +197,15 @@ func TestDashboardServes(t *testing.T) {
 	}
 	if strings.Contains(eng, `mdb-addon-engine-head`) {
 		t.Error("compact add-on manage on the engine page must not repeat the engine head")
+	}
+	if !strings.Contains(eng, `data-action="secrets.rotate" data-params="{&#34;engine&#34;:&#34;pg&#34;}"`) || !strings.Contains(eng, `data-action="secrets.rotate" data-params="{&#34;engine&#34;:&#34;&#34;}"`) {
+		t.Error("Principals must offer rotating this engine's passwords and every engine's")
+	}
+	if !strings.Contains(eng, `data-cmd-shortcut`) || !strings.Contains(eng, `aria-keyshortcuts="Meta+K Control+K /"`) || strings.Contains(eng, `title="Search pages and actions (⌘K)"`) {
+		t.Error("the header search trigger names its shortcuts for the platform and carries no tooltip repeating its label")
+	}
+	if n := strings.Count(eng, `data-bs-target="#mdb-engine-addons"`); n != 1 {
+		t.Errorf("engine page opens Add-ons from %d places; one trigger is enough", n)
 	}
 	if !strings.Contains(eng, `mdb-engine-hero`) || !strings.Contains(eng, `mdb-engine-addr-list`) || !strings.Contains(eng, `mdb-engine-addr-row`) {
 		t.Error("engine page must use the hero status strip and compact address rows")
@@ -535,6 +544,12 @@ func TestEnginesSayWhetherTheyRun(t *testing.T) {
 	}
 	if b := body(t, serve(t, stopped, nil, "/engines/pg", "")); !strings.Contains(b, `data-action="stack.up"`) || !strings.Contains(b, `&#34;profiles&#34;:`) {
 		t.Error("stopped engine page must offer Start the stack with profiles prefills")
+	}
+	if b := body(t, serve(t, stopped, nil, "/engines/pg", "")); strings.Count(b, `data-action="stack.up"`) != 1 {
+		t.Errorf("stopped engine page offers Start %d times; the page header is the one place", strings.Count(b, `data-action="stack.up"`))
+	}
+	if b := body(t, serve(t, stopped, nil, "/engines/pg", "")); !strings.Contains(b, "Start PostgreSQL first") || strings.Contains(b, `&#34;engine&#34;:&#34;pg&#34;}" data-bs-toggle="tooltip" data-bs-placement="top" title="Rotate passwords`) {
+		t.Error("a stopped engine's Rotate button must be disabled with the reason, since rotation needs the database up")
 	}
 	if b := body(t, serve(t, stopped, nil, "/engines", "")); strings.Contains(b, "stretched-link") {
 		t.Error("engine cards must not use stretched-link (it fights the ⋮ menu)")

@@ -55,6 +55,7 @@ what one means, increments it, and a consumer must refuse a version newer than i
 | `root_secret`, `root_secret_file` | `_ROOT_SECRET` | the file name under `secrets/` and its path in a container, `/run/secrets/…`; never a value |
 | `principals` | `_ROOT_SECRET` | `[{role: admin, password_file}]`; see [Principals](#principals) |
 | `auth_method`, `auth_off_by_default_upstream`, `tls_always` | `_AUTH_METHOD`, `_AUTH_OFF_BY_DEFAULT_UPSTREAM`, `_TLS_ALWAYS` | |
+| `rotate_secrets` | `_ROTATE_SECRETS` | `true` when `scripts/rotate-secrets --engine` can change this engine's passwords live; the dashboard offers per-engine rotation only then |
 | `pooling`, `pooler` | `_POOLING`, `_POOLER_*` | `pooler` exists only when `gen-compose` generates one: external pooling, an image, and a `compose-pooler.yml` |
 | `pooler.superuser` | — | always `false`: pgBouncer's auth query excludes superusers and ProxySQL mirrors every user except `root` |
 | `implemented`, `buildable` | `_PUBLISH`, `images/<engine>/Dockerfile` | `implemented` is `engine_implemented`; `buildable` is what `scripts/ci-matrix` builds |

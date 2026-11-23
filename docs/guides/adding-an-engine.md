@@ -55,6 +55,7 @@ MDB_ENGINE_BACKUP_EXT=rdb
 
 MDB_ENGINE_AUTH_METHOD=requirepass
 MDB_ENGINE_TLS_ALWAYS=false
+# MDB_ENGINE_ROTATE_SECRETS=true once scripts/rotate-secrets can ALTER its passwords
 
 MDB_ENGINE_POOLING=driver
 MDB_ENGINE_POOLING_RATIONALE='clients multiplex over one connection'

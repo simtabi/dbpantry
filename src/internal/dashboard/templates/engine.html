@@ -40,37 +40,21 @@
   </div>
 </div>
 <div class="page-body"><div class="container-xl">
+  {{/* The page header already carries the title, status and the primary Start; the hero only explains the state. */}}
   <div class="card mdb-engine-hero mb-3 {{if eq $st "running"}}mdb-engine-hero-ok{{else if eq $st "stopped"}}mdb-engine-hero-stopped{{else if eq $st "orphan"}}mdb-engine-hero-orphan{{else}}mdb-engine-hero-off{{end}}">
-    <div class="card-body">
-      <div class="row align-items-center g-3">
-        <div class="col-lg">
-          <div class="text-secondary small text-uppercase fw-semibold mb-1">Engine status</div>
-          <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
-            <span class="fs-3 fw-bold mb-0">{{$e.Title}}</span>
-            {{template "engine-status" $st}}
-          </div>
-          {{if $running}}
-          <p class="text-secondary mb-0">Running on <code class="mdb-mono">{{$e.Direct.Network.Host}}:{{$e.Direct.Network.Port}}</code>. Projects and add-ons can talk to it now.</p>
-          {{else if $e.Enabled}}
-          <p class="text-secondary mb-0">In <code class="mdb-mono">MDB_PROFILES</code>, but the container is not up — nothing answers until you start the stack.</p>
-          {{else}}
-          <p class="text-secondary mb-0">Not in the profiles. Start with this engine to enable it and bring the stack up.</p>
-          {{end}}
-        </div>
-        <div class="col-lg-auto">
-          <div class="btn-list">
-            {{if $running}}
-            <a href="/connect" class="btn">{{icon "plug"}} How to connect</a>
-            <button type="button" class="btn" data-bs-toggle="offcanvas" data-bs-target="#mdb-engine-addons" aria-controls="mdb-engine-addons" title="Poolers, extensions and UIs for {{$e.Title}}">{{icon "layers"}} Add-ons <span class="badge bg-primary-lt ms-1">{{$addonOn}}/{{$addonTotal}}</span></button>
-            {{else if $e.Enabled}}
-            {{actionButton . "stack.up" "Start the stack" (print "profiles=" (join $s.Endpoints.Profiles ",")) "class=btn-primary btn-lg" "icon=play"}}
-            <button type="button" class="btn" data-bs-toggle="offcanvas" data-bs-target="#mdb-engine-addons" aria-controls="mdb-engine-addons" title="Poolers, extensions and UIs for {{$e.Title}}">{{icon "layers"}} Add-ons <span class="badge bg-secondary-lt ms-1">{{$addonOn}}/{{$addonTotal}}</span></button>
-            {{else}}
-            {{actionButton . "stack.up" (print "Start with " $e.Engine) (print "profiles=" (profilesWith $s.Endpoints.Profiles $e.Engine)) "class=btn-primary btn-lg" "icon=play"}}
-            <a href="/config" class="btn">Profiles</a>
-            {{end}}
-          </div>
-        </div>
+    <div class="card-body d-flex flex-wrap align-items-center gap-3">
+      <div class="flex-fill min-w-0">
+        {{if $running}}
+        <p class="mb-0">Running on <code class="mdb-mono">{{$e.Direct.Network.Host}}:{{$e.Direct.Network.Port}}</code>. Projects and add-ons can talk to it now.</p>
+        {{else if $e.Enabled}}
+        <p class="mb-0">In <code class="mdb-mono">MDB_PROFILES</code>, but the container is not up, so nothing answers until you start the stack.</p>
+        {{else}}
+        <p class="mb-0">Not in <code class="mdb-mono">MDB_PROFILES</code>. Start with this engine to enable it and bring the stack up.</p>
+        {{end}}
+      </div>
+      <div class="btn-list flex-nowrap">
+        <button type="button" class="btn" data-bs-toggle="offcanvas" data-bs-target="#mdb-engine-addons" aria-controls="mdb-engine-addons" title="Poolers, extensions and UIs for {{$e.Title}}">{{icon "layers"}} Add-ons <span class="badge {{if $addonOn}}bg-primary-lt{{else}}bg-secondary-lt{{end}} ms-1">{{$addonOn}}/{{$addonTotal}}</span></button>
+        {{if not $e.Enabled}}<a href="/config" class="btn" title="Choose which engines MDB_PROFILES starts">Profiles</a>{{end}}
       </div>
     </div>
   </div>
@@ -121,16 +105,15 @@
         <div class="card-header">
           <h3 class="card-title">Projects on {{$e.Title}}</h3>
           <div class="card-actions btn-list">
-            <button type="button" class="btn btn-sm" data-bs-toggle="offcanvas" data-bs-target="#mdb-engine-addons" aria-controls="mdb-engine-addons" title="Poolers, extensions and UIs · {{$addonOn}}/{{$addonTotal}} on">{{icon "layers"}} Add-ons <span class="badge bg-secondary-lt">{{$addonOn}}/{{$addonTotal}}</span></button>
             {{if $running}}{{actionButton $page "project.new" "New" (print "engine=" $e.Engine) "class=btn-sm btn-primary" "icon=plus"}}{{end}}
           </div>
         </div>
         {{with $s.ProjectsOn $e.Engine}}
         <div class="list-group list-group-flush list-group-hoverable flex-fill">
           {{range .}}{{if eq .State "orphaned"}}
-          <a href="/projects" class="list-group-item list-group-item-action d-flex align-items-center" title="Only password files remain"><span class="avatar avatar-sm me-3">{{icon "folders"}}</span><div class="min-w-0"><div class="fw-medium text-truncate">{{.Name}}</div><div class="text-secondary small mdb-mono text-truncate">{{.Owner}}</div></div><span class="ms-auto me-2">{{template "project-state" .}}</span></a>
+          <a href="/projects" class="list-group-item list-group-item-action d-flex align-items-center" title="Only password files remain"><span class="avatar mdb-avatar-round bg-azure-lt text-azure me-3" aria-hidden="true">{{icon "folders"}}</span><div class="min-w-0"><div class="fw-medium text-truncate">{{.Name}}</div><div class="text-secondary small mdb-mono text-truncate">{{.Owner}}</div></div><span class="ms-auto me-2">{{template "project-state" .}}</span></a>
           {{else}}
-          <a href="/projects/{{.Engine}}/{{.Name}}" class="list-group-item list-group-item-action d-flex align-items-center"><span class="avatar avatar-sm me-3">{{icon "folders"}}</span><div class="min-w-0"><div class="fw-medium text-truncate">{{.Name}}</div><div class="text-secondary small mdb-mono text-truncate">{{.Owner}}</div></div><span class="ms-auto me-2">{{template "project-state" .}}</span><span class="text-secondary small d-none d-xl-inline">Details →</span></a>
+          <a href="/projects/{{.Engine}}/{{.Name}}" class="list-group-item list-group-item-action d-flex align-items-center"><span class="avatar mdb-avatar-round bg-azure-lt text-azure me-3" aria-hidden="true">{{icon "folders"}}</span><div class="min-w-0"><div class="fw-medium text-truncate">{{.Name}}</div><div class="text-secondary small mdb-mono text-truncate">{{.Owner}}</div></div><span class="ms-auto me-2">{{template "project-state" .}}</span><span class="text-secondary small d-none d-xl-inline">Details →</span></a>
           {{end}}{{end}}
         </div>
         {{else}}
@@ -141,7 +124,22 @@
 
     <div class="col-12">
       <div class="card">
-        <div class="card-header"><h3 class="card-title">Principals</h3><div class="card-actions text-secondary small">passwords live in the files named here</div></div>
+        <div class="card-header">
+          <div>
+            <h3 class="card-title">Principals</h3>
+            <div class="card-subtitle text-secondary small mb-0">Passwords live in the files named here, never in the page.</div>
+          </div>
+          {{if $e.RotateSecrets}}
+          <div class="card-actions btn-list">
+            {{if $running}}
+            {{actionButton $page "secrets.rotate" (print "Rotate " $e.Title " passwords") (print "engine=" $e.Engine) "class=btn-sm" "icon=key"}}
+            {{else}}
+            <span class="d-inline-block" tabindex="0" data-bs-toggle="tooltip" title="Start {{$e.Title}} first: rotation changes the password inside the running database, then the file."><button type="button" class="btn btn-sm" disabled>{{icon "key"}} Rotate {{$e.Title}} passwords</button></span>
+            {{end}}
+            {{actionButton $page "secrets.rotate" "Rotate all engines" "engine=" "class=btn-sm" "icon=refresh"}}
+          </div>
+          {{end}}
+        </div>
         <div class="table-responsive">
           <table class="table table-vcenter card-table mb-0">
             <thead><tr><th>Role</th><th>User</th><th>Password file (in the container)</th></tr></thead>

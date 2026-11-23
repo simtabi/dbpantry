@@ -6,7 +6,7 @@
   cursor: default;
 }
 .mdb-header-chip-icon {
-  width: 1.75rem;
+  width: var(--mdb-control-h);
   padding: 0;
   justify-content: center;
   color: var(--tblr-primary);
@@ -364,7 +364,7 @@
   display: inline-flex;
   align-items: center;
   gap: .35rem;
-  height: 1.75rem;
+  height: var(--mdb-control-h);
   padding: 0 .65rem;
   margin: 0;
   border: 1px solid transparent;
@@ -983,15 +983,28 @@ html[data-bs-theme="dark"] [data-dbpantry-splash] {
 
 /* Command palette (⌘K) */
 .mdb-cmd-trigger {
+  height: var(--mdb-control-h);
+  padding: 0 .4rem 0 .65rem;
+  font-size: .8125rem;
+  color: var(--tblr-secondary);
   cursor: pointer;
   background: var(--tblr-bg-surface-secondary);
   border: 1px solid var(--tblr-border-color);
-  height: 2rem;
+  border-radius: var(--mdb-control-radius);
+  transition: border-color .15s, color .15s, box-shadow .15s;
 }
 .mdb-cmd-trigger:hover {
   border-color: var(--tblr-primary);
   color: var(--tblr-body-color);
 }
+.mdb-cmd-trigger:focus-visible {
+  outline: 0;
+  border-color: var(--tblr-primary);
+  box-shadow: 0 0 0 .2rem color-mix(in srgb, var(--tblr-primary) 25%, transparent);
+}
+.mdb-cmd-trigger-icon { display: inline-flex; flex: 0 0 auto; }
+.mdb-cmd-trigger-icon .icon { width: 1rem; height: 1rem; }
+.mdb-cmd-trigger .mdb-cmd-kbd { background: var(--tblr-bg-surface); }
 .mdb-cmd-kbd {
   font-size: .7rem;
   font-weight: 600;
@@ -1207,12 +1220,12 @@ body.mdb-page-busy #mdb-job { z-index: 1055; }
   line-height: 1.4;
   color: var(--tblr-body-color);
   background: var(--tblr-bg-surface-secondary);
-  border-radius: 0;
+  border-radius: var(--tblr-border-radius);
 }
 .mdb-job-cmd code::before { content: "$ "; color: var(--mdb-dim); }
 .mdb-job-cmd code:empty { display: none; }
 .mdb-job-cmd code:empty + .btn { display: none; }
-.mdb-job-locked-pill { margin-top: .15rem; white-space: nowrap; border-radius: 0; }
+.mdb-job-locked-pill { margin-top: .15rem; white-space: nowrap; }
 
 /* Facts: a row of label/value cells divided by hairlines. */
 .mdb-job-facts {
@@ -1267,7 +1280,7 @@ body.mdb-page-busy #mdb-job { z-index: 1055; }
   display: grid;
   grid-auto-columns: minmax(0, 1fr);
   grid-auto-flow: column;
-  gap: .25rem;
+  gap: .25rem .75rem;
   padding: .75rem 1.25rem .8rem;
   border-bottom: 1px solid var(--mdb-rule);
 }
@@ -1348,15 +1361,13 @@ body.mdb-page-busy #mdb-job { z-index: 1055; }
   color: var(--mdb-err);
   background: var(--tblr-bg-surface);
   border: 1px solid color-mix(in srgb, var(--mdb-err) 25%, transparent);
-  border-radius: 0;
+  border-radius: var(--tblr-border-radius);
 }
 .mdb-job-banner-actions { display: flex; flex-wrap: wrap; gap: .4rem; flex: 0 0 auto; }
 .mdb-job-banner-actions .btn svg { margin-right: .3rem; }
 
 /* Toolbar + filter bar. */
 .mdb-panel .mdb-job-toolbar { padding: .6rem 1.25rem; gap: .5rem; }
-.mdb-panel .btn,
-.mdb-panel .btn-group > .btn { border-radius: 0; }
 .mdb-job-views .btn.active { background: var(--tblr-body-color); color: var(--tblr-bg-surface); border-color: var(--tblr-body-color); }
 .mdb-job-console { background: var(--tblr-bg-surface); min-height: 0; }
 .mdb-job-console-bar {
@@ -1648,4 +1659,45 @@ body.mdb-page-busy #mdb-job { z-index: 1055; }
   .mdb-run-indet::after,
   .mdb-job-seg-bar.is-indeterminate > span,
   .mdb-run-tag.is-running::before { animation: none; }
+}
+
+/* One control size and one corner radius for every button. .btn-sm draws the
+   same as .btn; only .btn-lg is bigger, for the rare call to action that needs it. */
+:root {
+  --mdb-control-h: 2rem;
+  --mdb-control-radius: var(--tblr-border-radius);
+}
+.btn,
+.btn-sm,
+.btn-group-sm > .btn {
+  --tblr-btn-padding-y: .25rem;
+  --tblr-btn-padding-x: .75rem;
+  --tblr-btn-font-size: .8125rem;
+  --tblr-btn-line-height: 1.25;
+  --tblr-btn-border-radius: var(--mdb-control-radius);
+  min-height: var(--mdb-control-h);
+  border-radius: var(--mdb-control-radius);
+}
+.btn .icon { width: 1rem; height: 1rem; }
+.btn-lg {
+  --tblr-btn-padding-x: 1.25rem;
+  --tblr-btn-font-size: .9375rem;
+  min-height: 2.5rem;
+}
+.btn-icon,
+.btn-sm.btn-icon {
+  min-width: var(--mdb-control-h);
+  --tblr-btn-padding-x: 0;
+}
+.btn-group > .btn:not(:last-child):not(.dropdown-toggle) { border-top-right-radius: 0; border-bottom-right-radius: 0; }
+.btn-group > .btn:not(:first-child) { border-top-left-radius: 0; border-bottom-left-radius: 0; }
+
+/* Icon avatars are circles with room around the glyph. */
+.avatar:has(> .icon),
+.mdb-avatar-round {
+  border-radius: 50%;
+}
+.avatar > .icon {
+  width: 55%;
+  height: 55%;
 }

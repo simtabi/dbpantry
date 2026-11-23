@@ -60,15 +60,17 @@ type Access struct {
 
 // Endpoint is everything a client needs to connect to one engine.
 type Endpoint struct {
-	Engine     string             `json:"engine"`
-	Title      string             `json:"title"`
-	Family     string             `json:"family"`
-	Enabled    bool               `json:"enabled"`
-	TLSAlways  bool               `json:"tls_always"`
-	BootBudget int                `json:"boot_budget_seconds"`
-	Direct     Access             `json:"direct"`
-	Pooled     *Access            `json:"pooled"`
-	Principals []engine.Principal `json:"principals"`
+	Engine    string `json:"engine"`
+	Title     string `json:"title"`
+	Family    string `json:"family"`
+	Enabled   bool   `json:"enabled"`
+	TLSAlways bool   `json:"tls_always"`
+	// RotateSecrets: scripts/rotate-secrets --engine can rotate this engine.
+	RotateSecrets bool               `json:"rotate_secrets"`
+	BootBudget    int                `json:"boot_budget_seconds"`
+	Direct        Access             `json:"direct"`
+	Pooled        *Access            `json:"pooled"`
+	Principals    []engine.Principal `json:"principals"`
 }
 
 // Document is the endpoints output.
@@ -148,7 +150,7 @@ func Resolve(m engine.Manifest, s *config.Settings, o Options) (Document, error)
 		upper := strings.ToUpper(strings.ReplaceAll(e.Name, "-", "_"))
 		ep := Endpoint{
 			Engine: e.Name, Title: e.Title, Family: e.Family, Enabled: on(e.Name),
-			TLSAlways: e.TLSAlways, BootBudget: e.BootBudget,
+			TLSAlways: e.TLSAlways, RotateSecrets: e.RotateSecrets, BootBudget: e.BootBudget,
 			Direct:     Access{Network: Address{e.Name, e.Port}, Superuser: true, Enabled: on(e.Name)},
 			Principals: adminUser(s, upper, append([]engine.Principal(nil), e.Principals...)),
 		}
