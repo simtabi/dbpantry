@@ -82,6 +82,26 @@ func TestScreenDrawIsFlushLeft(t *testing.T) {
 	}
 }
 
+// Off a terminal (--pretty for dashboard jobs) the title and finished steps
+// must appear only in Stop's final tree — not once mid-flight and again at the end.
+func TestScreenOffTTYPrintsTreeOnce(t *testing.T) {
+	var buf bytes.Buffer
+	a := &app{stdout: &buf, environ: func() []string { return nil }, pretty: true, noColor: true}
+	sc := a.newScreen("down", "data volumes are kept")
+	n := sc.add("Stop the stack")
+	n.Finish(ui.Done, "", time.Now())
+	sc.start()
+	time.Sleep(50 * time.Millisecond)
+	sc.stop()
+	out := buf.String()
+	if c := strings.Count(out, "dbpantry"); c != 1 {
+		t.Fatalf("title must print once on Stop, got %d in %q", c, out)
+	}
+	if c := strings.Count(out, "Stop the stack"); c != 1 {
+		t.Fatalf("finished step must print once with the final tree, got %d in %q", c, out)
+	}
+}
+
 func TestStyleHonoursNoColor(t *testing.T) {
 	a := &app{environ: func() []string { return []string{"NO_COLOR=1"} }}
 	if a.style().Color {

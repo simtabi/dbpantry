@@ -133,13 +133,9 @@ func (s *screen) summary(frame int, now time.Time) string {
 }
 
 func (s *screen) start() {
-	if !s.live.Terminal() {
-		head := s.st.Bold(s.st.Cyan("dbpantry")) + s.st.Dim(" › ") + s.st.Bold(s.title)
-		if len(s.facts) > 0 {
-			head += "  " + s.st.Dim(strings.Join(s.facts, " · "))
-		}
-		_, _ = fmt.Fprintln(s.a.stdout, head)
-	}
+	// Off a terminal the title and finished steps appear once in Stop's
+	// final tree. Printing them here (and again in run via Print) made the
+	// job drawer show every line twice beside a column of "·" marks.
 	s.live.Start()
 }
 
@@ -212,19 +208,9 @@ func (s *screen) run(ctx context.Context, root string, env []string, node *ui.No
 	} else {
 		node.Finish(ui.Done, "", ended)
 	}
-	label, started := node.Label, node.Started
 	s.mu.Unlock()
-	if !s.live.Terminal() {
-		icon := s.st.Icon(ui.Done, 0)
-		if err != nil {
-			icon = s.st.Icon(ui.Failed, 0)
-		}
-		detail := ""
-		if !started.IsZero() {
-			detail = "  " + s.st.Dim(ui.Duration(ended.Sub(started)))
-		}
-		s.live.Print(icon + " " + label + detail)
-	}
+	// Off a terminal, do not Print the finished step: Stop redraws the full
+	// tree once. Mid-flight progress is the Live summary line only.
 	if err != nil {
 		return all.String(), err
 	}

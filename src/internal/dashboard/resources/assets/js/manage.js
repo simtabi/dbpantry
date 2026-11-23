@@ -868,9 +868,12 @@
     if (kind === 'fail') { return '✖'; }
     if (kind === 'warn') { return '⚠'; }
     if (kind === 'title') { return '›'; }
-    if (kind === 'progress') { return '·'; }
-    if (kind === 'running') { return ''; }
-    return '·';
+    // Tree lines already carry ├─ / └─ / ✔ in the text; a mark column of
+    // "·" was the dotted left gutter in the job drawer (design.md D-105).
+    if (kind === 'tree' || kind === 'plain' || kind === 'progress' || kind === 'running') {
+      return '';
+    }
+    return '';
   }
 
   function appendJobLine(parsed) {
