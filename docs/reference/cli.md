@@ -85,7 +85,7 @@ These follow the table dbpantry shares with mesobia (refactor plan §7). Codes 2
 | `down`, `status` | `scripts/runtime down`, `status` | `down`, `status` |
 | `logs [SERVICE…] [--follow] [--tail N]` | `scripts/runtime logs -f --tail=100` | `logs` |
 | `restart SERVICE…` | `scripts/runtime restart` (Compose: `compose restart`; other backends refuse it by name) | none |
-| `endpoints [-o table\|json]` | the binary (phase 1) | `endpoints` |
+| `endpoints [-o table\|json]` | the binary (phase 1); the table's PROFILE column is `enabled` or `disabled` ([statuses](../guides/statuses.md)) | `endpoints` |
 | `dashboard [--listen ADDR] [--auth token\|password\|none] [--allow-destroy] [--tls-cert F --tls-key F]` | the binary: the web dashboard, `127.0.0.1:8484` by default; every action runs one of these commands as a job (`GET /api/v1/actions`, Help in the UI; full write-up in the checkout's `docs/reference/api.md`) | `dashboard` |
 | `api token create NAME [--scope read\|operate\|admin] [--expires DUR]`, `api token ls`, `api token revoke NAME\|ID` | the binary: API tokens for the dashboard API, stored as SHA-256 in `api-tokens.json` in the instance home | none |
 | `forward [SERVICE…]` | `scripts/runtime forward` | none |

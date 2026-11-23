@@ -1011,3 +1011,28 @@ func TestEngineOrphanStatus(t *testing.T) {
 		// redis-style off (no container) is only asserted when present; muted class is the off mark.
 	}
 }
+
+func TestHelpExplainsEveryStatus(t *testing.T) {
+	help := body(t, serve(t, fixture, nil, "/help", ""))
+	if !strings.Contains(help, `id="statuses"`) {
+		t.Fatal("Help has no status guide (id=statuses)")
+	}
+	for _, g := range StateGuide {
+		if !strings.Contains(help, `id="statuses-`+g.ID+`"`) {
+			t.Errorf("Help's status guide has no %s section", g.ID)
+		}
+		for _, st := range g.States {
+			if !strings.Contains(help, ">"+st.Label+"</span>") {
+				t.Errorf("Help's status guide does not show the %s badge %q", g.ID, st.Label)
+			}
+		}
+	}
+	for _, path := range []string{"/", "/engines"} {
+		if b := body(t, serve(t, fixture, nil, path, "")); !strings.Contains(b, `href="/help#statuses-engine"`) {
+			t.Errorf("%s does not link the engine status guide", path)
+		}
+	}
+	if b := body(t, serve(t, fixture, nil, "/status", "")); !strings.Contains(b, `href="/help#statuses"`) || !strings.Contains(b, "Three refreshes failed in a row") {
+		t.Error("/status's Live legend must come from the status guide and link it")
+	}
+}

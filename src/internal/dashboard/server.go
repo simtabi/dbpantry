@@ -764,9 +764,12 @@ var funcs = template.FuncMap{
 			return "off"
 		}
 	},
-	"join": strings.Join,
-	"base": filepath.Base,
-	"path": filepath.Join,
+	"stateOf":    stateOf,
+	"stateGuide": func() []StateGroup { return StateGuide },
+	"stateGroup": stateGroup,
+	"join":       strings.Join,
+	"base":       filepath.Base,
+	"path":       filepath.Join,
 	"upper": func(s string) string {
 		return strings.ToUpper(strings.ReplaceAll(s, "-", "_"))
 	},

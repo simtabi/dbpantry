@@ -102,6 +102,10 @@ func (a *app) endpointsCmd() *cobra.Command {
 host port it is published on (MDB_PUBLISH=direct or proxy), its pooled endpoint
 when it has a pooler, its boot budget, and its principals as password-file paths.
 
+PROFILE says whether the engine is in MDB_PROFILES (enabled) or not (disabled);
+whether its container runs is dbpantry status. docs/guides/statuses.md explains
+how the two make the dashboard's running, stopped, leftover and disabled.
+
 Superusers cannot authenticate through either pooler, so admin work uses the
 direct endpoint ("superuser": false on every pooled one).`,
 		Args: cobra.NoArgs,
@@ -176,7 +180,7 @@ func fixtureEnv(m engine.Manifest, s *config.Settings) ([]string, int, error) {
 
 func writeEndpointsTable(a *app, doc endpoint.Document) error {
 	tw := tabwriter.NewWriter(a.stdout, 0, 0, 2, ' ', 0)
-	_, _ = fmt.Fprintln(tw, "ENGINE\tENABLED\tNETWORK\tPUBLISHED\tPOOLED\tBOOT BUDGET")
+	_, _ = fmt.Fprintln(tw, "ENGINE\tPROFILE\tNETWORK\tPUBLISHED\tPOOLED\tBOOT BUDGET")
 	for _, e := range doc.Endpoints {
 		pub, pooled := "-", "-"
 		if p := e.Direct.Published; p != nil {
@@ -189,8 +193,12 @@ func writeEndpointsTable(a *app, doc endpoint.Document) error {
 			}
 		}
 		// Every value is sanitised before it reaches the terminal (N19).
-		_, _ = fmt.Fprintf(tw, "%s\t%t\t%s:%d\t%s\t%s\t%ds\n",
-			sanitize(e.Engine), e.Enabled, sanitize(e.Direct.Network.Host), e.Direct.Network.Port, sanitize(pub), sanitize(pooled), e.BootBudget)
+		profile := "disabled"
+		if e.Enabled {
+			profile = "enabled"
+		}
+		_, _ = fmt.Fprintf(tw, "%s\t%s\t%s:%d\t%s\t%s\t%ds\n",
+			sanitize(e.Engine), profile, sanitize(e.Direct.Network.Host), e.Direct.Network.Port, sanitize(pub), sanitize(pooled), e.BootBudget)
 	}
 	return tw.Flush()
 }

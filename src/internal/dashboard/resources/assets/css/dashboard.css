@@ -1701,3 +1701,10 @@ body.mdb-page-busy #mdb-job { z-index: 1055; }
   width: 55%;
   height: 55%;
 }
+
+/* Help › What the statuses mean. */
+.mdb-state-table { table-layout: fixed; }
+.mdb-state-table td { vertical-align: top; }
+.mdb-state-table th:first-child { width: 8rem; }
+.mdb-state-table th:nth-child(2) { width: 55%; }
+.mdb-state-group:target { background: var(--tblr-primary-lt); transition: background .6s; }

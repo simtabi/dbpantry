@@ -92,7 +92,10 @@ stays open (close, Escape and backdrop are blocked) so progress keeps
 streaming; a reload warns and re-opens the job from `sessionStorage` if it is
 still running; the confirm modal likewise stays put until the action has
 started. The Live badge pauses or resumes the five-second refresh and shows
-**Live / Paused / Retrying / Disconnected** by colour (design.md D-92). Add-ons
+**Live / Paused / Retrying / Disconnected** by colour (design.md D-92). Every
+badge the dashboard draws (engine, health, project, job, Live) is explained,
+with what to do next, in [What the statuses mean](statuses.md) and on
+**Help › What the statuses mean**. Add-ons
 and Databases keep Live off so the wizards keep their step and form state.
 The header shows a stats dropdown (services / engines / images) beside Live, plus
 a notifications bell; Back uses history when it can; the page-header

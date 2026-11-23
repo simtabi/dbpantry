@@ -87,8 +87,11 @@ func (a *app) statusCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "status",
 		Short: "Show service status",
-		Args:  cobra.NoArgs,
-		RunE:  func(c *cobra.Command, _ []string) error { return a.runSteps(c, script("scripts/runtime", "status")) },
+		Long: `Show every container of the stack, its state and its health check
+(scripts/runtime status). The dashboard draws the same facts as badges; what
+each one means, and what to do about it, is in docs/guides/statuses.md.`,
+		Args: cobra.NoArgs,
+		RunE: func(c *cobra.Command, _ []string) error { return a.runSteps(c, script("scripts/runtime", "status")) },
 	}
 }
 
