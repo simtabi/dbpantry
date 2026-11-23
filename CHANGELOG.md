@@ -102,6 +102,10 @@ waiving them.
   tall inline card. Live refresh skips while any offcanvas or modal is open.
 
 ### Fixed
+- **One failed convergence left MySQL, MariaDB and PostgreSQL unhealthy for good (D-109).**
+  The converge-failed marker survived restarts, and nothing removed it, so the healthcheck kept refusing
+  after a later start converged. Each convergence stage now clears it first; check 80 guards it. Rebuild
+  the images (`make build`) to pick it up.
 - **Job drawer kept spinning after fail and painted a dead 0% bar.** Failed steps abandon
   running children; the drawer settles leftover spinners, strips double ✔ from tree rows,
   drives the header from ASCII bars without dumping ░ rows, and tightens line spacing.
