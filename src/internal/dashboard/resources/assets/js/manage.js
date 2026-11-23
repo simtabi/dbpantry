@@ -835,9 +835,9 @@
     if (!box) { return; }
     box.textContent = '';
     var add = function (k, v, cls) {
-      var f = el('div', { 'class': 'mdb-job-fact' });
-      f.appendChild(el('div', { 'class': 'mdb-job-fact-k' }, k));
-      var val = el('div', { 'class': 'mdb-job-fact-v' + (cls ? ' ' + cls : '') });
+      var f = el('div', { 'class': 'datagrid-item' });
+      f.appendChild(el('div', { 'class': 'datagrid-title' }, k));
+      var val = el('div', { 'class': 'datagrid-content' + (cls ? ' ' + cls : '') });
       if (v && v.nodeType) { val.appendChild(v); } else { val.textContent = v || '—'; }
       f.appendChild(val);
       box.appendChild(f);
@@ -861,20 +861,25 @@
     }
   }
 
+  // statusTag is the job's state as the same badge the Jobs table and the
+  // health column use: a light Tabler badge with a status dot.
   function statusTag(job) {
-    var t = el('span', { 'class': 'mdb-run-tag' });
     var p = runProgress();
+    var tone = 'secondary', text = 'Starting…', live = false;
     switch (job.state) {
       case 'running':
-        t.className += ' is-running';
-        t.textContent = 'Running' + (p ? ' · ' + p.pct + '%' : '') + (p && p.eta ? ' · ETA ' + fmtDur(p.eta * 1000) : '');
+        tone = 'azure'; live = true;
+        text = 'Running' + (p ? ' · ' + p.pct + '%' : '') + (p && p.eta ? ' · ETA ' + fmtDur(p.eta * 1000) : '');
         break;
-      case 'paused': t.className += ' is-paused'; t.textContent = 'Paused'; break;
-      case 'succeeded': t.className += ' is-done'; t.textContent = 'Succeeded · exit 0'; break;
-      case 'cancelled': t.className += ' is-warn'; t.textContent = 'Aborted'; break;
-      case 'failed': t.className += ' is-fail'; t.textContent = 'Failed · exit ' + (job.exit_code || 1); break;
-      default: t.textContent = 'Starting…';
+      case 'paused': tone = 'yellow'; text = 'Paused'; break;
+      case 'succeeded': tone = 'green'; text = 'Succeeded · exit 0'; break;
+      case 'cancelled': tone = 'yellow'; text = 'Aborted'; break;
+      case 'failed': tone = 'red'; text = 'Failed · exit ' + (job.exit_code || 1); break;
+      default: live = true;
     }
+    var t = el('span', { 'class': 'badge bg-' + tone + '-lt mdb-run-tag text-nowrap' });
+    t.appendChild(el('span', { 'class': 'status-dot status-' + tone + ' me-1' + (live ? ' status-dot-animated' : '') }));
+    t.appendChild(document.createTextNode(text));
     return t;
   }
 
@@ -934,27 +939,32 @@
     box.textContent = '';
     box.className = 'mdb-job-banner d-none';
     var job = currentJob || {};
+    var icon = function (paths) {
+      var i = el('span', { 'aria-hidden': 'true' });
+      i.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" class="icon alert-icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' + paths + '</svg>';
+      return i.firstChild;
+    };
     if (job.state === 'failed') {
       var f = (run && run.failure) || null;
-      box.className = 'mdb-job-banner is-fail';
+      box.className = 'alert alert-danger mdb-job-banner is-fail';
+      box.appendChild(icon('<path d="M12 9v4"/><path d="M10.363 3.591l-8.106 13.534a1.914 1.914 0 0 0 1.636 2.871h16.214a1.914 1.914 0 0 0 1.636 -2.87l-8.106 -13.536a1.914 1.914 0 0 0 -3.274 0z"/><path d="M12 16h.01"/>'));
       var text = el('div', { 'class': 'mdb-job-banner-text' });
       var kicker = 'Failed';
       if (f && f.index) { kicker += ' at step ' + f.index + ' · ' + f.step; }
-      text.appendChild(el('div', { 'class': 'mdb-panel-kicker' }, kicker));
+      text.appendChild(el('div', { 'class': 'subheader text-danger' }, kicker));
       var headline = (f && f.headline) || lastRawIssue() || ('exit ' + (job.exit_code || 1));
-      text.appendChild(el('h4', { 'class': 'mdb-job-banner-title' }, headline));
+      text.appendChild(el('h4', { 'class': 'alert-heading mdb-job-banner-title' }, headline));
       var why = 'The run stopped and exited with code ' + (job.exit_code || (f && f.exit) || 1) + '.';
       if (f && f.index && run.steps[f.index - 1]) {
         var c = counts(run.steps[f.index - 1].children);
         if (c.notStarted) { why += ' ' + plural(c.notStarted, 'waiting resources') + (c.notStarted === 1 ? ' was' : ' were') + ' not started.'; }
         if (c.stopped) { why += ' ' + plural(c.stopped, 'resources') + (c.stopped === 1 ? ' was' : ' were') + ' stopped mid-way.'; }
       }
-      text.appendChild(el('p', { 'class': 'mdb-job-banner-body' }, why));
+      text.appendChild(el('div', { 'class': 'alert-description' }, why));
       if (f && f.lines && f.lines.length) {
         text.appendChild(el('code', { 'class': 'mdb-job-banner-code' }, f.what + ' → ' + lastErrorLine(f.lines)));
       }
-      box.appendChild(text);
-      var acts = el('div', { 'class': 'mdb-job-banner-actions' });
+      var acts = el('div', { 'class': 'btn-list mt-2' });
       var retry = el('button', { type: 'button', 'class': 'btn btn-primary btn-sm', 'data-job-retry': '', title: 'Run the same command again' });
       retry.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg> Retry';
       acts.appendChild(retry);
@@ -964,22 +974,26 @@
         logs.appendChild(document.createTextNode(f.service + ' logs'));
         acts.appendChild(logs);
       }
-      box.appendChild(acts);
+      text.appendChild(acts);
+      box.appendChild(text);
       return;
     }
     if (job.state === 'cancelled') {
-      box.className = 'mdb-job-banner is-warn';
+      box.className = 'alert alert-warning mdb-job-banner is-warn';
+      box.appendChild(icon('<path d="M3 12a9 9 0 1 0 18 0a9 9 0 0 0 -18 0"/><path d="M12 8v4"/><path d="M12 16h.01"/>'));
       var t2 = el('div', { 'class': 'mdb-job-banner-text' });
-      t2.appendChild(el('h4', { 'class': 'mdb-job-banner-title' }, 'Aborted'));
-      t2.appendChild(el('p', { 'class': 'mdb-job-banner-body' }, 'Stopped by an operator. Restart runs the same command again.'));
+      t2.appendChild(el('h4', { 'class': 'alert-heading mdb-job-banner-title' }, 'Aborted'));
+      t2.appendChild(el('div', { 'class': 'alert-description' }, 'Stopped by an operator. Restart runs the same command again.'));
       box.appendChild(t2);
       return;
     }
     if (job.state === 'succeeded') {
-      box.className = 'mdb-job-banner is-done';
+      box.className = 'alert alert-success mdb-job-banner is-done';
+      box.appendChild(icon('<path d="M5 12l5 5l10 -10"/>'));
+      var t3 = el('div', { 'class': 'mdb-job-banner-text' });
       var titles = { up: 'Stack is up', down: 'Stack is down', 'project new': 'Project provisioned' };
       var head = (run && titles[run.title]) || (jobTitle(job) + ' finished');
-      box.appendChild(el('h4', { 'class': 'mdb-job-banner-title' }, head));
+      t3.appendChild(el('h4', { 'class': 'alert-heading mdb-job-banner-title' }, head));
       var bits = [];
       var last = run && run.steps && run.steps[run.steps.length - 1];
       if (last && last.detail) { bits.push(last.detail); }
@@ -988,7 +1002,8 @@
         var published = run.connect.filter(function (r) { return !!r.host; }).length;
         bits.push(published ? published + ' published to this machine' : 'nothing published to this machine');
       }
-      if (bits.length) { box.appendChild(el('span', { 'class': 'mdb-job-banner-sub' }, bits.join(' · '))); }
+      if (bits.length) { t3.appendChild(el('div', { 'class': 'alert-description' }, bits.join(' · '))); }
+      box.appendChild(t3);
     }
   }
 

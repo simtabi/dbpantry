@@ -1178,102 +1178,39 @@ body.mdb-page-busy #mdb-job { z-index: 1055; }
   --mdb-mono: var(--tblr-font-monospace, ui-monospace, "SF Mono", Menlo, monospace);
 }
 .mdb-panel .offcanvas-body { min-height: 0; }
-.mdb-panel-head {
-  display: flex;
-  align-items: flex-start;
-  gap: .75rem;
-  padding: 1.1rem 1.25rem 1rem;
-  border-bottom: 1px solid var(--mdb-rule);
-  background: var(--tblr-bg-surface);
-}
+/* Panel header: Tabler offcanvas-header + subheader + offcanvas-title,
+   shared by the job, status and add-on panels (kicker: Tabler .subheader). */
+.mdb-panel-head { align-items: flex-start; gap: .75rem; padding: 1rem 1.25rem; background: var(--tblr-bg-surface); }
 .mdb-panel-head-text { flex: 1 1 auto; min-width: 0; }
-.mdb-panel-head .btn-close { margin-top: .15rem; }
-.mdb-panel-kicker {
-  font-size: .6875rem;
-  font-weight: 700;
-  letter-spacing: .08em;
-  text-transform: uppercase;
-  color: var(--mdb-dim);
-  line-height: 1.2;
-  margin-bottom: .3rem;
-}
-.mdb-panel-title {
-  font-size: 1.25rem;
-  font-weight: 800;
-  letter-spacing: -.01em;
-  line-height: 1.25;
-  margin: 0;
-}
-.mdb-panel-note { margin-top: .3rem; font-size: .8125rem; color: var(--mdb-dim); line-height: 1.4; }
-.mdb-job-cmd {
-  display: flex;
-  align-items: center;
-  gap: .25rem;
-  margin-top: .4rem;
-  min-width: 0;
-}
+.mdb-panel-head .subheader { margin-bottom: .25rem; }
+.mdb-panel-head .btn-close { margin: .125rem 0 0; }
+.mdb-panel-title { font-size: 1.125rem; font-weight: var(--tblr-font-weight-bold); line-height: 1.4; }
+.mdb-panel-note { margin-top: .25rem; font-size: .8125rem; color: var(--tblr-secondary); line-height: 1.4; }
+.mdb-job-cmd { display: flex; align-items: center; gap: .25rem; margin-top: .5rem; min-width: 0; }
 .mdb-job-cmd code {
   display: block;
   min-width: 0;
-  padding: .2rem .5rem;
+  padding: .25rem .5rem;
   font-size: .8125rem;
   line-height: 1.4;
   color: var(--tblr-body-color);
-  background: var(--tblr-bg-surface-secondary);
-  border-radius: var(--tblr-border-radius);
+  background: var(--tblr-bg-surface-tertiary);
+  border: var(--tblr-border-width) solid var(--tblr-border-color);
+  border-radius: var(--mdb-control-radius);
 }
-.mdb-job-cmd code::before { content: "$ "; color: var(--mdb-dim); }
+.mdb-job-cmd code::before { content: "$ "; color: var(--tblr-secondary); }
 .mdb-job-cmd code:empty { display: none; }
 .mdb-job-cmd code:empty + .btn { display: none; }
 .mdb-job-locked-pill { margin-top: .15rem; white-space: nowrap; }
 
-/* Facts: a row of label/value cells divided by hairlines. */
+/* Facts: Tabler datagrid, packed tighter for a side panel. */
 .mdb-job-facts {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(8.5rem, 1fr));
-  border-bottom: 1px solid var(--mdb-rule);
+  --tblr-datagrid-item-width: 7.5rem;
+  --tblr-datagrid-padding: 1rem;
+  padding: .875rem 1.25rem;
+  border-bottom: var(--tblr-border-width) solid var(--tblr-border-color);
 }
-.mdb-job-fact {
-  padding: .65rem 1.25rem .7rem;
-  border-right: 1px solid var(--mdb-rule);
-  min-width: 0;
-}
-.mdb-job-fact:last-child { border-right: 0; }
-.mdb-job-fact-k {
-  font-size: .6875rem;
-  font-weight: 700;
-  letter-spacing: .08em;
-  text-transform: uppercase;
-  color: var(--mdb-dim);
-  margin-bottom: .2rem;
-}
-.mdb-job-fact-v {
-  font-size: .875rem;
-  font-weight: 600;
-  line-height: 1.35;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.mdb-run-tag {
-  display: inline-flex;
-  align-items: center;
-  gap: .35rem;
-  font-size: .75rem;
-  font-weight: 700;
-  line-height: 1.5;
-  padding: 0 .5rem;
-  color: var(--mdb-dim);
-  background: var(--tblr-bg-surface-secondary);
-}
-.mdb-run-tag::before { content: ""; width: .45rem; height: .45rem; background: currentColor; }
-.mdb-run-tag.is-running { color: var(--mdb-info); background: color-mix(in srgb, var(--mdb-info) 12%, transparent); }
-.mdb-run-tag.is-running::before { animation: mdb-run-blink 1s steps(2, start) infinite; }
-.mdb-run-tag.is-done { color: var(--mdb-ok); background: color-mix(in srgb, var(--mdb-ok) 12%, transparent); }
-.mdb-run-tag.is-fail { color: var(--mdb-err); background: color-mix(in srgb, var(--mdb-err) 12%, transparent); }
-.mdb-run-tag.is-warn,
-.mdb-run-tag.is-paused { color: var(--mdb-warn); background: color-mix(in srgb, var(--mdb-warn) 14%, transparent); }
-@keyframes mdb-run-blink { to { visibility: hidden; } }
+.mdb-job-facts .datagrid-content { font-weight: var(--tblr-font-weight-medium); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* Segments: one bar per top-level step, coloured by state. */
 .mdb-job-segments {
@@ -1326,49 +1263,31 @@ body.mdb-page-busy #mdb-job { z-index: 1055; }
 .mdb-job-seg.is-skipped .mdb-job-seg-name { color: var(--mdb-dim); font-weight: 500; }
 .mdb-job-seg-dur { font-family: var(--mdb-mono); font-variant-numeric: tabular-nums; color: var(--mdb-dim); }
 
-/* Banner: failure first, success summarised. */
-.mdb-job-banner {
-  display: flex;
-  align-items: flex-start;
-  gap: 1rem;
-  padding: .9rem 1.25rem 1rem;
-  border-bottom: 1px solid var(--mdb-rule);
-  border-left: .25rem solid transparent;
-}
-.mdb-job-banner.is-fail { border-left-color: var(--mdb-err); background: color-mix(in srgb, var(--mdb-err) 7%, var(--tblr-bg-surface)); }
-.mdb-job-banner.is-fail .mdb-panel-kicker { color: var(--mdb-err); }
-.mdb-job-banner.is-warn { border-left-color: var(--mdb-warn); background: color-mix(in srgb, var(--mdb-warn) 8%, var(--tblr-bg-surface)); }
-.mdb-job-banner.is-done {
-  align-items: baseline;
-  flex-wrap: wrap;
-  gap: .25rem .75rem;
-  border-left-color: var(--mdb-ok);
-  background: color-mix(in srgb, var(--mdb-ok) 7%, var(--tblr-bg-surface));
-}
-.mdb-job-banner-text { flex: 1 1 auto; min-width: 0; }
-.mdb-job-banner-title { margin: 0; font-size: 1rem; font-weight: 800; line-height: 1.35; overflow-wrap: anywhere; }
-.mdb-job-banner-body { margin: .3rem 0 0; font-size: .8125rem; line-height: 1.45; color: var(--tblr-body-color); }
-.mdb-job-banner-sub { font-size: .8125rem; color: var(--mdb-dim); }
-.mdb-job-banner-code {
+/* Banner: a Tabler alert (danger / warning / success) under the facts. */
+.mdb-job-banner.alert { margin: .875rem 1.25rem 0; }
+.mdb-job-banner-text { min-width: 0; }
+.mdb-job-banner-title { overflow-wrap: anywhere; }
+.mdb-job-banner .subheader { margin-bottom: .125rem; }
+.mdb-job-banner.is-fail .mdb-job-banner-code {
   display: block;
   margin-top: .5rem;
-  padding: .35rem .55rem;
+  padding: .375rem .5rem;
   font-family: var(--mdb-mono);
   font-size: .75rem;
   line-height: 1.45;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
-  color: var(--mdb-err);
+  color: var(--tblr-danger);
   background: var(--tblr-bg-surface);
-  border: 1px solid color-mix(in srgb, var(--mdb-err) 25%, transparent);
-  border-radius: var(--tblr-border-radius);
+  border: var(--tblr-border-width) solid var(--tblr-border-color);
+  border-radius: var(--mdb-control-radius);
 }
-.mdb-job-banner-actions { display: flex; flex-wrap: wrap; gap: .4rem; flex: 0 0 auto; }
-.mdb-job-banner-actions .btn svg { margin-right: .3rem; }
 
-/* Toolbar + filter bar. */
-.mdb-panel .mdb-job-toolbar { padding: .6rem 1.25rem; gap: .5rem; }
-.mdb-job-views .btn.active { background: var(--tblr-body-color); color: var(--tblr-bg-surface); border-color: var(--tblr-body-color); }
+/* Toolbar: Tabler segmented nav for the view, buttons at control height. */
+.mdb-panel .mdb-job-toolbar { padding: .75rem 1.25rem; gap: .5rem; border-bottom: 0; }
+.mdb-job-views { --tblr-nav-height: var(--mdb-control-h); --tblr-nav-font-size: .8125rem; --tblr-nav-radius: var(--mdb-control-radius); }
+.mdb-job-views .nav-link .icon { width: 1rem; height: 1rem; }
+.mdb-job-views .badge { font-variant-numeric: tabular-nums; }
 /* The output console is dark in both themes, like a terminal and like the
    Logs view. data-bs-theme="dark" on it re-scopes Tabler's colours; the
    --mdb-* aliases are redeclared here because .mdb-panel resolved them
@@ -1661,9 +1580,9 @@ body.mdb-page-busy #mdb-job { z-index: 1055; }
 @media (max-width: 767.98px) {
   .mdb-run-row { grid-template-columns: .9rem auto 1rem minmax(0, 1fr) minmax(0, 6rem) 3.5rem; padding: 0 .75rem; }
   .mdb-run-row > .mdb-run-bar { display: none; }
-  .mdb-job-banner { flex-direction: column; }
+  .mdb-job-banner.alert { margin-left: .75rem; margin-right: .75rem; }
   .mdb-panel-head,
-  .mdb-job-fact,
+  .mdb-job-facts,
   .mdb-job-segments,
   .mdb-panel .mdb-job-toolbar,
   .mdb-job-console-bar { padding-left: .75rem; padding-right: .75rem; }
@@ -1673,7 +1592,7 @@ body.mdb-page-busy #mdb-job { z-index: 1055; }
   .mdb-run-spin,
   .mdb-run-indet::after,
   .mdb-job-seg-bar.is-indeterminate > span,
-  .mdb-run-tag.is-running::before { animation: none; }
+  .mdb-run-tag .status-dot-animated::before { animation: none; }
 }
 
 /* One control size and one corner radius for every button. .btn-sm draws the

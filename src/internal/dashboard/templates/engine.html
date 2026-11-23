@@ -162,10 +162,10 @@
 
 {{/* Add-ons slide-in: toggles stay off the main card grid so connect + projects can balance. */}}
 <div class="offcanvas offcanvas-end mdb-engine-addons-drawer mdb-panel" tabindex="-1" id="mdb-engine-addons" aria-labelledby="mdb-engine-addons-title" data-bs-scroll="true">
-  <div class="mdb-panel-head">
+  <div class="offcanvas-header mdb-panel-head">
     <div class="mdb-panel-head-text">
-      <div class="mdb-panel-kicker">Add-ons · {{$addonOn}}/{{$addonTotal}} on</div>
-      <h2 class="mdb-panel-title text-truncate" id="mdb-engine-addons-title">{{$e.Title}}</h2>
+      <div class="subheader mdb-panel-kicker">Add-ons · {{$addonOn}}/{{$addonTotal}} on</div>
+      <h2 class="offcanvas-title mdb-panel-title text-truncate" id="mdb-engine-addons-title">{{$e.Title}}</h2>
       <div class="mdb-panel-note">Poolers, extensions and UIs for this engine.</div>
     </div>
     <button type="button" class="btn-close text-reset" data-bs-dismiss="offcanvas" aria-label="Close" title="Close"></button>

@@ -1045,3 +1045,27 @@ func TestJobConsoleIsAlwaysDark(t *testing.T) {
 	}
 }
 
+
+func TestJobDrawerUsesTablerComponents(t *testing.T) {
+	b := body(t, serve(t, fixture, nil, "/", ""))
+	for _, want := range []string{
+		`class="offcanvas-header mdb-panel-head"`,
+		`class="subheader mdb-panel-kicker"`,
+		`class="offcanvas-title mdb-panel-title`,
+		`class="datagrid mdb-job-facts"`,
+		`class="nav nav-segmented mdb-job-views"`,
+	} {
+		if !strings.Contains(b, want) {
+			t.Errorf("job drawer lacks Tabler markup %s", want)
+		}
+	}
+	js, err := os.ReadFile(filepath.Join("resources", "assets", "js", "manage.js")) // #nosec G304 -- fixed path in this package
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"'alert alert-danger mdb-job-banner is-fail'", "'alert alert-success mdb-job-banner is-done'", "'badge bg-' + tone + '-lt mdb-run-tag", "'datagrid-item'"} {
+		if !strings.Contains(string(js), want) {
+			t.Errorf("manage.js lacks %s", want)
+		}
+	}
+}
