@@ -1036,3 +1036,12 @@ func TestHelpExplainsEveryStatus(t *testing.T) {
 		t.Error("/status's Live legend must come from the status guide and link it")
 	}
 }
+
+func TestJobConsoleIsAlwaysDark(t *testing.T) {
+	// The page theme is set in the browser, so the console pins its own.
+	b := body(t, serve(t, fixture, nil, "/", ""))
+	if !strings.Contains(b, `class="mdb-job-console flex-fill d-flex flex-column min-h-0" data-bs-theme="dark"`) {
+		t.Error("the job output console must carry data-bs-theme=dark")
+	}
+}
+
