@@ -1,22 +1,78 @@
 {{define "content"}}
-<div class="page-header d-print-none"><div class="container-xl"><div class="row g-2 align-items-center">
-  <div class="col"><div class="page-pretitle">{{.S.BackupDir}}</div><h2 class="page-title">Backups</h2></div>
-  <div class="col-auto ms-auto"><span class="text-secondary">{{len .S.Backups}} files · {{bytes .S.BackupBytes}}</span></div>
-</div></div></div>
+<div class="page-header d-print-none">
+  <div class="container-xl">
+    <div class="row g-2 align-items-center">
+      <div class="col">
+        <div class="d-flex align-items-center flex-wrap gap-2">
+          <span class="mdb-page-icon bg-yellow-lt text-yellow" aria-hidden="true">{{icon "archive"}}</span>
+          <h2 class="page-title mb-0">Backups</h2>
+          <span class="badge bg-yellow-lt text-yellow mdb-mono mdb-env-crumb" title="{{.S.BackupDir}}">{{.S.BackupDir}}</span>
+          <span class="badge bg-secondary-lt">{{len .S.Backups}} files · {{bytes .S.BackupBytes}}</span>
+        </div>
+        <nav class="mdb-page-crumbs" aria-label="breadcrumb">
+          <ol class="breadcrumb breadcrumb-arrows breadcrumb-muted">
+            <li class="breadcrumb-item"><a href="/">{{t . "nav.overview"}}</a></li>
+            <li class="breadcrumb-item"><a href="/projects">Projects</a></li>
+            <li class="breadcrumb-item active" aria-current="page">Backups</li>
+          </ol>
+        </nav>
+      </div>
+      <div class="col-auto ms-auto"><div class="btn-list">
+        {{actionButton . "backup.run" "Back up" "class=btn-primary" "icon=download"}}
+        {{actionButton . "backup.verify" "Verify" "icon=check"}}
+        {{actionButton . "backup.restore" "Restore" "icon=restore"}}
+      </div></div>
+    </div>
+  </div>
+</div>
 <div class="page-body"><div class="container-xl">
   <div class="card">
     {{if .S.BackupsErr}}<div class="card-body"><div class="alert alert-warning mb-0" role="alert">{{.S.BackupsErr}}</div></div>
     {{else if not .S.Backups}}
-    <div class="empty"><div class="empty-icon">{{icon "archive"}}</div><p class="empty-title">No backups yet</p><p class="empty-subtitle text-secondary">Take one with <code>make backup-all</code>, then check it restores with <code>make verify-backups</code>.</p></div>
+    <div class="empty"><div class="empty-icon">{{icon "archive"}}</div><p class="empty-title">No backups yet</p><p class="empty-subtitle text-secondary">Back up every database on every engine, then verify that each dump restores into a scratch database.</p><div class="empty-action">{{actionButton . "backup.run" "Back up everything" "class=btn-primary" "icon=download"}}</div></div>
     {{else}}
     <div class="table-responsive">
       <table class="table table-vcenter card-table">
-        <thead><tr><th>File</th><th>Engine</th><th class="text-end">Size</th><th class="text-end">Taken</th></tr></thead>
-        <tbody>{{range .S.Backups}}<tr><td class="mdb-mono">{{.File}}</td><td><span class="badge bg-primary-lt">{{.Engine}}</span></td><td class="text-end">{{bytes .Size}}</td><td class="text-end text-secondary" title="{{.Modified}}">{{ago .Modified}}</td></tr>{{end}}</tbody>
+        <thead><tr><th>File</th><th>Engine</th><th class="text-end">Size</th><th class="text-end">Taken</th><th class="w-1"></th></tr></thead>
+        <tbody>{{range .S.Backups}}<tr><td class="mdb-mono">{{.File}}</td><td><span class="badge bg-primary-lt">{{.Engine}}</span></td><td class="text-end">{{bytes .Size}}</td><td class="text-end text-secondary" title="{{.Modified}}">{{ago .Modified}}</td>
+          <td>{{actionButton $ "backup.restore" "Restore" (print "engine=" .Engine) (print "file=" .File) "class=btn-sm" "icon=restore"}}</td></tr>{{end}}</tbody>
       </table>
     </div>
     {{end}}
-    <div class="card-footer text-secondary small">Restore one: <code>make restore ENGINE=&lt;engine&gt; DB=&lt;db&gt; FILE=&lt;file&gt;</code></div>
+    <div class="card-footer text-secondary small">The same as <code>dbpantry backup run</code>, <code>dbpantry backup verify</code> and <code>dbpantry restore</code>. Restoring replaces the database and asks for its name.</div>
   </div>
+  <div class="card mt-3">
+    <div class="card-header">
+      <div><h3 class="card-title">Point-in-time recovery</h3><p class="card-subtitle">pgBackRest for PostgreSQL, binlogs for the MySQL family, where the engine has it.</p></div>
+      <div class="card-actions btn-list">
+        {{actionButton . "pitr.info" "Recovery window" "class=btn-sm" "icon=info"}}
+        {{actionButton . "pitr.backup" "Take a PITR backup" "class=btn-sm" "icon=download"}}
+      </div>
+    </div>
+    {{if .S.PITR}}
+    <div class="table-responsive">
+      <table class="table table-vcenter card-table">
+        <thead><tr><th>Engine</th><th>State</th><th>Detail</th></tr></thead>
+        <tbody>{{range .S.PITR}}<tr>
+          <td><span class="badge bg-primary-lt">{{.Engine}}</span></td>
+          <td>{{if .Enabled}}<span class="badge bg-green-lt">on</span>{{else}}<span class="badge bg-secondary-lt">off</span>{{end}}</td>
+          <td class="text-secondary">{{.Summary}}</td>
+        </tr>{{end}}</tbody>
+      </table>
+    </div>
+    {{else}}
+    <div class="card-body text-secondary small">No PITR-capable engine is in the stack.</div>
+    {{end}}
+    <div class="card-footer text-secondary small">Restoring to a point in time stops the engine and replaces its data, so it stays on the command line: <code>dbpantry pitr restore --to TARGET</code>.</div>
+  </div>
+  {{with .S.LastVerify}}
+  <div class="card mt-3">
+    <div class="card-header"><h3 class="card-title">Last verify</h3></div>
+    <div class="card-body">
+      <span class="badge {{if eq .Result "succeeded"}}bg-green-lt{{else}}bg-red-lt{{end}}">{{.Result}}</span>
+      <span class="text-secondary ms-2" title="{{.At}}">{{ago .At}} · {{.Actor}}</span>
+    </div>
+  </div>
+  {{end}}
 </div></div>
 {{end}}

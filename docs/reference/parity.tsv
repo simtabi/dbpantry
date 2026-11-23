@@ -16,6 +16,8 @@ init-prod	init	26	3	init --prod
 prod-overlay	config prod-overlay	26	3	not in the plan's §7; config is its home (D-73)
 check-env	config validate	06,26	3
 render	config render	47	3
+-	config show	go:TestShowOriginAndSet	3	new: effective settings with --origin (env|file|unset)
+-	config set	go:TestShowOriginAndSet,50	3	new: write one MDB_ key into the instance .env, quoted
 certs	certs init	12,20	3
 certs-renew	certs renew	12,68	3
 rotate-secrets	secrets rotate	57	3	then pooler sync for mirroring poolers (N8)
@@ -25,6 +27,10 @@ up	up	15,52	4
 down	down	15,52	4
 status	status	52	4
 logs	logs	52	4
+-	restart	52,go:TestCommandsRunTheirScripts	4	new: the dashboard's restart action (management-plan.md §3.1)
+-	service start	go:TestCommandsRunTheirScripts	1	Compose start for Services ⋮ menu
+-	service stop	go:TestCommandsRunTheirScripts	1
+-	service restart	go:TestCommandsRunTheirScripts	1	alias of top-level restart
 -	forward	54	4	the Kubernetes backend's port-forward (D-64)
 destroy	destroy	41	4
 test-profile	up	25	4	up --profile test
@@ -35,6 +41,9 @@ mongo	shell	32	4
 cassandra	shell	32	4
 shell	tools	07,73	4
 new-project	project new	13,28,34,36	4	then pooler sync for a mirroring pooler (N8)
+-	project ls	go:TestProjectLsJoinsTheEnginesAndThePasswordFiles,go:TestJoinCallsEachProjectByWhatItsEngineSays	4	new: scripts/project ls, joined with the password files (audit B1, B2)
+-	project rotate	go:TestCommandsRunTheirScripts,go:TestConfirmation	4	new: scripts/new-project --rotate, then pooler sync
+-	project drop	go:TestCommandsRunTheirScripts,go:TestConfirmation	4	new: scripts/project drop, then pooler sync
 -	pooler sync	35,go:TestCommandsRunTheirScripts	4	N8: restart a pooler that mirrors credentials at start
 backup	backup run	21,59	6
 backup-all	backup run	22	6	backup run --all
@@ -58,9 +67,23 @@ self-update	self-update	go:TestCommandsRunTheirScripts	9
 manifest	manifest	62	1
 -	manifest check-helm	65	1
 endpoints	endpoints	go:TestEndpointsAndFixtureDryRun	1
-dashboard	dashboard	go:TestDashboardServes	1
+dashboard	dashboard	go:TestDashboardServes,go:TestEveryActionIsGatedByScope	1
+-	api token create	go:TestTokensAreManagedByAnAdminAndShownOnce	7	new: API tokens for the dashboard API (management-plan.md §3.3, X14)
+-	api token ls	go:TestTokensAreManagedByAnAdminAndShownOnce	7	new
+-	api token revoke	go:TestTokensAreManagedByAnAdminAndShownOnce	7	new
 start	start	go:TestStartRunsUpProjectsThenDashboard	1
 fixture-up	fixture up	64,66	1
 fixture-down	fixture down	64	1
 -	version	go:TestVersionFormats	2
 -	completion	go:TestTreeIsPinned	2	cobra's own
+-	doctor	go:TestHostFillsMachineFacts,go:TestParseRuntimeInfoOrbStack	1	host + runtime facts; dashboard /system (D-93)
+-	addon ls	go:TestCatalogHasPgBouncerAndNoMongoPooler	1	declarative add-ons (D-96)
+-	addon enable	go:TestMergeProfiles	1
+-	addon disable	go:TestMergeProfiles	1
+-	env types	go:TestParseAliases	1	environment types (D-100)
+-	env ls	go:TestRegistryRoundTrip	1
+-	env init	go:TestRegistryRoundTrip	1
+-	env use	go:TestRegistryRoundTrip	1
+-	env copy	go:TestRegistryRoundTrip	1	export then restore across homes
+-	env migrate	go:TestRegistryRoundTrip	1	alias of env copy (also: move)
+-	env remove	go:TestRegistryRoundTrip	1

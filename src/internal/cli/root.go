@@ -107,19 +107,21 @@ replaces them one bounded context at a time (refactor plan, phase 2).`,
 		// Engines
 		a.manifestCmd(),
 		// Stack
-		a.startCmd(), a.upCmd(), a.downCmd(), a.statusCmd(), a.logsCmd(), a.endpointsCmd(), a.dashboardCmd(), a.forwardCmd(), a.destroyCmd(),
+		a.startCmd(), a.upCmd(), a.downCmd(), a.restartCmd(), a.serviceCmd(), a.statusCmd(), a.logsCmd(), a.endpointsCmd(), a.dashboardCmd(), a.apiCmd(), a.forwardCmd(), a.destroyCmd(),
 		// Fixtures
 		a.fixtureCmd(),
-		// Runtime
-		a.runtimeCmd(),
+		// Runtime / host
+		a.runtimeCmd(), a.doctorCmd(),
 		// Shells
 		a.shellCmd(), a.toolsCmd(),
 		// Projects
 		a.projectCmd(),
 		// Data
 		a.backupCmd(), a.restoreCmd(), a.pitrCmd(), a.dataCmd(), a.upgradeCmd(),
-		// Topology
-		a.haCmd(), a.poolerCmd(),
+		// Topology / add-ons
+		a.haCmd(), a.poolerCmd(), a.addonCmd(),
+		// Environments (named instance homes)
+		a.envCmd(),
 		// Security
 		a.certsCmd(), a.secretsCmd(), a.imagesCmd(),
 		// Development

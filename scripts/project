@@ -1,0 +1,175 @@
+#!/usr/bin/env bash
+#
+# The projects an engine really has, and dropping one (management plan, Phase
+# E; audit 2026-11-18, B1 and B2).
+#
+#   ls   asks every running engine for its databases and, where the family can
+#        say, the extensions each has. It reads no password file: joining the
+#        two, and calling a password file with no database orphaned, is the
+#        caller's (`dbpantry project ls`, the dashboard), which already reads
+#        them. An engine that is running but does not answer is listed with
+#        reachable false, so its projects read as unknown rather than gone.
+#   drop removes a project's database and roles, then its password files and
+#        client certificate. It asks for the project name first; CONFIRM=yes
+#        answers for automation. Backups of the database are kept.
+#
+# drop acts only on a project dbpantry provisioned -- one with an owner
+# password file -- and never on a name the engines keep for themselves, so it
+# cannot drop a database it did not make. It refuses while the engine is not
+# answering: the password files are the only record of a database that still
+# exists.
+#
+# Usage: scripts/project ls [--engine ENGINE]... [--format text|json]
+#        scripts/project drop --name NAME [--engine ENGINE]
+#        CONFIRM=yes scripts/project drop --name NAME --engine ENGINE
+
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# shellcheck source=backend-lib.sh
+. "$ROOT/scripts/backend-lib.sh"
+cd "$ROOT" || exit 1
+
+FORMAT=text
+log() { if [[ "$FORMAT" == json ]]; then printf '[project] %s\n' "$*" >&2; else printf '[project] %s\n' "$*"; fi; }
+die() { printf '[project] ERROR: %s\n' "$*" >&2; exit 1; }
+
+# shellcheck source=project-lib.sh
+. "$ROOT/scripts/project-lib.sh"
+
+usage() { sed -n '/^# Usage:/,/^$/s/^# \{0,7\}//p' "$0" >&2; exit 2; }
+
+ACTION="${1:-}"; [[ $# -gt 0 ]] && shift
+NAME=""
+ENGINE=""
+ENGINES=()
+while (( $# )); do
+    case "$1" in
+        --name)   NAME="${2:-}"; shift 2 ;;
+        --engine) ENGINE="${2:-}"; ENGINES+=("${2:-}"); shift 2 ;;
+        --format) FORMAT="${2:-}"; shift 2 ;;
+        *) die "unknown argument: $1" ;;
+    esac
+done
+[[ "$FORMAT" == text || "$FORMAT" == json ]] || die "--format is text or json, not '$FORMAT'"
+
+# -----------------------------------------------------------------------------
+# ls
+# -----------------------------------------------------------------------------
+# One engine's entry: reachable, and its databases with their extensions.
+# Prints a JSON object or text rows.
+list_engine() {
+    local reachable=false dbs="" exts="" db
+    if hook_ping; then
+        reachable=true
+        dbs="$(hook_list_databases 2>/dev/null || true)"
+        if [[ -n "$dbs" ]] && command -v hook_list_extensions >/dev/null 2>&1; then
+            # shellcheck disable=SC2086 # database names are constrained identifiers
+            exts="$(hook_list_extensions $dbs 2>/dev/null || true)"
+        fi
+    fi
+    # The "db<TAB>ext,ext" line for one database. bash 3.2 (macOS) has no
+    # associative arrays.
+    ext_of() { awk -F'\t' -v d="$1" '$1 == d { print $2; exit }' <<< "$exts"; }
+
+    if [[ "$FORMAT" == text ]]; then
+        if [[ "$reachable" != true ]]; then
+            printf '%-10s %-32s %s\n' "$ENGINE" "-" "(not answering)"
+            return
+        fi
+        for db in $dbs; do
+            printf '%-10s %-32s %s\n' "$ENGINE" "$db" "$(ext_of "$db")"
+        done
+        return
+    fi
+
+    local items="" sep="" e list esep all
+    for db in $dbs; do
+        if command -v hook_list_extensions >/dev/null 2>&1; then
+            list="" esep="" all="$(ext_of "$db")"
+            for e in ${all//,/ }; do list+="${esep}$(json_str "$e")"; esep=","; done
+            list="[${list}]"
+        else
+            list="null"
+        fi
+        items+="${sep}{\"name\":$(json_str "$db"),\"extensions\":${list}}"
+        sep=","
+    done
+    printf '{"engine":%s,"title":%s,"reachable":%s,"databases":[%s]}' \
+        "$(json_str "$ENGINE")" "$(json_str "${MDB_ENGINE_TITLE:-$ENGINE}")" "$reachable" "$items"
+}
+
+do_ls() {
+    local running candidate out="" sep=""
+    # Without --engine: every engine whose service is running. An engine that
+    # is not running is left out, and the caller reads its projects as unknown.
+    if (( ${#ENGINES[@]} == 0 )); then
+        running="$(mdb_be_running 2>/dev/null || true)"
+        for candidate in $(engine_list); do
+            engine_load "$candidate" || continue
+            grep -qx "$MDB_ENGINE_NAME" <<< "$running" && ENGINES+=("$MDB_ENGINE_NAME")
+        done
+    fi
+
+    [[ "$FORMAT" == text ]] && printf '%-10s %-32s %s\n' ENGINE DATABASE EXTENSIONS
+    for candidate in ${ENGINES[@]+"${ENGINES[@]}"}; do
+        project_load_engine "$candidate"
+        project_require_hook hook_ping
+        project_require_hook hook_list_databases
+        if [[ "$FORMAT" == json ]]; then
+            out+="${sep}$(list_engine)"
+            sep=","
+        else
+            list_engine
+        fi
+    done
+    [[ "$FORMAT" == json ]] && printf '{"engines":[%s]}\n' "$out"
+    return 0
+}
+
+# -----------------------------------------------------------------------------
+# drop
+# -----------------------------------------------------------------------------
+do_drop() {
+    project_check_name "$NAME"
+    project_load_engine "${ENGINE:-pg}"
+    project_require_hook hook_ping
+    project_require_hook hook_drop_project
+    project_secret_files "$NAME"
+
+    [[ -s "$SECRET_FILE" ]] \
+        || die "no project '$NAME' on $ENGINE (no $(project_rel "$SECRET_FILE")); dbpantry drops only the projects it provisioned"
+    # Off stdin: an exec into the container reads it, and would take the
+    # typed confirmation with it.
+    hook_ping </dev/null \
+        || die "$ENGINE is not answering, so '$NAME' cannot be dropped; nothing was changed. Start it first (dbpantry up)"
+
+    if [[ "${CONFIRM:-}" != "yes" ]]; then
+        printf '\n'
+        printf 'About to drop project "%s" on %s:\n' "$NAME" "$ENGINE"
+        printf '  the database %s and everything in it\n' "$NAME"
+        printf '  the roles %s and %s_readonly\n' "$USER_NAME" "$USER_NAME"
+        printf '  their password files and client certificate\n'
+        printf 'Backups of the database are kept.\n\n'
+        printf 'Type the project name to continue: '
+        read -r answer || answer=""
+        [[ "$answer" == "$NAME" ]] || die "confirmation did not match; nothing was changed"
+    fi
+
+    hook_drop_project "$NAME" "$USER_NAME" \
+        || die "dropping '$NAME' on $ENGINE failed; its password files are kept, so it can be dropped again"
+    log "dropped the database '$NAME' and the roles '$USER_NAME', '${USER_NAME}_readonly' on $ENGINE"
+
+    rm -f "$SECRET_FILE" "$RO_SECRET_FILE"
+    log "removed $(project_rel "$SECRET_FILE") and $(project_rel "$RO_SECRET_FILE")"
+    if [[ -d "$MDB_HOME/certs/clients/$USER_NAME" ]]; then
+        rm -rf "$MDB_HOME/certs/clients/$USER_NAME"
+        log "removed the client certificate certs/clients/$USER_NAME"
+    fi
+}
+
+case "$ACTION" in
+    ls)   do_ls ;;
+    drop) do_drop ;;
+    *)    usage ;;
+esac

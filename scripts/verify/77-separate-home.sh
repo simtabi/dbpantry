@@ -39,6 +39,22 @@ got="$(cd "$SCRATCH_DIR" && env -u MDB_HOME MDB_RT_ROOT="$MDB_ROOT" bash -c \
     || vfail "a copy of the tree, run from a process that sourced the operator's libraries, defaults its home to $got, not to itself"
 vinfo "a copy of the tree defaults its home to itself, whatever its parent sourced"
 
+# 0b. A generated compose file is the home's, never the kit's: a checkout
+# that is also its own instance holds compose.engines.yml for itself, and a
+# separate home that has not generated one yet read it, so check-env tested
+# the other instance's ports (2026-11-21, a scratch home refused for 54000).
+probe="$(mktemp -d)"
+add_cleanup "rm -rf '$probe'"
+mkdir -p "$probe/kit" "$probe/home"
+: > "$probe/kit/compose.engines.yml"
+: > "$probe/kit/docker-compose.yml"
+# shellcheck disable=SC2016  # expanded by the inner shell
+got="$(MDB_HOME="$probe/home" MDB_RT_ROOT="$probe/kit" bash -c \
+    '. "$1/scripts/runtime-lib.sh"; _mdb_compose_file compose.engines.yml; _mdb_compose_file docker-compose.yml' _ "$MDB_ROOT")"
+[[ "$got" == "$probe/home/compose.engines.yml"$'\n'"$probe/kit/docker-compose.yml" ]] \
+    || vfail "a home with no generated compose.engines.yml resolves it to: ${got//$'\n'/, } (want the home's, absent, and the kit's docker-compose.yml)"
+vinfo "a generated compose file resolves to the home even before it is generated; shipped ones to the kit"
+
 # 1. init and check-env wrote the instance into the home, and only there.
 for f in .env secrets/pg_superuser_password.txt certs/ca.crt; do
     [[ -s "$SCRATCH_HOME/$f" ]] || vfail "init did not write $f into the home"

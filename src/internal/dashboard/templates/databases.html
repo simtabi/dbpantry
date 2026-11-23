@@ -1,0 +1,199 @@
+{{define "content"}}
+{{$s := .S}}
+{{$page := .}}
+<div class="page-header d-print-none">
+  <div class="container-xl">
+    <div class="row g-2 align-items-center">
+      <div class="col">
+        <div class="d-flex align-items-center flex-wrap gap-2">
+          <span class="mdb-page-icon bg-green-lt text-green" aria-hidden="true">{{icon "database"}}</span>
+          <h2 class="page-title mb-0">Databases &amp; users</h2>
+        </div>
+        <nav class="mdb-page-crumbs" aria-label="breadcrumb">
+          <ol class="breadcrumb breadcrumb-arrows breadcrumb-muted">
+            <li class="breadcrumb-item"><a href="/">{{t . "nav.overview"}}</a></li>
+            <li class="breadcrumb-item"><a href="/projects">Projects</a></li>
+            <li class="breadcrumb-item active" aria-current="page">Databases</li>
+          </ol>
+        </nav>
+        <div class="text-secondary mt-1">Shared-hosting style: one database per project, with an owner (full) and a read-only user. Create, rotate, drop and reveal passwords through the same jobs as the CLI.</div>
+      </div>
+      <div class="col-auto btn-list">
+        {{actionButton . "project.new" "New database" "class=btn-primary" "icon=plus"}}
+        <a class="btn" href="/projects" title="Flat project list with ⋮ menus">Projects list</a>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="page-body">
+  <div class="container-xl">
+
+    <div class="card mb-3">
+      <div class="card-header">
+        <h3 class="card-title">Provision wizard</h3>
+        <div class="card-actions text-secondary small">Same path as cPanel / Plesk: create DB → users arrive with it → privileges are fixed</div>
+      </div>
+      <div class="card-body">
+        <div class="row g-3">
+          <div class="col-md-3">
+            <div class="d-flex">
+              <span class="avatar avatar-sm bg-green-lt text-green me-2">1</span>
+              <div>
+                <div class="fw-medium">Create database</div>
+                <div class="text-secondary small">Name + engine. Opens the confirm modal with those fields.</div>
+                <div class="mt-2">{{actionButton . "project.new" "Create…" "class=btn-sm btn-primary" "icon=plus"}}</div>
+              </div>
+            </div>
+          </div>
+          <div class="col-md-3">
+            <div class="d-flex">
+              <span class="avatar avatar-sm bg-azure-lt text-azure me-2">2</span>
+              <div>
+                <div class="fw-medium">Users are created</div>
+                <div class="text-secondary small"><code class="mdb-mono">{name}_user</code> (owner) and <code class="mdb-mono">{name}_user_readonly</code> (SELECT).</div>
+              </div>
+            </div>
+          </div>
+          <div class="col-md-3">
+            <div class="d-flex">
+              <span class="avatar avatar-sm bg-purple-lt text-purple me-2">3</span>
+              <div>
+                <div class="fw-medium">Privileges</div>
+                <div class="text-secondary small">Owner: ALL on the database. Readonly: SELECT (CONNECT on PostgreSQL). No arbitrary GRANT.</div>
+              </div>
+            </div>
+          </div>
+          <div class="col-md-3">
+            <div class="d-flex">
+              <span class="avatar avatar-sm bg-yellow-lt text-yellow me-2">4</span>
+              <div>
+                <div class="fw-medium">Connect &amp; passwords</div>
+                <div class="text-secondary small">Open the project page → Show password (blurred until revealed; Live pauses; never logged).</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card mb-3">
+      <div class="card-header">
+        <h3 class="card-title">Privileges matrix</h3>
+        <div class="card-actions text-secondary small">Design.md D-97 — fixed owner / read-only pair</div>
+      </div>
+      <div class="table-responsive">
+        <table class="table table-vcenter card-table table-sm">
+          <thead>
+            <tr>
+              <th>Role</th>
+              <th>Attached to</th>
+              <th>Privileges</th>
+              <th>Rename</th>
+              <th>Password</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="mdb-mono">&#123;name&#125;_user</td>
+              <td>That project's database only</td>
+              <td>Owner / ALL (create objects, DML, DDL on its DB)</td>
+              <td class="text-secondary">Recreate project under a new name (users follow the name)</td>
+              <td>Project page → Show password</td>
+            </tr>
+            <tr>
+              <td class="mdb-mono">&#123;name&#125;_user_readonly</td>
+              <td>Same database</td>
+              <td>SELECT (and CONNECT on PostgreSQL)</td>
+              <td class="text-secondary">Same as owner — tied to the project name</td>
+              <td>Same reveal control</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="row row-cards">
+      {{range $s.Projects}}
+      <div class="col-12">
+        <div class="card">
+          <div class="card-header">
+            <h3 class="card-title">
+              <a href="{{if eq .State "orphaned"}}/projects{{else}}/projects/{{.Engine}}/{{.Name}}{{end}}" class="text-reset">{{.Name}}</a>
+              <span class="ms-2">{{template "project-state" .}}</span>
+              <span class="badge bg-primary-lt ms-1">{{.Engine}}</span>
+            </h3>
+            <div class="card-actions btn-list">
+              {{if ne .State "orphaned"}}
+              <a class="btn btn-sm" href="/projects/{{.Engine}}/{{.Name}}" title="Connection block and reveal passwords">Users &amp; passwords</a>
+              {{end}}
+              {{template "project-menu" (projectMenu $page .)}}
+            </div>
+          </div>
+          <div class="card-body">
+            <div class="datagrid">
+              <div class="datagrid-item">
+                <div class="datagrid-title">Owner (full)</div>
+                <div class="datagrid-content mdb-mono">{{.Owner}}</div>
+              </div>
+              <div class="datagrid-item">
+                <div class="datagrid-title">Read-only</div>
+                <div class="datagrid-content mdb-mono">{{.Readonly}}</div>
+              </div>
+              <div class="datagrid-item">
+                <div class="datagrid-title">Privileges</div>
+                <div class="datagrid-content">Owner: ALL on database · Readonly: SELECT{{if eq .Engine "pg"}} / CONNECT{{end}}</div>
+              </div>
+              <div class="datagrid-item">
+                <div class="datagrid-title">Extensions</div>
+                <div class="datagrid-content">{{if .Extensions}}{{range .Extensions}}<span class="badge bg-azure-lt me-1">{{.}}</span>{{end}}{{else}}<span class="text-secondary">none listed</span>{{end}}</div>
+              </div>
+            </div>
+
+            {{if ne .State "orphaned"}}
+            <div class="mt-3 p-3 bg-secondary-lt rounded">
+              <div class="fw-medium mb-1">Rename this database</div>
+              <div class="text-secondary small mb-2">dbpantry does not <code class="mdb-mono">ALTER DATABASE … RENAME</code>. Provision under the new name, migrate data, then drop the old project (users rename with it).</div>
+              <div class="btn-list">
+                {{actionButton $page "project.new" "Create under new name…" (printf "class=btn-sm") (printf "engine=%s" .Engine)}}
+                {{actionButton $page "project.drop" "Drop this project…" (printf "class=btn-sm") (printf "name=%s" .Name) (printf "engine=%s" .Engine)}}
+                <a class="btn btn-sm" href="/projects/{{.Engine}}/{{.Name}}">Reveal passwords</a>
+              </div>
+            </div>
+            {{end}}
+          </div>
+          <div class="card-footer text-secondary small">
+            Passwords never appear in jobs, logs or <code class="mdb-mono">/api/v1/status</code>. Reveal only on the project page (Live pauses while the password is shown).
+          </div>
+        </div>
+      </div>
+      {{else}}
+      <div class="col-12">
+        <div class="card card-body">
+          <div class="empty py-4">
+            <p class="empty-title">No databases yet</p>
+            <p class="empty-subtitle text-secondary">Step 1 of the wizard: provision a project (database + owner + read-only user).</p>
+            <div class="empty-action">{{actionButton . "project.new" "Provision a database" "class=btn-primary" "icon=plus"}}</div>
+          </div>
+        </div>
+      </div>
+      {{end}}
+    </div>
+
+    {{with $s.Unmanaged}}
+    <div class="card mt-3">
+      <div class="card-header"><h3 class="card-title">Other databases (unmanaged)</h3>
+        <div class="card-actions text-secondary small">Adopt to create password files and the owner / readonly pair</div>
+      </div>
+      <div class="list-group list-group-flush">
+        {{range .}}
+        <div class="list-group-item d-flex align-items-center">
+          <span class="flex-fill mdb-mono">{{.Name}} <span class="badge bg-secondary-lt ms-2">{{.Engine}}</span></span>
+          {{actionButton $page "project.new" "Adopt" (printf "class=btn-sm") (printf "name=%s" .Name) (printf "engine=%s" .Engine)}}
+        </div>
+        {{end}}
+      </div>
+    </div>
+    {{end}}
+  </div>
+</div>
+{{end}}

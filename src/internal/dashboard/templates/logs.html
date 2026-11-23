@@ -1,0 +1,67 @@
+{{define "content"}}
+<div class="page-header d-print-none">
+  <div class="container-xl">
+    <div class="row g-2 align-items-center">
+      <div class="col">
+        <div class="d-flex align-items-center flex-wrap gap-2">
+          <span class="mdb-page-icon bg-azure-lt text-azure" aria-hidden="true">{{icon "file"}}</span>
+          <h2 class="page-title mb-0"><span class="mdb-mono">{{.Service}}</span> logs</h2>
+        </div>
+        <nav class="mdb-page-crumbs" aria-label="breadcrumb">
+          <ol class="breadcrumb breadcrumb-arrows breadcrumb-muted">
+            <li class="breadcrumb-item"><a href="/">{{t . "nav.overview"}}</a></li>
+            <li class="breadcrumb-item"><a href="/services">Services</a></li>
+            <li class="breadcrumb-item active" aria-current="page">{{.Service}} logs</li>
+          </ol>
+        </nav>
+      </div>
+      <div class="col-auto ms-auto d-print-none">
+        <div class="btn-list">
+          <select class="form-select w-auto" data-logs-tail aria-label="Lines to show">
+            <option value="100">Last 100 lines</option>
+            <option value="500" selected>Last 500 lines</option>
+            <option value="2000">Last 2000 lines</option>
+            <option value="all">Everything</option>
+          </select>
+          <label class="form-check form-switch m-0 align-self-center"><input class="form-check-input" type="checkbox" data-logs-follow checked><span class="form-check-label">Follow</span></label>
+          {{actionButton . "service.restart" "Restart" (print "service=" .Service)}}
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="page-body"><div class="container-xl">
+  <div class="card mdb-logs-card">
+    <div class="card-header flex-wrap gap-2">
+      <div class="d-flex align-items-center gap-2 flex-wrap">
+        <span class="status-dot status-dot-animated status-green" data-logs-dot></span>
+        <span class="text-secondary small" data-logs-state>connecting</span>
+        <span class="badge bg-secondary-lt" data-logs-count title="Lines retained in the viewer">0 lines</span>
+      </div>
+      <div class="card-actions d-flex flex-wrap align-items-center gap-2 ms-auto">
+        <div class="input-icon">
+          <span class="input-icon-addon">{{icon "search"}}</span>
+          <input type="search" class="form-control form-control-sm" data-logs-filter placeholder="Filter lines…" aria-label="Filter log lines" autocomplete="off">
+        </div>
+        <div class="btn-group btn-group-sm" role="group" aria-label="Log levels">
+          <button type="button" class="btn active" data-logs-level="error" aria-pressed="true" title="Show errors">error</button>
+          <button type="button" class="btn active" data-logs-level="warn" aria-pressed="true" title="Show warnings">warn</button>
+          <button type="button" class="btn active" data-logs-level="info" aria-pressed="true" title="Show info">info</button>
+          <button type="button" class="btn active" data-logs-level="debug" aria-pressed="true" title="Show debug">debug</button>
+          <button type="button" class="btn active" data-logs-level="other" aria-pressed="true" title="Show other lines">other</button>
+        </div>
+        <label class="form-check form-switch m-0"><input class="form-check-input" type="checkbox" data-logs-wrap checked><span class="form-check-label small">Wrap</span></label>
+        <button type="button" class="btn btn-sm" data-logs-bottom title="Jump to the latest line">{{icon "arrow-down"}} Latest</button>
+        <button type="button" class="btn btn-sm" data-copy="#mdb-logs-plain"><span data-copy-label>Copy</span></button>
+      </div>
+    </div>
+    <div class="mdb-log mdb-log-viewer m-0" id="mdb-logs" data-logs="{{.Service}}" role="log" tabindex="0" aria-label="Service logs. Filter and level chips narrow the view."></div>
+    <pre id="mdb-logs-plain" class="visually-hidden" aria-hidden="true"></pre>
+    <div class="card-footer d-none" data-logs-empty>
+      <span class="text-secondary">No lines match the filter or selected levels.</span>
+    </div>
+    <button type="button" class="btn btn-sm btn-warning mdb-logs-pill d-none" data-logs-pill title="Jump to new lines">0 new</button>
+  </div>
+  <p class="text-secondary small mt-2 mb-0">The same as <code>dbpantry logs {{.Service}}</code>. A shell in this service: <code>dbpantry shell {{.Service}} -- sh</code>.</p>
+</div></div>
+{{end}}

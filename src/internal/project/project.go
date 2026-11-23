@@ -1,7 +1,9 @@
-// Package project reads what scripts/new-project prints with --format json:
-// one object describing a project on one engine. The CLI draws it as a tree
-// and tables (project new); the dashboard shows it on the project's page
-// (with --show, which provisions nothing).
+// Package project reads what the project scripts print with --format json:
+// scripts/new-project's object describing a project on one engine, which the
+// CLI draws as a tree and tables (project new) and the dashboard shows on the
+// project's page (with --show, which provisions nothing); and scripts/project
+// ls's listing of the databases the engines really have, which Join puts
+// together with the password files (project ls, the Projects page).
 package project
 
 import (
@@ -18,10 +20,13 @@ type Provisioned struct {
 	Owner      string   `json:"owner"`
 	Readonly   string   `json:"readonly"`
 	Extensions []string `json:"extensions"`
-	Secrets    []Secret `json:"secrets"`
-	TLSAlways  bool     `json:"tls_always"`
-	Pooler     *Pooler  `json:"pooler"`
-	Network    string   `json:"network"`
+	// ExtensionsActive are the extensions the database has, which are not
+	// always those requested; nil when the engine's family cannot say.
+	ExtensionsActive []string `json:"extensions_active"`
+	Secrets          []Secret `json:"secrets"`
+	TLSAlways        bool     `json:"tls_always"`
+	Pooler           *Pooler  `json:"pooler"`
+	Network          string   `json:"network"`
 	// Block is the paste-ready .env block, password included.
 	Block string `json:"block"`
 }

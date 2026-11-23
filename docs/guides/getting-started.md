@@ -75,7 +75,9 @@ mean a leak of the read-only role is a leak of the writable one.
 
 ## 3. Connect
 
-The dashboard shows all of this in one place: `make dashboard`, then `http://127.0.0.1:8484/`.
+The dashboard shows all of this in one place: `make dashboard`, then open
+**http://127.0.0.1:8484/** (that host only). For a no-sign-in local demo:
+`make dashboard AUTH=none`.
 Each project's page has its paste-ready `.env` block (the password blurred until you show it,
 with a copy button), the compose snippet that joins the network, and its roles, password files
 and extensions. The Connect page explains the publish modes, TLS and the shells.

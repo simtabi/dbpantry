@@ -86,7 +86,7 @@ func TestTreeDrawsBranchesStatesAndTimes(t *testing.T) {
 	want := strings.Join([]string{
 		"✔ Start the stack  2.0s",
 		"├─ ✔ Images",
-		"│  └─ ✔ localhost/dbpantry-pg:17  Built",
+		"   └─ ✔ localhost/dbpantry-pg:17  Built",
 		"└─ ⠋ Containers  5.0s",
 	}, "\n")
 	if got != want {

@@ -6,13 +6,19 @@
     <h2 class="page-title">{{$p.Database}}</h2>
   </div>
   <div class="col-auto ms-auto"><div class="btn-list">
+    {{if $s.Running $e.Engine}}
+    {{actionButton . "backup.run" "Back up" (print "engine=" $p.Engine) (print "db=" $p.Database) "icon=download"}}
+    {{actionButton . "backup.restore" "Restore" (print "engine=" $p.Engine) (print "db=" $p.Database) "icon=restore"}}
+    {{actionButton . "project.rotate" "Rotate passwords" (print "engine=" $p.Engine) (print "name=" $p.Database) "icon=refresh"}}
+    {{actionButton . "project.drop" "Drop" (print "engine=" $p.Engine) (print "name=" $p.Database) "class=btn-outline-danger" "icon=trash"}}
+    {{end}}
     <button type="button" class="btn" data-reveal>{{icon "eye"}} <span data-reveal-label>Show password</span></button>
     <button type="button" class="btn btn-primary" data-copy="#env-block">{{icon "copy"}} <span data-copy-label>Copy .env block</span></button>
   </div></div>
 </div></div></div>
 <div class="page-body"><div class="container-xl">
   {{if not ($s.Running $e.Engine)}}
-  <div class="alert alert-warning" role="alert"><div class="d-flex"><div>{{icon "alert"}}</div><div class="ms-2">{{$e.Title}} is not running, so this project cannot be reached right now. Start it with <code>{{if $e.Enabled}}make up{{else}}make up PROFILES={{join $s.Endpoints.Profiles ","}},{{$e.Engine}}{{end}}</code>.</div></div></div>
+  <div class="alert alert-warning" role="alert"><div class="d-flex"><div>{{icon "alert"}}</div><div class="ms-2">{{$e.Title}} is not running, so this project cannot be reached right now. Start it with <code>{{if $e.Enabled}}dbpantry up{{else}}dbpantry up --profiles {{join $s.Endpoints.Profiles ","}},{{$e.Engine}}{{end}}</code>.</div></div></div>
   {{end}}
   <div class="row row-cards">
     <div class="col-lg-7">
@@ -40,7 +46,7 @@
             <div class="datagrid-item"><div class="datagrid-title">From containers</div><div class="datagrid-content mdb-mono">{{$e.Direct.Network.Host}}:{{$e.Direct.Network.Port}}</div></div>
             <div class="datagrid-item"><div class="datagrid-title">From this machine</div><div class="datagrid-content mdb-mono">{{with $e.Direct.Published}}{{.Address}}:{{.Port}}{{else}}not published{{end}}</div></div>
             <div class="datagrid-item"><div class="datagrid-title">TLS</div><div class="datagrid-content">{{if $p.TLSAlways}}<span class="badge bg-green-lt">always: use verify-full</span>{{else}}<span class="badge bg-secondary-lt">prod profile: DB_SSL_CA</span>{{end}}</div></div>
-            <div class="datagrid-item"><div class="datagrid-title">Extensions</div><div class="datagrid-content">{{range $p.Extensions}}<span class="badge bg-azure-lt me-1">{{.}}</span>{{else}}<span class="text-secondary">none requested</span>{{end}}</div></div>
+            <div class="datagrid-item"><div class="datagrid-title">Extensions</div><div class="datagrid-content">{{if $p.ExtensionsActive}}{{range $p.ExtensionsActive}}<span class="badge bg-azure-lt me-1">{{.}}</span>{{end}}{{else if $p.Extensions}}{{range $p.Extensions}}<span class="badge bg-secondary-lt me-1" title="requested; the engine was not asked which it has">{{.}}</span>{{end}}{{else}}<span class="text-secondary">none</span>{{end}}{{range missing $p.Extensions $p.ExtensionsActive}}<span class="badge bg-red-lt me-1" title="requested (MDB_{{upper $p.Engine}}_INIT_EXTENSIONS) but not created">{{.}} missing</span>{{end}}</div></div>
           </div>
         </div>
       </div>

@@ -1,0 +1,268 @@
+{{define "content"}}
+{{$s := .S}}
+{{$page := .}}
+{{$filter := .FilterEngine}}
+{{$filters := .FilterEngines}}
+{{$mode := or .FilterMode "multi"}}
+{{$hasPick := ne $filters ""}}
+<div class="page-header d-print-none">
+  <div class="container-xl">
+    <div class="row g-2 align-items-center">
+      <div class="col">
+        <div class="d-flex align-items-center flex-wrap gap-2">
+          <span class="mdb-page-icon bg-purple-lt text-purple" aria-hidden="true">{{icon "layers"}}</span>
+          <h2 class="page-title mb-0">{{t . "addons.title"}}</h2>
+        </div>
+        <nav class="mdb-page-crumbs" aria-label="breadcrumb">
+          <ol class="breadcrumb breadcrumb-arrows breadcrumb-muted">
+            <li class="breadcrumb-item"><a href="/">{{t . "nav.overview"}}</a></li>
+            <li class="breadcrumb-item"><a href="/operations">{{t . "ops.operations"}}</a></li>
+            <li class="breadcrumb-item active" aria-current="page">{{t . "addons.title"}}</li>
+          </ol>
+        </nav>
+        <div class="text-secondary mt-1">{{t . "addons.lead"}}</div>
+      </div>
+      <div class="col-auto btn-list">
+        <a class="btn" href="/status" title="{{t . "nav.status_tip"}}">{{t . "nav.status"}}</a>
+        <a class="btn" href="/engines" title="{{t . "addons.engines_tip"}}">{{t . "addons.engines_link"}}</a>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="page-body">
+  <div class="container-xl" id="mdb-addon-wizard"
+       data-engine="{{$filter}}"
+       data-engines="{{$filters}}"
+       data-mode="{{$mode}}"
+       data-scope="{{if $hasPick}}engines{{else}}all{{end}}"
+       data-i18n-showing-all="{{t . "addons.showing_all"}}"
+       data-i18n-selected-one="{{t . "addons.selected_one"}}"
+       data-i18n-selected-many="{{t . "addons.selected_many"}}"
+       data-i18n-queued="{{t . "addons.queued"}}"
+       data-i18n-enable="{{t . "addons.enable"}}"
+       data-i18n-disable="{{t . "addons.disable"}}"
+       data-i18n-remove="{{t . "addons.remove"}}"
+       data-i18n-preload-tip="{{t . "addons.preload_tip"}}"
+       data-i18n-need-engine="{{t . "addons.need_engine"}}"
+       data-i18n-need-engines="{{t . "addons.need_engines"}}"
+       data-i18n-need-step="{{t . "addons.need_step"}}"
+       data-i18n-need-queue="{{t . "addons.need_queue"}}"
+       data-i18n-off-banner="{{t . "addons.off_banner"}}"
+       data-i18n-off-action="{{t . "addons.off_action"}}"
+       data-i18n-engine-off="{{t . "addons.engine_off_tip"}}"
+       data-i18n-engine-stopped="{{t . "addons.engine_stopped_tip"}}"
+       data-i18n-engine-up="{{t . "addons.engine_up_tip"}}"
+       data-i18n-enable-first="{{t . "addons.enable_profile_first"}}">
+    <ul class="steps steps-green steps-counter my-3" id="mdb-addon-steps" aria-label="{{t . "addons.steps_label"}}">
+      <li class="step-item active" data-step-label="1"><a href="#mdb-addon-step-engine" class="text-reset" data-addon-step-link="1">{{t . "addons.step_engine"}}</a></li>
+      <li class="step-item" data-step-label="2"><a href="#mdb-addon-step-catalog" class="text-reset" data-addon-step-link="2" aria-disabled="true" tabindex="-1" title="{{t . "addons.need_step"}}">{{t . "addons.step_catalog"}}</a></li>
+      <li class="step-item" data-step-label="3"><a href="#mdb-addon-step-review" class="text-reset" data-addon-step-link="3" aria-disabled="true" tabindex="-1" title="{{t . "addons.need_step"}}">{{t . "addons.step_review"}}</a></li>
+    </ul>
+
+    <div class="card mb-3 mdb-addon-panel" id="mdb-addon-step-engine" data-addon-panel="1">
+      <div class="card-header">
+        <div class="me-auto">
+          <h3 class="card-title mb-1">1. {{t . "addons.step_engine"}}</h3>
+          <div class="text-secondary">{{t . "addons.engine_hint"}}</div>
+        </div>
+        <div class="card-actions">
+          <div class="mdb-addon-mode" role="group" aria-label="{{t . "addons.mode_label"}}" id="mdb-addon-mode">
+            <span class="mdb-addon-mode-label text-secondary small">{{t . "addons.mode_label"}}</span>
+            <div class="btn-group" role="group">
+              <button type="button" class="btn btn-sm{{if eq $mode "single"}} btn-primary{{else}}{{end}}" data-addon-mode="single" aria-pressed="{{if eq $mode "single"}}true{{else}}false{{end}}" title="{{t . "addons.mode_single_tip"}}" data-bs-toggle="tooltip">{{t . "addons.mode_single"}}</button>
+              <button type="button" class="btn btn-sm{{if ne $mode "single"}} btn-primary{{end}}" data-addon-mode="multi" aria-pressed="{{if ne $mode "single"}}true{{else}}false{{end}}" title="{{t . "addons.mode_multi_tip"}}" data-bs-toggle="tooltip">{{t . "addons.mode_multi"}}</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="alert alert-warning d-none mb-3" id="mdb-addon-off-banner" data-addon-off-banner role="status">
+          <div class="d-flex flex-wrap align-items-center gap-2">
+            <span data-addon-off-banner-text>{{t . "addons.off_banner"}}</span>
+            <a class="btn btn-sm" href="/engines" data-addon-off-banner-link title="{{t . "addons.engines_tip"}}">{{t . "addons.off_action"}}</a>
+          </div>
+        </div>
+        <div class="mdb-addon-picker-toolbar mb-3">
+          <button type="button"
+                  class="btn btn-sm{{if not $hasPick}} btn-azure{{else}} btn-outline-azure{{end}}"
+                  data-addon-engine=""
+                  data-addon-engine-pick="1"
+                  data-addon-all="1"
+                  aria-pressed="{{if not $hasPick}}true{{else}}false{{end}}"
+                  title="{{t . "addons.all_tip"}}"
+                  data-bs-toggle="tooltip">
+            {{t . "addons.all_engines"}}
+          </button>
+          <span class="text-secondary small" id="mdb-addon-selection-summary" data-addon-selection-summary>
+            {{if not $hasPick}}{{t . "addons.showing_all"}}{{else if eq $mode "single"}}{{t . "addons.selected_one_fallback"}}{{else}}{{t . "addons.selected_many_fallback"}}{{end}}
+          </span>
+        </div>
+        <div class="row row-cards g-2" id="mdb-addon-engines" role="listbox" aria-label="{{t . "addons.step_engine"}}" aria-multiselectable="{{if eq $mode "multi"}}true{{else}}false{{end}}">
+          {{range $s.EndpointsEnabledFirst}}
+          {{$up := and .Enabled ($s.Running .Engine)}}
+          {{$stopped := and .Enabled (not ($s.Running .Engine))}}
+          {{$selected := csvHas $filters .Engine}}
+          <div class="col-sm-6 col-lg-4">
+            <div class="card card-sm mdb-addon-engine-card h-100{{if $selected}} mdb-addon-engine-card-selected{{end}}{{if not .Enabled}} mdb-addon-engine-card-off{{end}}"
+                 data-addon-engine-wrap="{{.Engine}}">
+              <button type="button"
+                      class="card-body d-flex align-items-start gap-2 py-3 text-start w-100 mdb-addon-engine-hit"
+                      data-addon-engine="{{.Engine}}"
+                      data-addon-engine-pick="1"
+                      data-addon-enabled="{{.Enabled}}"
+                      data-addon-running="{{$up}}"
+                      role="option"
+                      aria-selected="{{if $selected}}true{{else}}false{{end}}"
+                      title="{{if not .Enabled}}{{t $page "addons.enable_profile_first"}}{{else if $stopped}}{{t $page "addons.engine_stopped_tip"}}{{else}}{{.Title}}{{end}}"
+                      data-bs-toggle="tooltip">
+                <span class="mdb-addon-engine-check{{if eq $mode "multi"}} is-multi{{end}}{{if $selected}} is-on{{end}}" aria-hidden="true">
+                  <svg class="mdb-addon-engine-check-icon" xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                </span>
+                <div class="flex-fill min-w-0">
+                  <div class="fw-medium text-truncate">{{.Title}}</div>
+                  <div class="small text-secondary mdb-mono">{{.Engine}}</div>
+                </div>
+                {{if $up}}
+                <span class="badge bg-green-lt" title="{{t $page "addons.engine_up_tip"}}" data-bs-toggle="tooltip">{{t $page "addons.status_up"}}</span>
+                {{else if $stopped}}
+                <span class="badge bg-yellow-lt" title="{{t $page "addons.engine_stopped_tip"}}" data-bs-toggle="tooltip">{{t $page "addons.status_stopped"}}</span>
+                {{else}}
+                <span class="badge bg-secondary-lt" title="{{t $page "addons.engine_off_tip"}}" data-bs-toggle="tooltip">{{t $page "addons.status_off"}}</span>
+                {{end}}
+              </button>
+              {{if not .Enabled}}
+              <div class="card-footer py-2">
+                <a class="btn btn-sm w-100" href="/engines/{{.Engine}}" title="{{t $page "addons.enable_profile_first"}}" data-bs-toggle="tooltip">{{t $page "addons.open_engine"}}</a>
+              </div>
+              {{else if $stopped}}
+              <div class="card-footer py-2">
+                <a class="btn btn-sm w-100" href="/engines/{{.Engine}}" title="{{t $page "addons.engine_stopped_tip"}}" data-bs-toggle="tooltip">{{t $page "addons.open_engine"}}</a>
+              </div>
+              {{end}}
+            </div>
+          </div>
+          {{end}}
+        </div>
+      </div>
+      <div class="card-footer d-flex flex-wrap justify-content-between gap-2">
+        <div class="text-secondary small align-self-center" data-addon-engine-footer>
+          {{t . "addons.engine_footer"}}
+        </div>
+        <button type="button" class="btn btn-primary" data-addon-next="2" data-addon-gate="catalog" title="{{t . "addons.next_catalog"}}" data-bs-toggle="tooltip">{{t . "addons.next_catalog"}}</button>
+      </div>
+    </div>
+
+    <div class="card mb-3 d-none mdb-addon-panel" id="mdb-addon-step-catalog" data-addon-panel="2">
+      <div class="card-header mdb-addon-catalog-header">
+        <div class="mdb-addon-catalog-heading">
+          <h3 class="card-title mb-1">2. {{t . "addons.step_catalog"}}</h3>
+          <div class="text-secondary small" id="mdb-addon-catalog-filter" data-addon-catalog-filter>{{t . "addons.showing_all"}}</div>
+        </div>
+        <div class="mdb-addon-kinds" id="mdb-addon-kinds" role="group" aria-label="{{t . "addons.kinds_label"}}">
+          <button type="button" class="btn btn-sm btn-primary" data-addon-kind="" title="{{t . "addons.kind_all"}}">{{t . "addons.kind_all"}}</button>
+          <button type="button" class="btn btn-sm" data-addon-kind="pooler">{{t . "addons.kind_poolers"}}</button>
+          <button type="button" class="btn btn-sm" data-addon-kind="extension">{{t . "addons.kind_extensions"}}</button>
+          <button type="button" class="btn btn-sm" data-addon-kind="embed">{{t . "addons.kind_embed"}}</button>
+          <button type="button" class="btn btn-sm" data-addon-kind="ui">{{t . "addons.kind_ui"}}</button>
+        </div>
+      </div>
+      <div class="card-body p-0">
+        {{$groups := addonsCatalogGrouped $s}}
+        {{if $groups}}
+        <div class="mdb-addon-manage">
+          {{range $groups}}
+          {{$eng := .Engine}}
+          {{$engOn := false}}
+          {{range $s.Endpoints.Endpoints}}{{if and (eq .Engine $eng) .Enabled}}{{$engOn = true}}{{end}}{{end}}
+          <div class="mdb-addon-engine" data-addon-engine-block="{{$eng}}" data-addon-engine-enabled="{{$engOn}}">
+            <div class="mdb-addon-engine-head">
+              <div class="mdb-addon-engine-head-main min-w-0">
+                <span class="fw-medium text-truncate">{{.Title}}</span>
+                <span class="badge bg-primary-lt mdb-mono">{{$eng}}</span>
+                {{if not $engOn}}
+                <span class="badge bg-secondary-lt" title="{{t $page "addons.enable_profile_first"}}" data-bs-toggle="tooltip">{{t $page "addons.status_off"}}</span>
+                {{end}}
+              </div>
+              <div class="mdb-addon-engine-head-meta">
+                <span class="text-secondary small text-nowrap">{{.On}}/{{.Total}} on</span>
+                {{if not $engOn}}
+                <a class="btn btn-sm" href="/engines/{{$eng}}" title="{{t $page "addons.enable_profile_first"}}" data-bs-toggle="tooltip">{{t $page "addons.open_engine"}}</a>
+                {{end}}
+              </div>
+            </div>
+            {{range .Kinds}}
+            <div class="mdb-addon-kind" data-addon-kind-block="{{.Kind}}">
+              <div class="mdb-addon-kind-label">{{.Label}}</div>
+              <div class="list-group list-group-flush">
+                {{range .Rows}}
+                <div class="list-group-item mdb-addon-row{{if or (not .Supported) (not $engOn)}} is-muted{{end}}"
+                     data-addon-row data-id="{{.ID}}" data-engine="{{.Engine}}" data-kind="{{.Kind}}"
+                     data-supported="{{.Supported}}" data-enabled="{{.Enabled}}" data-engine-enabled="{{$engOn}}"
+                     data-title="{{.Title}}" data-preload="{{.NeedsPreload}}">
+                  <div class="mdb-addon-row-main min-w-0">
+                    <div class="fw-medium text-truncate">{{.Title}}</div>
+                    <div class="mdb-addon-row-meta text-secondary text-truncate">
+                      <span class="mdb-mono">{{.ID}}</span>
+                      {{if .Summary}} · {{.Summary}}{{end}}
+                      {{if .NeedsPreload}} · preload{{end}}
+                      {{if .Enabled}} · <span class="text-green">on</span>{{end}}
+                    </div>
+                  </div>
+                  <div class="mdb-addon-row-actions">
+                    {{if and .Supported $engOn}}
+                    {{if .Enabled}}
+                    <button type="button" class="btn btn-sm" data-addon-queue="disable" data-id="{{.ID}}" data-engine="{{.Engine}}" data-title="{{.Title}}" title="{{t $page "addons.queue_off_tip"}}" data-bs-toggle="tooltip">{{t $page "addons.queue_off"}}</button>
+                    {{else}}
+                    <button type="button" class="btn btn-sm btn-outline-primary" data-addon-queue="enable" data-id="{{.ID}}" data-engine="{{.Engine}}" data-title="{{.Title}}" data-preload="{{.NeedsPreload}}" title="{{t $page "addons.queue_on_tip"}}" data-bs-toggle="tooltip">{{t $page "addons.queue_on"}}</button>
+                    {{end}}
+                    {{else if not .Supported}}
+                    <span class="badge bg-secondary-lt" title="{{.Rationale}}" data-bs-toggle="tooltip">{{t $page "addons.unsupported"}}</span>
+                    {{else}}
+                    <button type="button" class="btn btn-sm" disabled aria-disabled="true" title="{{t $page "addons.enable_profile_first"}}" data-bs-toggle="tooltip">{{t $page "addons.queue_on"}}</button>
+                    {{end}}
+                  </div>
+                </div>
+                {{end}}
+              </div>
+            </div>
+            {{end}}
+          </div>
+          {{end}}
+        </div>
+        {{else}}
+        <div class="empty py-4"><p class="empty-title">{{t . "addons.catalog_none"}}</p></div>
+        {{end}}
+        <div class="empty py-4 d-none" id="mdb-addon-catalog-empty" data-addon-catalog-empty>
+          <p class="empty-title">{{t . "addons.catalog_empty"}}</p>
+          <p class="empty-subtitle text-secondary">{{t . "addons.catalog_empty_hint"}}</p>
+        </div>
+      </div>
+      <div class="card-footer d-flex justify-content-between gap-2 flex-wrap">
+        <button type="button" class="btn" data-addon-next="1">{{t . "addons.back"}}</button>
+        <button type="button" class="btn btn-primary" data-addon-next="3" data-addon-gate="review" title="{{t . "addons.next_review"}}" data-bs-toggle="tooltip">{{t . "addons.next_review"}}</button>
+      </div>
+    </div>
+
+    <div class="card mb-3 d-none mdb-addon-panel" id="mdb-addon-step-review" data-addon-panel="3">
+      <div class="card-header">
+        <h3 class="card-title">3. {{t . "addons.step_review"}}</h3>
+        <div class="card-actions text-secondary small">{{t . "addons.review_hint"}}</div>
+      </div>
+      <div class="card-body">
+        <ul class="list-group list-group-flush" id="mdb-addon-review">
+          <li class="list-group-item text-secondary" data-addon-review-empty>{{t . "addons.review_empty"}}</li>
+        </ul>
+        <div class="alert alert-info mt-3 d-none" id="mdb-addon-preload-note" role="status">
+          {{t . "addons.preload_note"}}
+        </div>
+      </div>
+      <div class="card-footer d-flex justify-content-between gap-2 flex-wrap">
+        <button type="button" class="btn" data-addon-next="2">{{t . "addons.back"}}</button>
+        <button type="button" class="btn btn-primary" id="mdb-addon-apply" disabled aria-disabled="true" title="{{t . "addons.need_queue"}}" data-bs-toggle="tooltip">{{t . "addons.apply"}}</button>
+      </div>
+    </div>
+
+    <script type="application/json" id="mdb-addon-data">{{toJSON $s.Addons}}</script>
+  </div>
+</div>
+{{end}}

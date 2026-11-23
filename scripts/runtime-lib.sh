@@ -201,11 +201,18 @@ mdb_compose() {
 # copy first (the generated compose.engines.yml, compose.proxy.yml and
 # compose.prod.engines.yml live there), then the kit's (docker-compose.yml and
 # the overlays). An absolute path is returned unchanged.
+#
+# A generated file is always the instance's, present or not: a checkout that
+# is also its own instance holds generated files for that instance, and a
+# separate home that has not generated its own yet must not read them (they
+# carry the other instance's ports). A missing one is left out of the list.
+_MDB_GENERATED_COMPOSE=" compose.engines.yml compose.proxy.yml compose.prod.engines.yml "
 _mdb_compose_file() {
+    local rel="${1#./}"
     case "$1" in
         /*) printf '%s\n' "$1" ;;
-        *)  if [[ -f "$MDB_HOME/${1#./}" ]]; then printf '%s\n' "$MDB_HOME/${1#./}"
-            else printf '%s\n' "$MDB_RT_ROOT/${1#./}"; fi ;;
+        *)  if [[ -f "$MDB_HOME/$rel" || "$_MDB_GENERATED_COMPOSE" == *" $rel "* ]]; then printf '%s\n' "$MDB_HOME/$rel"
+            else printf '%s\n' "$MDB_RT_ROOT/$rel"; fi ;;
     esac
 }
 

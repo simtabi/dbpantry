@@ -1,0 +1,211 @@
+{{define "content"}}
+{{$s := .S}}
+{{$page := .}}
+<div class="page-header d-print-none">
+  <div class="container-xl">
+    <div class="row g-2 align-items-center">
+      <div class="col">
+        <div class="d-flex align-items-center flex-wrap gap-2">
+          <span class="mdb-page-icon bg-primary-lt text-primary" aria-hidden="true">{{icon "activity"}}</span>
+          <h2 class="page-title mb-0">{{t . "status.title"}}</h2>
+        </div>
+        <nav class="mdb-page-crumbs" aria-label="breadcrumb">
+          <ol class="breadcrumb breadcrumb-arrows breadcrumb-muted">
+            <li class="breadcrumb-item"><a href="/">{{t . "nav.overview"}}</a></li>
+            <li class="breadcrumb-item"><a href="/operations">{{t . "ops.operations"}}</a></li>
+            <li class="breadcrumb-item active" aria-current="page">{{t . "status.title"}}</li>
+          </ol>
+        </nav>
+        <div class="text-secondary mt-1">{{t . "status.lead"}}</div>
+      </div>
+      <div class="col-auto btn-list">
+        <button type="button" class="btn" data-status-json title="Open status JSON in the side panel">{{icon "braces"}} Raw</button>
+        {{actionButton . "verify" (t . "ops.verify") "class=btn-primary" "icon=activity"}}
+      </div>
+    </div>
+  </div>
+</div>
+<div class="page-body">
+  <div class="container-xl">
+    <div class="row row-deck row-cards">
+
+      <div class="col-sm-6 col-lg-3">
+        <div class="card">
+          <div class="card-body">
+            <div class="subheader">{{t . "status.health"}}</div>
+            <div class="h1 mb-0">{{$s.HealthPercent}}%</div>
+            <div class="text-secondary">{{$s.Healthy}} healthy of {{len $s.Services}} services</div>
+          </div>
+        </div>
+      </div>
+      <div class="col-sm-6 col-lg-3">
+        <div class="card">
+          <div class="card-body">
+            <div class="subheader">{{t . "status.services"}}</div>
+            <div class="h1 mb-0">{{$s.ServicesUp}}<span class="text-secondary fs-3">/{{len $s.Services}}</span></div>
+            <div class="text-secondary">{{$s.ServicesUp}} up · {{$s.ServicesDown}} down{{if $s.ServicesErr}} · unavailable{{end}}</div>
+          </div>
+        </div>
+      </div>
+      <div class="col-sm-6 col-lg-3">
+        <div class="card">
+          <div class="card-body">
+            <div class="subheader">{{t . "status.engines"}}</div>
+            <div class="h1 mb-0">{{$s.EnginesRunning}}<span class="text-secondary fs-3">/{{$s.Enabled}}</span></div>
+            <div class="text-secondary">running of {{$s.Enabled}} enabled ({{len $s.Endpoints.Endpoints}} total)</div>
+          </div>
+        </div>
+      </div>
+      <div class="col-sm-6 col-lg-3">
+        <div class="card">
+          <div class="card-body">
+            <div class="subheader">{{t . "status.images_projects"}}</div>
+            <div class="h1 mb-0">{{len $s.Images}}<span class="text-secondary fs-3"> · {{len $s.Projects}}</span></div>
+            <div class="text-secondary">images · projects{{with $s.Orphaned}} · {{len .}} orphaned{{end}}</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-lg-4">
+        <div class="card">
+          <div class="card-header"><h3 class="card-title">{{t . "status.instance"}}</h3></div>
+          <div class="list-group list-group-flush">
+            <div class="list-group-item d-flex justify-content-between"><span class="text-secondary">Backend</span><span class="mdb-mono">{{$s.Backend}}</span></div>
+            <div class="list-group-item d-flex justify-content-between"><span class="text-secondary">Publish</span><a href="/connect#publish" class="mdb-mono">{{$s.Endpoints.Publish}}</a></div>
+            <div class="list-group-item d-flex justify-content-between"><span class="text-secondary">Network</span><span class="mdb-mono">{{$s.Network}}</span></div>
+            <div class="list-group-item d-flex justify-content-between"><span class="text-secondary">Version</span><span class="mdb-mono text-truncate ms-2" title="{{$s.Version}}">{{$s.Version}}</span></div>
+            <div class="list-group-item d-flex justify-content-between"><span class="text-secondary">Read at</span><span class="mdb-mono" data-generated>{{clock $s.Generated}}</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-lg-4">
+        <div class="card">
+          <div class="card-header"><h3 class="card-title">{{t . "status.refresh"}}</h3></div>
+          <div class="card-body">
+            <p class="text-secondary small mb-3">{{t . "status.refresh_blurb"}}</p>
+            <div class="datagrid">
+              <div class="datagrid-item">
+                <div class="datagrid-title">Live</div>
+                <div class="datagrid-content"><span class="badge bg-green-lt"><span class="status-dot status-dot-animated status-green me-1"></span>refreshing every 5s</span></div>
+              </div>
+              <div class="datagrid-item">
+                <div class="datagrid-title">Paused</div>
+                <div class="datagrid-content"><span class="badge bg-yellow-lt"><span class="status-dot status-yellow me-1"></span>you stopped it, or the page holds a password</span></div>
+              </div>
+              <div class="datagrid-item">
+                <div class="datagrid-title">Retrying</div>
+                <div class="datagrid-content"><span class="badge bg-yellow-lt"><span class="status-dot status-yellow me-1"></span>one or two failed fetches</span></div>
+              </div>
+              <div class="datagrid-item">
+                <div class="datagrid-title">Disconnected</div>
+                <div class="datagrid-content"><span class="badge bg-red-lt"><span class="status-dot status-red me-1"></span>three failed refreshes in a row</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-lg-4">
+        <div class="card">
+          <div class="card-header">
+            <h3 class="card-title">{{t . "ops.jobs"}}</h3>
+            <div class="card-actions"><a href="/jobs" class="btn btn-sm">{{t . "nav.view_jobs"}}</a></div>
+          </div>
+          {{if .Running}}
+          <div class="alert alert-warning mb-0 rounded-0 border-0 border-bottom" role="status">
+            <div class="d-flex align-items-center">
+              <span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>
+              <div class="flex-fill">{{actionTitle .Running.Action}} is running</div>
+              <button type="button" class="btn btn-sm" data-job-open="{{.Running.ID}}">Open</button>
+            </div>
+          </div>
+          {{end}}
+          <div class="list-group list-group-flush">
+            {{range $i, $j := .Jobs}}
+            {{if lt $i 5}}
+            <a class="list-group-item list-group-item-action" href="/jobs"{{if eq $j.State "running"}} data-job-open="{{$j.ID}}"{{end}}>
+              <div class="d-flex align-items-center">
+                <span class="status-dot me-2 {{if eq $j.State "running"}}status-yellow status-dot-animated{{else if eq $j.State "succeeded"}}status-green{{else}}status-red{{end}}"></span>
+                <span class="flex-fill text-truncate">{{actionTitle $j.Action}}</span>
+                {{template "job-state" $j}}
+              </div>
+            </a>
+            {{end}}
+            {{end}}
+            {{if not .Jobs}}
+            <div class="list-group-item text-secondary small">{{t . "nav.no_jobs"}}</div>
+            {{end}}
+          </div>
+        </div>
+      </div>
+
+      <div class="col-lg-7">
+        <div class="card">
+          <div class="card-header">
+            <h3 class="card-title">{{t . "status.services"}}</h3>
+            <div class="card-actions"><a href="/services" class="btn btn-sm">All services</a></div>
+          </div>
+          {{if $s.ServicesErr}}
+          <div class="alert alert-danger mb-0 rounded-0" role="alert">{{$s.ServicesErr}}</div>
+          {{else if not $s.Services}}
+          <div class="empty py-4"><p class="empty-title">Nothing is running</p><div class="empty-action">{{actionButton $page "stack.up" "Start the stack" "class=btn-primary" "icon=play"}}</div></div>
+          {{else}}
+          <div class="table-responsive">
+            <table class="table table-vcenter card-table table-hover mb-0">
+              <thead><tr><th>Service</th><th>State</th><th>Health</th><th></th></tr></thead>
+              <tbody>
+                {{range $s.Services}}
+                <tr>
+                  <td class="mdb-mono fw-medium">{{.Name}}</td>
+                  <td>{{if .State}}<span class="badge {{if eq .State "running"}}bg-green-lt{{else}}bg-red-lt{{end}}">{{.State}}</span>{{else}}<span class="text-secondary">—</span>{{end}}</td>
+                  <td>{{template "health-status" .}}</td>
+                  <td class="text-end"><a href="/services/{{.Name}}/logs" class="btn btn-sm">Logs</a></td>
+                </tr>
+                {{end}}
+              </tbody>
+            </table>
+          </div>
+          {{end}}
+        </div>
+      </div>
+
+      <div class="col-lg-5">
+        <div class="card">
+          <div class="card-header">
+            <h3 class="card-title">{{t . "status.engines"}}</h3>
+            <div class="card-actions"><a href="/engines" class="btn btn-sm">All engines</a></div>
+          </div>
+          <div class="list-group list-group-flush">
+            {{range $s.EndpointsEnabledFirst}}
+            <a class="list-group-item list-group-item-action d-flex align-items-center" href="/engines/{{.Engine}}">
+              <span class="flex-fill">{{.Title}}</span>
+              {{template "engine-status" (status $s .Engine .Enabled)}}
+            </a>
+            {{end}}
+          </div>
+        </div>
+      </div>
+
+      {{$groups := addonsByEngine $s}}
+      {{if $groups}}
+      <div class="col-12">
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <h3 class="card-title mb-0">Add-ons</h3>
+              <div class="card-subtitle">Grouped by database engine — toggle to enable or disable</div>
+            </div>
+            <div class="card-actions"><a href="/addons" class="btn btn-sm btn-primary">Open wizard</a></div>
+          </div>
+          <div class="card-body p-0">
+            {{template "addon-manage" (dict "Groups" $groups "Compact" false "Page" $page)}}
+          </div>
+        </div>
+      </div>
+      {{end}}
+
+    </div>
+  </div>
+</div>
+{{end}}

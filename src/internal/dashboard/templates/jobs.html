@@ -1,0 +1,49 @@
+{{define "content"}}
+<div class="page-header d-print-none"><div class="container-xl"><div class="row g-2 align-items-center">
+  <div class="col"><div class="page-pretitle">Every change made from the dashboard or the API</div><h2 class="page-title">Jobs</h2></div>
+</div></div></div>
+<div class="page-body"><div class="container-xl">
+  <div class="row row-cards">
+    <div class="col-12">
+      <div class="card">
+        <div class="card-header"><h3 class="card-title">This session</h3><div class="card-actions"><span class="text-secondary small">output kept for the last 50 jobs</span></div></div>
+        {{if not .Jobs}}
+        <div class="empty"><div class="empty-icon">{{icon "terminal"}}</div><p class="empty-title">No jobs yet</p><p class="empty-subtitle text-secondary">Start, stop, build or back up from any page; each run appears here with its output.</p></div>
+        {{else}}
+        <div class="table-responsive"><table class="table table-vcenter card-table">
+          <thead><tr><th>Job</th><th>Action</th><th>By</th><th>State</th><th class="text-end">Started</th><th></th></tr></thead>
+          <tbody>{{range .Jobs}}<tr>
+            <td class="mdb-mono">{{.ID}}</td>
+            <td><div>{{actionTitle .Action}}</div><div class="small text-secondary mdb-mono">dbpantry {{join .Args " "}}</div></td>
+            <td>{{.Actor}}</td>
+            <td>{{template "job-state" .}}</td>
+            <td class="text-end text-secondary" title="{{.Started}}">{{ago .Started}}</td>
+            <td class="text-end"><button type="button" class="btn btn-sm" data-job-open="{{.ID}}">{{icon "terminal"}} Output</button></td>
+          </tr>{{end}}</tbody>
+        </table></div>
+        {{end}}
+      </div>
+    </div>
+    <div class="col-12">
+      <div class="card">
+        <div class="card-header"><h3 class="card-title">Audit log</h3><div class="card-actions"><span class="text-secondary small mdb-mono">audit/dashboard.jsonl</span></div></div>
+        {{if not .Audit}}
+        <div class="card-body text-secondary">Nothing recorded yet.</div>
+        {{else}}
+        <div class="table-responsive"><table class="table table-vcenter card-table table-sm">
+          <thead><tr><th>When</th><th>Who</th><th>Action</th><th>Command</th><th>Result</th><th class="text-end">Took</th></tr></thead>
+          <tbody>{{range .Audit}}<tr>
+            <td class="text-secondary" title="{{.Time}}">{{ago .Time}}</td>
+            <td>{{.Actor}}</td>
+            <td>{{.Action}}</td>
+            <td class="small mdb-mono">dbpantry {{join .Args " "}}</td>
+            <td>{{if eq .Result "succeeded"}}<span class="badge bg-green-lt">succeeded</span>{{else}}<span class="badge bg-red-lt">failed, exit {{.ExitCode}}</span>{{end}}</td>
+            <td class="text-end text-secondary">{{ms .DurationMS}}</td>
+          </tr>{{end}}</tbody>
+        </table></div>
+        {{end}}
+      </div>
+    </div>
+  </div>
+</div></div>
+{{end}}

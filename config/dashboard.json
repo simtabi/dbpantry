@@ -1,0 +1,7 @@
+{
+  "auth": "token",
+  "allow_destroy": false,
+  "listen": "127.0.0.1:8484",
+  "confirm": "all",
+  "session_hours": 12
+}

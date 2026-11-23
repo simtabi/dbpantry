@@ -1,0 +1,118 @@
+{{define "content"}}
+{{$page := .}}
+{{$s := .S}}
+<div class="page-header d-print-none">
+  <div class="container-xl">
+    <div class="row g-2 align-items-center">
+      <div class="col">
+        <div class="d-flex align-items-center flex-wrap gap-2">
+          <span class="mdb-page-icon bg-teal-lt text-teal" aria-hidden="true">{{icon "folders"}}</span>
+          <h2 class="page-title mb-0">{{t . "envs.title"}}</h2>
+        </div>
+        <nav class="mdb-page-crumbs" aria-label="breadcrumb">
+          <ol class="breadcrumb breadcrumb-arrows breadcrumb-muted">
+            <li class="breadcrumb-item"><a href="/">{{t . "nav.overview"}}</a></li>
+            <li class="breadcrumb-item"><a href="/operations">{{t . "ops.operations"}}</a></li>
+            <li class="breadcrumb-item active" aria-current="page">{{t . "envs.title"}}</li>
+          </ol>
+        </nav>
+        <div class="text-secondary mt-1">{{t . "envs.lead"}}</div>
+      </div>
+      <div class="col-auto btn-list">
+        {{actionButton . "env.init" (t . "envs.create") "class=btn-primary" "icon=plus"}}
+        {{actionButton . "env.copy" (t . "envs.copy") "class=btn" "icon=download"}}
+        {{actionButton . "env.migrate" (t . "envs.migrate") "class=btn" "icon=topology"}}
+      </div>
+    </div>
+  </div>
+</div>
+<div class="page-body">
+  <div class="container-xl">
+    <div class="row row-cards">
+      <div class="col-lg-7">
+        <div class="card">
+          <div class="card-header">
+            <h3 class="card-title">{{t . "envs.registered"}}</h3>
+            <div class="card-actions">
+              <span class="badge bg-azure-lt mdb-mono" title="MDB_HOME">{{base .S.Endpoints.EnvFile}}</span>
+            </div>
+          </div>
+          {{if $s.Environments}}
+          <div class="table-responsive">
+            <table class="table table-vcenter card-table">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Type</th>
+                  <th>Home</th>
+                  <th class="w-1"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {{range $s.Environments}}
+                <tr>
+                  <td class="mdb-mono">{{.Name}}</td>
+                  <td><span class="badge bg-teal-lt">{{.Type}}</span></td>
+                  <td class="text-secondary small mdb-mono text-truncate" style="max-width:14rem" title="{{.Home}}">{{.Home}}</td>
+                  <td>
+                    <div class="dropdown">
+                      <a href="#" class="btn-action" data-bs-toggle="dropdown" aria-expanded="false">{{icon "dots"}}</a>
+                      <div class="dropdown-menu dropdown-menu-end">
+                        {{actionButton $page "env.copy" (t $page "envs.copy") "class=dropdown-item" "icon=download" (printf "from=%s" .Name)}}
+                        {{actionButton $page "env.migrate" (t $page "envs.migrate") "class=dropdown-item" "icon=topology" (printf "from=%s" .Name)}}
+                        {{actionButton $page "backup.run" "Backup…" "class=dropdown-item" "icon=archive"}}
+                        {{actionButton $page "env.remove" (t $page "envs.remove") "class=dropdown-item" "icon=trash" (printf "name=%s" .Name)}}
+                      </div>
+                    </div>
+                  </td>
+                </tr>
+                {{end}}
+              </tbody>
+            </table>
+          </div>
+          {{else}}
+          <div class="card-body">
+            <p class="text-secondary mb-3">{{t . "envs.empty"}}</p>
+            <div class="btn-list">
+              {{actionButton $page "env.init" (t . "envs.create") "class=btn-primary btn-sm" "icon=plus"}}
+              {{actionButton $page "backup.run" "Backup…" "class=btn-sm" "icon=download"}}
+              {{actionButton $page "backup.restore" "Restore…" "class=btn-sm" "icon=restore"}}
+            </div>
+          </div>
+          {{end}}
+        </div>
+        <div class="card mt-3">
+          <div class="card-header"><h3 class="card-title">CLI</h3></div>
+          <div class="card-body">
+            <pre class="mdb-mono mb-0">dbpantry env types
+dbpantry env init --name shop-uat --type uat
+dbpantry env ls
+eval "$(dbpantry env use shop-uat)"
+dbpantry env copy --from shop-dev --to shop-uat --engine pg --db shop --confirm shop
+dbpantry env migrate --from shop-uat --to shop-prd --engine pg --db shop --confirm shop
+dbpantry env remove shop-uat          # unregister
+dbpantry env remove shop-uat --purge  # also delete the home</pre>
+          </div>
+        </div>
+      </div>
+      <div class="col-lg-5">
+        <div class="card">
+          <div class="card-header"><h3 class="card-title">{{t . "envs.types"}}</h3></div>
+          <div class="list-group list-group-flush list-group-hoverable">
+            <div class="list-group-item"><div class="fw-medium">localdev</div><div class="small text-secondary">Laptop / single machine (aliases: local, lcl)</div></div>
+            <div class="list-group-item"><div class="fw-medium">dev</div><div class="small text-secondary">Shared team development</div></div>
+            <div class="list-group-item"><div class="fw-medium">test</div><div class="small text-secondary">Automated / functional tests (aliases: tst)</div></div>
+            <div class="list-group-item"><div class="fw-medium">qa</div><div class="small text-secondary">Quality assurance</div></div>
+            <div class="list-group-item"><div class="fw-medium">uat</div><div class="small text-secondary">User acceptance testing</div></div>
+            <div class="list-group-item"><div class="fw-medium">trn</div><div class="small text-secondary">Training (aliases: train)</div></div>
+            <div class="list-group-item"><div class="fw-medium">spt</div><div class="small text-secondary">Support / hot-fix (aliases: support)</div></div>
+            <div class="list-group-item"><div class="fw-medium">stg · preprod</div><div class="small text-secondary">Staging / pre-production (prod-like)</div></div>
+            <div class="list-group-item"><div class="fw-medium">demo · sandbox</div><div class="small text-secondary">Demos and throwaway experiments</div></div>
+            <div class="list-group-item"><div class="fw-medium">prod</div><div class="small text-secondary">Production (aliases: prd, production, live)</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{{end}}

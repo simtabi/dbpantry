@@ -35,6 +35,9 @@ bare() { ( cd "$work/bin" && env -i PATH="$PATH" HOME="$work/home" TMPDIR="${TMP
 # 1. init from the bare binary. With the pg profile only: the default adds ui,
 # whose Adminer publishes 8080, and init's check-env rightly refuses a port
 # this host may hold. What is tested here is the binary, not the host.
+# check-env's env-file fallback must also ignore HAProxy's ports when ha is
+# off (design.md D-85): otherwise a busy 5432/7000 on the host fails this
+# init whenever Compose cannot render.
 out="$(PROFILES=pg bare init 2>&1)" || vfail "dbpantry init from the bare binary failed:
 $(printf '%s\n' "$out" | tail -15 | sed 's/^/       /')"
 home="$work/home/.config/dbpantry"

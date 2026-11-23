@@ -1,36 +1,66 @@
 {{define "content"}}
-<div class="page-header d-print-none"><div class="container-xl"><div class="row g-2 align-items-center">
-  <div class="col"><div class="page-pretitle">Containers</div><h2 class="page-title">Services</h2></div>
-  <div class="col-auto ms-auto"><span class="text-secondary">{{.S.Backend}} backend</span></div>
-</div></div></div>
+{{$page := .}}
+<div class="page-header d-print-none">
+  <div class="container-xl">
+    <div class="row g-2 align-items-center">
+      <div class="col">
+        <div class="d-flex align-items-center flex-wrap gap-2">
+          <span class="mdb-page-icon bg-green-lt text-green" aria-hidden="true">{{icon "server"}}</span>
+          <h2 class="page-title mb-0">Services</h2>
+          <span class="badge bg-green-lt text-green">{{.S.Backend}}</span>
+          {{if not .S.ServicesErr}}<span class="badge bg-primary-lt" title="{{.S.ServicesUp}} up · {{.S.ServicesDown}} down">{{.S.ServicesUp}}/{{len .S.Services}} up</span>{{end}}
+        </div>
+        <nav class="mdb-page-crumbs" aria-label="breadcrumb">
+          <ol class="breadcrumb breadcrumb-arrows breadcrumb-muted">
+            <li class="breadcrumb-item"><a href="/">{{t . "nav.overview"}}</a></li>
+            <li class="breadcrumb-item"><a href="/engines">Engines</a></li>
+            <li class="breadcrumb-item active" aria-current="page">Services</li>
+          </ol>
+        </nav>
+        <div class="text-secondary mt-1">Start, stop and restart each container from the ⋮ menu. Stopping keeps every volume.</div>
+      </div>
+      <div class="col-auto ms-auto"><div class="btn-list">
+        {{actionButton . "stack.up" "Start stack" "icon=play"}}
+        {{actionButton . "stack.down" "Stop stack" "icon=stop"}}
+      </div></div>
+    </div>
+  </div>
+</div>
 <div class="page-body"><div class="container-xl">
   <div class="card">
     {{if .S.ServicesErr}}<div class="card-body">{{template "services-unavailable" .S.ServicesErr}}</div>
     {{else if not .S.Services}}
-    <div class="empty"><div class="empty-icon">{{icon "server"}}</div><p class="empty-title">Nothing is running</p><p class="empty-subtitle text-secondary">Start the stack with <code>make up PROFILES=&lt;engines&gt;</code>.</p></div>
+    <div class="empty"><div class="empty-icon">{{icon "server"}}</div><p class="empty-title">Nothing is running</p><p class="empty-subtitle text-secondary">Start the profiles you need; the first start builds each engine's image.</p><div class="empty-action">{{actionButton . "stack.up" "Start the stack" "class=btn-primary" "icon=play"}}</div></div>
     {{else}}
     <div class="table-responsive">
       <table class="table table-vcenter card-table">
-        <thead><tr><th>Service</th><th>State</th><th>Health</th><th>Up for</th><th>Image</th></tr></thead>
+        <thead><tr><th>Service</th><th>State</th><th>Health</th><th>Up for</th><th>Image</th><th class="w-1"></th></tr></thead>
         <tbody>
           {{range .S.Services}}
           <tr>
-            <td class="mdb-mono fw-medium">{{.Name}}</td>
+            <td class="mdb-mono fw-medium"><a href="/services/{{.Name}}/logs" class="text-reset">{{.Name}}</a></td>
             <td>{{if .State}}<span class="badge {{if eq .State "running"}}bg-green-lt{{else}}bg-red-lt{{end}}">{{.State}}</span>{{else}}<span class="text-secondary">–</span>{{end}}</td>
             <td>{{template "health-status" .}}</td>
             <td class="text-secondary text-nowrap">{{since .Started}}</td>
-            <td class="mdb-mono text-secondary text-nowrap">{{if .Image}}{{.Image}}{{else}}–{{end}}</td>
+            <td class="mdb-mono text-secondary mdb-cell-ref"{{if .Image}} title="{{.Image}}"{{end}}>{{if .Image}}{{.Image}}{{else}}–{{end}}</td>
+            <td class="text-end">{{template "service-menu" (serviceMenu $page .)}}</td>
           </tr>
           {{end}}
         </tbody>
       </table>
     </div>
     {{end}}
-    <div class="card-footer text-secondary small">Logs: <code>make logs</code> · status in the terminal: <code>make status</code> · stop everything (data is kept): <code>make down</code></div>
+    <div class="card-footer text-secondary small">Same as <code class="mdb-mono">dbpantry service start|stop|restart</code>, <code class="mdb-mono">dbpantry logs SERVICE</code>, and <code class="mdb-mono">dbpantry status</code>.</div>
   </div>
-  {{if .S.Fixture}}
   <div class="card mt-3">
-    <div class="card-header"><h3 class="card-title">Fixture <span class="text-secondary small mdb-mono ms-2">{{.S.FixtureProject}}</span></h3><div class="card-actions text-secondary small">disposable engines for test suites, on tmpfs</div></div>
+    <div class="card-header">
+      <div><h3 class="card-title">Fixture{{with .S.FixtureProject}} <span class="text-secondary small mdb-mono ms-2">{{.}}</span>{{end}}</h3><p class="card-subtitle">Disposable engines for test suites, beside the stack, on tmpfs.</p></div>
+      <div class="card-actions btn-list">
+        {{actionButton . "fixture.up" "Start the fixture" "class=btn-sm" "icon=play"}}
+        {{if .S.Fixture}}{{actionButton . "fixture.down" "Remove it" "class=btn-sm" "icon=trash"}}{{end}}
+      </div>
+    </div>
+    {{if .S.Fixture}}
     <div class="table-responsive">
       <table class="table table-vcenter card-table">
         <thead><tr><th>Service</th><th>State</th><th>Health</th><th>Up for</th><th>Image</th></tr></thead>
@@ -41,14 +71,16 @@
             <td><span class="badge {{if eq .State "running"}}bg-green-lt{{else}}bg-red-lt{{end}}">{{.State}}</span></td>
             <td>{{template "health-status" .}}</td>
             <td class="text-secondary text-nowrap">{{since .Started}}</td>
-            <td class="mdb-mono text-secondary text-nowrap">{{.Image}}</td>
+            <td class="mdb-mono text-secondary mdb-cell-ref" title="{{.Image}}">{{.Image}}</td>
           </tr>
           {{end}}
         </tbody>
       </table>
     </div>
     <div class="card-footer text-secondary small">Started with <code>dbpantry fixture up</code>; <code>dbpantry fixture down</code> removes it and its data.</div>
+    {{else}}
+    <div class="card-body text-secondary">The fixture is not running.</div>
+    {{end}}
   </div>
-  {{end}}
 </div></div>
 {{end}}

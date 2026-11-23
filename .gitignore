@@ -48,3 +48,7 @@ config/caddy/layer4.caddy
 # originals are at the repository root.
 src/internal/kit/files/*
 !src/internal/kit/files/README.md
+
+# Local agent smoke / e2e artefacts.
+.tmp-e2e/
+.tmp-smoke/
