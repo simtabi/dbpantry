@@ -1,31 +1,118 @@
 {{define "content"}}
 <div class="page-header d-print-none"><div class="container-xl"><div class="row g-2 align-items-center">
-  <div class="col"><div class="page-pretitle">Provisioned with make new-project</div><h2 class="page-title">Projects</h2></div>
+  <div class="col"><div class="page-pretitle">Databases with their own roles</div><h2 class="page-title">Projects</h2></div>
+  <div class="col-auto ms-auto">{{actionButton . "project.new" "New project" "class=btn-primary" "icon=plus"}}</div>
 </div></div></div>
 <div class="page-body"><div class="container-xl">
+  {{with .S.ProjectsErr}}
+  <div class="alert alert-warning" role="alert"><div class="d-flex"><div>{{icon "alert"}}</div><div class="ms-2">The engines could not be asked which databases they have, so the projects below are listed by their password files alone. <span class="text-secondary mdb-mono small">{{.}}</span></div></div></div>
+  {{end}}
+  {{with .S.Orphaned}}
+  <div class="alert alert-warning" role="alert"><div class="d-flex"><div>{{icon "alert"}}</div><div class="ms-2"><h4 class="alert-heading">{{len .}} orphaned {{if eq (len .) 1}}project{{else}}projects{{end}}</h4><div class="text-secondary">Their engines answer and have no such database; only the password files are left. Dropping one removes them: <code>dbpantry project drop --name NAME --engine ENGINE</code>.</div></div></div></div>
+  {{end}}
   <div class="card">
     {{if not .S.Projects}}
-    <div class="empty"><div class="empty-icon">{{icon "folders"}}</div><p class="empty-title">No projects yet</p><p class="empty-subtitle text-secondary">Provision one with <code>make new-project NAME=myapp ENGINE=&lt;engine&gt;</code>, or with the stack: <code>make start PROJECTS=myapp</code>.</p></div>
+    <div class="empty"><div class="empty-icon">{{icon "folders"}}</div><p class="empty-title">No projects yet</p><p class="empty-subtitle text-secondary">A project is a database with an owner role and a read-only role, its passwords in <code>secrets/</code>. Provision one here, with <code>dbpantry project new</code>, or with the stack: <code>dbpantry start --project myapp</code>.</p><div class="empty-action">{{actionButton . "project.new" "Provision a project" "class=btn-primary" "icon=plus"}}</div></div>
     {{else}}
-    <div class="table-responsive">
-      <table class="table table-vcenter card-table table-hover">
-        <thead><tr><th>Project</th><th>Engine</th><th>Engine status</th><th>Owner role</th><th>Read-only role</th><th>Password file</th><th class="w-1"></th></tr></thead>
-        <tbody>
-          {{range .S.Projects}}
-          <tr>
-            <td class="fw-medium">{{.Name}}</td>
-            <td><span class="badge bg-primary-lt">{{.Engine}}</span></td>
-            <td>{{with $.S.Engine .Engine}}{{template "engine-status" (status $.S .Engine .Enabled)}}{{end}}</td>
-            <td class="mdb-mono">{{.Owner}}</td>
-            <td class="mdb-mono">{{.Readonly}}</td>
-            <td class="mdb-mono text-secondary text-nowrap" title="{{.OwnerSecret}}{{with .ReadonlySecret}} · {{.}}{{end}}">{{.OwnerSecret}}</td>
-            <td><a href="/projects/{{.Engine}}/{{.Name}}" class="btn btn-sm btn-primary">{{icon "key"}} Connection details</a></td>
-          </tr>
-          {{end}}
-        </tbody>
-      </table>
+    <div class="list-group list-group-flush list-group-hoverable mdb-project-list">
+      {{range .S.SortedProjects}}
+      {{$st := ""}}{{with $.S.Engine .Engine}}{{$st = status $.S .Engine .Enabled}}{{end}}
+      <div class="list-group-item mdb-project-row">
+        <div class="row align-items-center g-2">
+          <div class="col-auto">
+            <span class="avatar{{if eq .State "active"}} bg-green-lt{{else if eq .State "orphaned"}} bg-yellow-lt{{else}} bg-secondary-lt{{end}}">{{icon "folders"}}</span>
+          </div>
+          <div class="col min-w-0">
+            <div class="d-flex flex-wrap align-items-center gap-2 mb-1">
+              {{if ne .State "orphaned"}}
+              <a href="/projects/{{.Engine}}/{{.Name}}" class="fw-medium text-reset text-decoration-none">{{.Name}}</a>
+              {{else}}
+              <span class="fw-medium">{{.Name}}</span>
+              {{end}}
+              <span class="badge bg-primary-lt">{{.Engine}}</span>
+              {{template "project-state" .}}
+              {{if $st}}{{template "engine-status" $st}}{{end}}
+            </div>
+            <div class="text-secondary small text-truncate">
+              <span class="mdb-mono" title="owner">{{.Owner}}</span>
+              <span class="mx-1">·</span>
+              <span class="mdb-mono" title="read-only">{{.Readonly}}</span>
+              {{if .Extensions}}
+              <span class="mx-1">·</span>
+              {{range .Extensions}}<span class="badge bg-azure-lt me-1">{{.}}</span>{{end}}
+              {{else if eq .State "active"}}
+              <span class="mx-1">·</span><span>no extensions</span>
+              {{end}}
+            </div>
+            <div class="text-secondary small mdb-mono text-truncate mt-1" title="{{.OwnerSecret}}{{with .ReadonlySecret}} · {{.}}{{end}}">{{base .OwnerSecret}}</div>
+          </div>
+          <div class="col-auto">
+            <div class="btn-list">
+              {{if ne .State "orphaned"}}
+              <a href="/projects/{{.Engine}}/{{.Name}}" class="btn btn-sm d-none d-md-inline-flex">{{icon "key"}} Details</a>
+              {{end}}
+              {{template "project-menu" (projectMenu $ .)}}
+            </div>
+          </div>
+        </div>
+      </div>
+      {{end}}
     </div>
     {{end}}
+    <div class="card-footer text-secondary small">Provisioning is idempotent: running it again for a project keeps its passwords and its data. Dropping a project keeps its backups.</div>
   </div>
+  {{with .S.Unmanaged}}
+  <div class="card mt-3 mdb-unmanaged">
+    <div class="card-header">
+      <div>
+        <h3 class="card-title mb-0">Other databases</h3>
+        <div class="text-secondary small mt-1">Present on an engine but not provisioned by dbpantry — no <code class="mdb-mono">secrets/</code> password files, and Drop will not touch them.</div>
+      </div>
+      <div class="card-actions">
+        <span class="badge bg-secondary-lt">{{len .}} unmanaged</span>
+      </div>
+    </div>
+    <div class="list-group list-group-flush list-group-hoverable">
+      {{range .}}
+      <div class="list-group-item">
+        <div class="row align-items-center g-2">
+          <div class="col-auto">
+            <span class="avatar bg-secondary-lt">{{icon "database"}}</span>
+          </div>
+          <div class="col min-w-0">
+            <div class="d-flex flex-wrap align-items-center gap-2 mb-1">
+              <span class="mdb-mono fw-medium">{{.Name}}</span>
+              <span class="badge bg-primary-lt">{{.Engine}}</span>
+              {{template "project-state" .}}
+            </div>
+            <div class="text-secondary small">
+              {{if .Extensions}}{{range .Extensions}}<span class="badge bg-azure-lt me-1">{{.}}</span>{{end}}{{else}}No extensions reported{{end}}
+            </div>
+          </div>
+          <div class="col-auto">
+            <div class="btn-list">
+              <a href="/engines/{{.Engine}}" class="btn btn-sm d-none d-md-inline-flex">{{icon "database"}} Engine</a>
+              <div class="dropdown" data-mdb-project-menu>
+                <button type="button" class="btn btn-sm btn-ghost-secondary btn-icon" data-bs-toggle="dropdown" data-bs-auto-close="outside" data-mdb-fixed-dropdown aria-expanded="false" aria-label="Actions for {{.Name}}" title="Actions for {{.Name}}">{{icon "dots"}}</button>
+                <div class="dropdown-menu dropdown-menu-end mdb-project-menu">
+                  <div class="dropdown-header">{{.Name}} <span class="text-secondary">· {{.Engine}}</span></div>
+                  <a class="dropdown-item" href="/engines/{{.Engine}}">{{icon "database"}}<span class="ms-2">Open engine</span></a>
+                  <a class="dropdown-item" href="/connect">{{icon "plug"}}<span class="ms-2">Connection guide</span></a>
+                  <span class="d-none" id="unmanaged-name-{{.Engine}}-{{.Name}}">{{.Name}}</span>
+                  <button type="button" class="dropdown-item" data-copy="#unmanaged-name-{{.Engine}}-{{.Name}}">{{icon "copy"}}<span class="ms-2">Copy database name</span></button>
+                  <div class="dropdown-divider"></div>
+                  <div class="dropdown-item-text text-secondary small">Adopt by provisioning roles and password files for this existing database (idempotent).</div>
+                  {{actionButton $ "project.new" "Adopt as project…" (print "name=" .Name) (print "engine=" .Engine) "class=dropdown-item" "icon=plus"}}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      {{end}}
+    </div>
+    <div class="card-footer text-secondary small">System databases (for example <code class="mdb-mono">postgres</code> / <code class="mdb-mono">mysql</code>) often appear here. Adopt only application databases you intend to manage.</div>
+  </div>
+  {{end}}
 </div></div>
 {{end}}

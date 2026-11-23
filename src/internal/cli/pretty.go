@@ -16,9 +16,11 @@ import (
 )
 
 // Formatted output: a tree of steps with spinners and progress bars, then
-// tables, drawn when standard output is a terminal. Anywhere else (a pipe, a
-// log, the verify harness, CI) and under --plain, a command prints what its
-// scripts print, unchanged, so nothing that reads that output breaks.
+// tables, drawn when standard output is a terminal, or when --pretty forces
+// it (dashboard jobs, `less -R`). Anywhere else and under --plain, a command
+// prints what its scripts print, unchanged, so nothing that reads that
+// output breaks. Off a terminal, --pretty streams one-line progress with
+// percentage and ETA, then prints the final tree once.
 
 // formatted reports whether this run draws formatted output.
 func (a *app) formatted() bool {
@@ -31,6 +33,11 @@ func (a *app) formatted() bool {
 	if a.env("TERM") == "dumb" {
 		return false
 	}
+	return a.isTTY()
+}
+
+// isTTY reports whether standard output is a terminal.
+func (a *app) isTTY() bool {
 	f, ok := a.stdout.(*os.File)
 	return ok && term.IsTerminal(int(f.Fd())) // #nosec G115 -- a file descriptor fits in an int
 }
@@ -68,7 +75,8 @@ type screen struct {
 
 func (a *app) newScreen(title string, facts ...string) *screen {
 	s := &screen{a: a, st: a.style(), title: title, facts: facts}
-	s.live = ui.NewLive(a.stdout, true, s.draw)
+	s.live = ui.NewLive(a.stdout, a.isTTY(), s.draw)
+	s.live.SetSummary(s.summary)
 	return s
 }
 
@@ -79,23 +87,66 @@ func (s *screen) draw(frame int, now time.Time) []string {
 		s.refresh()
 	}
 	w := s.a.width()
-	head := " " + s.st.Bold(s.st.Cyan("dbpantry")) + s.st.Dim(" › ") + s.st.Bold(s.title)
+	head := s.st.Bold(s.st.Cyan("dbpantry")) + s.st.Dim(" › ") + s.st.Bold(s.title)
 	if len(s.facts) > 0 {
-		head += "   " + s.st.Dim(strings.Join(s.facts, " · "))
+		head += "  " + s.st.Dim(strings.Join(s.facts, " · "))
 	}
-	lines := []string{ui.Truncate(head, w), ""}
-	for _, l := range s.st.Tree(s.steps, w-2, frame, now) {
-		lines = append(lines, " "+l)
-	}
+	// Flush-left: no gutter indent and no blank line under the title — those
+	// read as artificial margin beside the tree.
+	lines := []string{ui.Truncate(head, w)}
+	lines = append(lines, s.st.Tree(s.steps, w, frame, now)...)
 	return lines
 }
 
-func (s *screen) start() { s.live.Start() }
+// summary is the one-line progress a non-TTY stream gets while work runs.
+// Off a terminal the spinner does not animate (a fixed mark): Live already
+// prints a new line whenever the summary changes, and an animated glyph
+// would spam the dashboard job drawer with one row per frame.
+func (s *screen) summary(frame int, now time.Time) string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.refresh != nil {
+		s.refresh()
+	}
+	for _, n := range s.steps {
+		if n.State != ui.Running {
+			continue
+		}
+		mark := "…"
+		if s.live != nil && s.live.Terminal() {
+			mark = s.st.Icon(n.State, frame)
+		}
+		line := mark + " " + n.Label
+		if n.Progress != nil {
+			line += "  " + s.st.Progress(*n.Progress, 20, now)
+		} else if !n.Started.IsZero() {
+			// Whole seconds only: sub-second Duration strings change every
+			// tick and would force a new stream line for the same step.
+			elapsed := now.Sub(n.Started).Truncate(time.Second)
+			if elapsed >= time.Second {
+				line += "  " + s.st.Dim(ui.Duration(elapsed))
+			}
+		}
+		return line
+	}
+	return ""
+}
 
-// stop draws the final frame and leaves the cursor below it.
+func (s *screen) start() {
+	if !s.live.Terminal() {
+		head := s.st.Bold(s.st.Cyan("dbpantry")) + s.st.Dim(" › ") + s.st.Bold(s.title)
+		if len(s.facts) > 0 {
+			head += "  " + s.st.Dim(strings.Join(s.facts, " · "))
+		}
+		_, _ = fmt.Fprintln(s.a.stdout, head)
+	}
+	s.live.Start()
+}
+
+// stop draws the final frame and leaves the cursor on the next line (no
+// extra blank — callers add one blank only when another section follows).
 func (s *screen) stop() {
 	s.live.Stop()
-	_, _ = fmt.Fprintln(s.a.stdout)
 }
 
 func (s *screen) add(label string) *ui.Node {
@@ -154,13 +205,29 @@ func (s *screen) run(ctx context.Context, root string, env []string, node *ui.No
 	err := s.a.runStepTo(ctx, root, env, st, w, w)
 	w.flush()
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	node.Log = nil
+	ended := time.Now()
 	if err != nil {
-		node.Finish(ui.Failed, "", time.Now())
+		node.Finish(ui.Failed, "", ended)
+	} else {
+		node.Finish(ui.Done, "", ended)
+	}
+	label, started := node.Label, node.Started
+	s.mu.Unlock()
+	if !s.live.Terminal() {
+		icon := s.st.Icon(ui.Done, 0)
+		if err != nil {
+			icon = s.st.Icon(ui.Failed, 0)
+		}
+		detail := ""
+		if !started.IsZero() {
+			detail = "  " + s.st.Dim(ui.Duration(ended.Sub(started)))
+		}
+		s.live.Print(icon + " " + label + detail)
+	}
+	if err != nil {
 		return all.String(), err
 	}
-	node.Finish(ui.Done, "", time.Now())
 	return all.String(), nil
 }
 
@@ -168,11 +235,11 @@ func (s *screen) run(ctx context.Context, root string, env []string, node *ui.No
 func (s *screen) fail(what, output string, err error) error {
 	s.stop()
 	if out := strings.TrimRight(output, "\n"); out != "" {
+		_, _ = fmt.Fprintln(s.a.stdout)
 		_, _ = fmt.Fprintln(s.a.stdout, s.st.Rule(what+" said", s.a.width()))
 		for _, l := range strings.Split(out, "\n") {
 			_, _ = fmt.Fprintln(s.a.stdout, sanitize(l))
 		}
-		_, _ = fmt.Fprintln(s.a.stdout)
 	}
 	return err
 }
@@ -210,9 +277,9 @@ func (w *lineWriter) flush() {
 
 var _ io.Writer = (*lineWriter)(nil)
 
-// printLines writes lines to standard output, indented by one space.
+// printLines writes lines to standard output, flush-left.
 func (a *app) printLines(lines []string) {
 	for _, l := range lines {
-		_, _ = fmt.Fprintln(a.stdout, " "+l)
+		_, _ = fmt.Fprintln(a.stdout, l)
 	}
 }

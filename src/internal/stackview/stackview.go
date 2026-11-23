@@ -226,6 +226,11 @@ func (v *View) node(r *resource, kids []*resource) *ui.Node {
 
 func detail(r *resource) string {
 	d := r.text
+	// A ✔ already means success — repeating Compose's "Healthy"/"Built"/…
+	// on every leaf is noise (design.md D-105 follow-up).
+	if r.state == ui.Done && successText(d) {
+		d = ""
+	}
 	if r.details != "" && r.state != ui.Done {
 		if d != "" {
 			d += ": "
@@ -233,6 +238,16 @@ func detail(r *resource) string {
 		d += r.details
 	}
 	return d
+}
+
+// successText is a Compose Done status that adds nothing past the checkmark.
+func successText(t string) bool {
+	switch strings.ToLower(strings.TrimSpace(t)) {
+	case "healthy", "built", "created", "started", "done", "exited", "removed", "stopped":
+		return true
+	default:
+		return false
+	}
 }
 
 func groupState(rs []*resource) ui.State {

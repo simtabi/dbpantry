@@ -55,7 +55,7 @@ GO_COMMIT_STAMP := $(shell git rev-parse --short HEAD 2>/dev/null || echo none)
 
 # The files the binary embeds (//go:embed: the dashboard's templates and
 # assets) are sources too, or an edited page would ship stale.
-DBPANTRY_SOURCES := $(shell find src -type f \( -name '*.go' -o -name go.mod -o -name go.sum -o -path '*/templates/*' -o -path '*/resources/*' \))
+DBPANTRY_SOURCES := $(shell find src -type f \( -name '*.go' -o -name go.mod -o -name go.sum -o -path '*/templates/*' -o -path '*/resources/*' -o -path '*/locales/*' -o -path '*/notices/*' \))
 
 define build_dbpantry
 	@mkdir -p "$(dir $(DBPANTRY))"
@@ -361,8 +361,17 @@ endpoints: $(DBPANTRY) ## Where to connect to each engine (OUTPUT=json, PROFILES
 	@$(DBPANTRY) endpoints -o "$(or $(OUTPUT),table)" $(if $(PROFILES),--profiles "$(PROFILES)",) $(if $(PROJECT),--project "$(PROJECT)",) $(if $(FIXTURE),--fixture,)
 
 .PHONY: dashboard
-dashboard: $(DBPANTRY) ## Serve the read-only web dashboard on 127.0.0.1:8484 (LISTEN= to change)
-	@$(DBPANTRY) dashboard $(if $(LISTEN),--listen "$(LISTEN)",)
+dashboard: $(DBPANTRY) ## Serve the web dashboard on 127.0.0.1:8484 (LISTEN= AUTH=none|token|password MDB_HOME=)
+	@$(if $(MDB_HOME),MDB_HOME="$(MDB_HOME)") $(DBPANTRY) dashboard $(if $(LISTEN),--listen "$(LISTEN)",) $(if $(AUTH),--auth "$(AUTH)",)
+
+.PHONY: demo-dashboard
+demo-dashboard: $(DBPANTRY) ## Detached loopback demo at http://127.0.0.1:8484/ (stop|status via scripts/demo-dashboard)
+	@MDB_HOME="$(or $(MDB_HOME),/tmp/mdb-live)" LISTEN="$(or $(LISTEN),127.0.0.1:8484)" AUTH="$(or $(AUTH),none)" \
+		MDB_BIN="$(CURDIR)/$(DBPANTRY)" scripts/demo-dashboard start
+
+.PHONY: demo-dashboard-stop
+demo-dashboard-stop: ## Stop the detached demo on LISTEN (default 127.0.0.1:8484)
+	@LISTEN="$(or $(LISTEN),127.0.0.1:8484)" scripts/demo-dashboard stop
 
 .PHONY: fixture-up
 fixture-up: $(DBPANTRY) ## Boot disposable tmpfs engines for a test suite, beside the stack (PROFILES=pg,mysql)

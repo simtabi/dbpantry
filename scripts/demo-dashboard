@@ -1,0 +1,228 @@
+#!/usr/bin/env bash
+# Loopback dashboard demo: AUTH=none on 127.0.0.1:8484 by default.
+# Detaches in its own session so agent/make SIGHUP does not kill it.
+#
+# Must be started with full host access to the Docker socket. An agent
+# sandbox that blocks ~/.docker/run/docker.sock makes stack/fixture jobs
+# fail with "permission denied" even when `docker info` works in a normal
+# terminal — restart this script outside that sandbox.
+#
+# Usage:
+#   scripts/demo-dashboard           # start (build binary if missing)
+#   scripts/demo-dashboard stop
+#   scripts/demo-dashboard status
+#   scripts/demo-dashboard restart
+#
+# Env (optional): MDB_HOME, LISTEN, PIDFILE, LOGFILE, AUTH (default none)
+
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+HOST_OS="$(uname -s | tr '[:upper:]' '[:lower:]')"
+case "$HOST_OS" in
+  darwin) HOST_OS=macos ;;
+esac
+BIN="${MDB_BIN:-$ROOT/build/$HOST_OS/dbpantry}"
+HOME_DIR="${MDB_HOME:-/tmp/mdb-live}"
+LISTEN="${LISTEN:-127.0.0.1:8484}"
+AUTH="${AUTH:-none}"
+PIDFILE="${PIDFILE:-/tmp/mdb-dash.pid}"
+LOGFILE="${LOGFILE:-/tmp/mdb-dash.log}"
+
+_die() { printf 'dbpantry demo-dashboard: %s\n' "$*" >&2; exit 1; }
+
+_listen_host() {
+  local h="${LISTEN%%:*}"
+  printf '%s' "${h:-127.0.0.1}"
+}
+
+_listen_port() {
+  local p="${LISTEN##*:}"
+  printf '%s' "${p:-8484}"
+}
+
+_browse_url() {
+  local h p
+  h="$(_listen_host)"
+  p="$(_listen_port)"
+  case "$h" in
+    0.0.0.0|::|"") h=127.0.0.1 ;;
+  esac
+  printf 'http://%s:%s/' "$h" "$p"
+}
+
+_free_port() {
+  local p port
+  port="$(_listen_port)"
+  if command -v lsof >/dev/null 2>&1; then
+    while read -r p; do
+      [ -n "$p" ] || continue
+      kill -9 "$p" 2>/dev/null || true
+    done < <(lsof -nP -iTCP:"$port" -sTCP:LISTEN -t 2>/dev/null || true)
+  fi
+  if [ -f "$PIDFILE" ]; then
+    p="$(cat "$PIDFILE" 2>/dev/null || true)"
+    if [ -n "${p:-}" ] && kill -0 "$p" 2>/dev/null; then
+      kill -9 "$p" 2>/dev/null || true
+    fi
+    rm -f "$PIDFILE"
+  fi
+  sleep 0.4
+}
+
+_ensure_bin() {
+  if [ ! -x "$BIN" ]; then
+    (cd "$ROOT" && make dbpantry) || _die "could not build $BIN"
+  fi
+  [ -x "$BIN" ] || _die "missing binary $BIN"
+}
+
+_ensure_home() {
+  [ -d "$HOME_DIR" ] || _die "MDB_HOME $HOME_DIR does not exist"
+  [ -f "$HOME_DIR/.env" ] || _die "MDB_HOME $HOME_DIR has no .env"
+}
+
+_running_pid() {
+  local p
+  if [ -f "$PIDFILE" ]; then
+    p="$(cat "$PIDFILE" 2>/dev/null || true)"
+    if [ -n "${p:-}" ] && kill -0 "$p" 2>/dev/null; then
+      printf '%s' "$p"
+      return 0
+    fi
+  fi
+  if command -v lsof >/dev/null 2>&1; then
+    p="$(lsof -nP -iTCP:"$(_listen_port)" -sTCP:LISTEN -t 2>/dev/null | head -1 || true)"
+    if [ -n "${p:-}" ]; then
+      printf '%s' "$p"
+      return 0
+    fi
+  fi
+  return 1
+}
+
+cmd_status() {
+  local p url
+  url="$(_browse_url)"
+  if p="$(_running_pid)"; then
+    printf 'demo-dashboard: running pid=%s\n' "$p"
+    printf '  url %s\n' "$url"
+    printf '  home %s\n' "$HOME_DIR"
+    printf '  log %s\n' "$LOGFILE"
+    if command -v curl >/dev/null 2>&1; then
+      local code
+      code="$(curl -s -m 5 -o /dev/null -w '%{http_code}' -H "Host: $(_listen_host):$(_listen_port)" "${url}assets/favicons/favicon.svg" || echo 000)"
+      printf '  asset http %s\n' "$code"
+    fi
+    return 0
+  fi
+  printf 'demo-dashboard: not running (want %s)\n' "$url"
+  return 1
+}
+
+cmd_stop() {
+  _free_port
+  printf 'demo-dashboard: stopped\n'
+}
+
+cmd_start() {
+  local p url code
+  url="$(_browse_url)"
+  if p="$(_running_pid)"; then
+    if command -v curl >/dev/null 2>&1; then
+      code="$(curl -s -m 5 -o /dev/null -w '%{http_code}' -H "Host: $(_listen_host):$(_listen_port)" "${url}assets/favicons/favicon.svg" || echo 000)"
+      if [ "$code" = "200" ]; then
+        printf 'demo-dashboard: already running pid=%s\n' "$p"
+        printf '  open %s\n' "$url"
+        return 0
+      fi
+    else
+      printf 'demo-dashboard: already running pid=%s\n' "$p"
+      printf '  open %s\n' "$url"
+      return 0
+    fi
+  fi
+
+  _ensure_bin
+  _ensure_home
+  _free_port
+
+  # Fail fast when this process cannot reach the engine — inherited sandbox
+  # restrictions otherwise show up later as opaque fixture/stack job failures.
+  if ! "$BIN" --home "$HOME_DIR" --no-color runtime info >/dev/null 2>&1; then
+    printf 'demo-dashboard: container engine not reachable from this process\n' >&2
+    "$BIN" --home "$HOME_DIR" --no-color runtime info 2>&1 | sed 's/^/  /' >&2 || true
+    printf '  Fix: start Docker Desktop (or OrbStack/Colima), and run this script\n' >&2
+    printf '  outside an agent sandbox that blocks ~/.docker/run/docker.sock.\n' >&2
+    exit 1
+  fi
+
+  # start_new_session detaches from the controlling TTY / make job so SIGHUP
+  # from an agent terminal does not take the dashboard down with it.
+  python3 - "$BIN" "$HOME_DIR" "$LISTEN" "$AUTH" "$PIDFILE" "$LOGFILE" <<'PY'
+import os, sys, subprocess
+from pathlib import Path
+
+bin_path, home, listen, auth, pidfile, logfile = sys.argv[1:7]
+Path(logfile).parent.mkdir(parents=True, exist_ok=True)
+path = os.environ.get("PATH", "/usr/bin:/bin")
+for extra in ("/usr/local/bin", "/opt/homebrew/bin", str(Path.home() / ".local/bin")):
+    if extra not in path.split(":") and os.path.isdir(extra):
+        path = f"{path}:{extra}"
+env = os.environ.copy()
+env["MDB_HOME"] = home
+env["PATH"] = path
+log = open(logfile, "a")
+proc = subprocess.Popen(
+    [bin_path, "--home", home, "--no-color", "dashboard", "--auth", auth, "--listen", listen],
+    stdin=subprocess.DEVNULL,
+    stdout=log,
+    stderr=log,
+    cwd="/",
+    env=env,
+    start_new_session=True,
+)
+Path(pidfile).write_text(str(proc.pid) + "\n")
+print(proc.pid)
+PY
+
+  p="$(cat "$PIDFILE" 2>/dev/null || true)"
+  [ -n "${p:-}" ] || _die "failed to record pid (see $LOGFILE)"
+
+  # Readiness: static assets answer without reading the stack. The first
+  # Overview hit waits on the runtime snapshot (often several seconds).
+  local ready="$url"
+  ready="${ready%/}/assets/favicons/favicon.svg"
+  code=000
+  if command -v curl >/dev/null 2>&1; then
+    for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16; do
+      if ! kill -0 "$p" 2>/dev/null; then
+        _die "dashboard exited early (pid $p); see $LOGFILE"
+      fi
+      code="$(curl -s -m 3 -o /dev/null -w '%{http_code}' -H "Host: $(_listen_host):$(_listen_port)" "$ready" || echo 000)"
+      [ "$code" = "200" ] && break
+      sleep 0.25
+    done
+    [ "$code" = "200" ] || _die "dashboard pid=$p but asset HTTP $code (see $LOGFILE)"
+    # Warm the first stack reading in the background so the browser is less likely to wait.
+    (curl -s -m 120 -o /dev/null -H "Host: $(_listen_host):$(_listen_port)" "$url" || true) >/dev/null 2>&1 &
+  else
+    sleep 1
+    kill -0 "$p" 2>/dev/null || _die "dashboard exited early (pid $p); see $LOGFILE"
+  fi
+
+  printf 'demo-dashboard: started pid=%s\n' "$p"
+  printf '  open %s\n' "$url"
+  printf '  Host must be localhost or 127.0.0.1\n'
+  printf '  log %s\n' "$LOGFILE"
+}
+
+cmd="${1:-start}"
+case "$cmd" in
+  start) cmd_start ;;
+  stop) cmd_stop ;;
+  restart) cmd_stop; cmd_start ;;
+  status) cmd_status ;;
+  -h|--help|help) sed -n '2,12p' "$0" ;;
+  *) _die "unknown command $cmd (start|stop|status|restart)" ;;
+esac

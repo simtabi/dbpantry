@@ -1,0 +1,67 @@
+{{define "content"}}
+<div class="page-header d-print-none">
+  <div class="container-xl">
+    <div class="row g-2 align-items-center">
+      <div class="col">
+        <h2 class="page-title">{{t . "help.title"}}</h2>
+        <div class="text-secondary mt-1">{{t . "help.lead"}}</div>
+      </div>
+      <div class="col-auto btn-list">
+        <a href="/about" class="btn">{{icon "info"}} {{t . "nav.about"}}</a>
+        <a href="/connect" class="btn btn-primary">{{icon "plug"}} {{t . "help.connect_details"}}</a>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="page-body">
+  <div class="container-xl">
+    <div class="row row-cards">
+      <div class="col-lg-6">
+        <div class="card">
+          <div class="card-header"><h3 class="card-title">{{t . "help.on_stack"}}</h3></div>
+          <div class="list-group list-group-flush">
+            <a href="/connect#shells" class="list-group-item list-group-item-action d-flex align-items-center">{{icon "terminal"}}<span class="ms-2">{{t . "help.shells"}}</span></a>
+            <a href="/connect#tls" class="list-group-item list-group-item-action d-flex align-items-center">{{icon "lock"}}<span class="ms-2">{{t . "help.tls"}}</span></a>
+            <button type="button" class="list-group-item list-group-item-action d-flex align-items-center" data-status-json>{{icon "braces"}}<span class="ms-2">{{t . "help.status_json"}}</span></button>
+            <a href="/connect" class="list-group-item list-group-item-action d-flex align-items-center">{{icon "plug"}}<span class="ms-2">{{t . "help.connect_details"}}</span></a>
+            {{actionButton . "verify" (t . "help.verify") "class=list-group-item list-group-item-action d-flex align-items-center" "icon=activity"}}
+          </div>
+        </div>
+        <div class="card mt-3">
+          <div class="card-header"><h3 class="card-title">{{t . "nav.language"}}</h3></div>
+          <div class="card-body">
+            <div class="btn-list">
+              {{range .LangLinks}}
+              <a href="{{.URL}}" class="btn{{if .Active}} btn-primary{{end}}">{{.Name}}</a>
+              {{end}}
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="col-lg-6">
+        <div class="card">
+          <div class="card-header"><h3 class="card-title">{{t . "help.docs"}}</h3></div>
+          <div class="list-group list-group-flush">
+            <a class="list-group-item list-group-item-action d-flex align-items-center" href="/help">{{icon "book"}}<span class="ms-2">{{t . "help.guide"}}</span></a>
+            <a class="list-group-item list-group-item-action d-flex align-items-center" href="/about">{{icon "info"}}<span class="ms-2">{{t . "nav.about"}}</span></a>
+            <a class="list-group-item list-group-item-action d-flex align-items-center" href="/api/v1/actions" target="_blank" rel="noopener">{{icon "braces"}}<span class="ms-2">{{t . "help.api"}}</span></a>
+            <button type="button" class="list-group-item list-group-item-action d-flex align-items-center" data-status-json>{{icon "braces"}}<span class="ms-2">{{t . "help.status_json"}}</span></button>
+            <a class="list-group-item list-group-item-action d-flex align-items-center" href="https://github.com/simtabi/dbpantry/blob/main/docs/reference/cli.md" rel="noopener">{{icon "book"}}<span class="ms-2">{{t . "help.cli"}}</span></a>
+            <a class="list-group-item list-group-item-action d-flex align-items-center" href="https://github.com/simtabi/dbpantry/blob/main/docs/guides/licensing.md" rel="noopener">{{icon "shield"}}<span class="ms-2">{{t . "help.licensing"}}</span></a>
+          </div>
+          <div class="card-body border-top">
+            <h4 class="subheader">{{t . "help.api"}}</h4>
+            <p class="text-secondary small mb-2">{{t . "help.api_blurb"}}</p>
+            <ul class="mb-0 small">
+              <li><code class="mdb-mono">GET /api/v1/status</code></li>
+              <li><code class="mdb-mono">GET /api/v1/actions</code></li>
+              <li><code class="mdb-mono">POST /api/v1/jobs</code> — {{t . "help.api_jobs"}}</li>
+              <li><code class="mdb-mono">dbpantry api token create</code></li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{{end}}

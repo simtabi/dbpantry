@@ -116,6 +116,23 @@ hook_provision_project() {
     _cass_set_password "${user}_readonly" "$ro_pw" || return 1
 }
 
+# Drop a project: its keyspace and both roles, one statement per invocation for
+# the reason hook_provision_project gives. IF EXISTS throughout, so a
+# half-dropped project can be dropped again.
+hook_drop_project() {
+    local ks="$1" user="$2" stmt
+    for stmt in \
+        "DROP KEYSPACE IF EXISTS ${ks}" \
+        "DROP ROLE IF EXISTS ${user}" \
+        "DROP ROLE IF EXISTS ${user}_readonly"
+    do
+        _cqlsh -e "$stmt" >/dev/null 2>&1 || {
+            printf '  cassandra: statement failed: %s...\n' "${stmt%% *}" >&2
+            return 1
+        }
+    done
+}
+
 _cql_quote() { printf '%s' "${1//$_CQL_SQ/$_CQL_SQ$_CQL_SQ}"; }
 _CQL_SQ="'"
 

@@ -203,10 +203,11 @@ func (a *app) imagesCmd() *cobra.Command {
 		Short: "Build and scan the engine images",
 	}
 	build := &cobra.Command{
-		Use:   "build",
-		Short: "Build every engine image for this architecture",
-		Args:  cobra.NoArgs,
-		RunE:  func(c *cobra.Command, _ []string) error { return a.runSteps(c, script("scripts/build")) },
+		Use:   "build [ENGINE...]",
+		Short: "Build the engine images for this architecture (default: every engine)",
+		RunE: func(c *cobra.Command, args []string) error {
+			return a.runSteps(c, script(append([]string{"scripts/build"}, args...)...))
+		},
 	}
 	scan := &cobra.Command{
 		Use:   "scan [ENGINE]",

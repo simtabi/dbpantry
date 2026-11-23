@@ -90,8 +90,12 @@ func (a *app) upFormatted(c *cobra.Command) error {
 		// port-forward, an Incus address); the table below describes Compose.
 		return a.runSteps(c, script("scripts/exposure-notice"))
 	}
-	a.printLines(connectTable(a.style(), doc, a.width()-2))
-	a.printLines(nextSteps(a.style(), doc))
+	_, _ = fmt.Fprintln(a.stdout)
+	a.printLines(connectTable(a.style(), doc, a.width()))
+	if next := nextSteps(a.style(), doc); len(next) > 0 {
+		_, _ = fmt.Fprintln(a.stdout)
+		a.printLines(next)
+	}
 	return nil
 }
 
@@ -154,14 +158,14 @@ func connectTable(st ui.Style, doc endpoint.Document, width int) []string {
 	if len(t.Rows) == 0 {
 		return nil
 	}
-	return append(st.Table(t, width), "")
+	return st.Table(t, width)
 }
 
 // nextSteps are the commands someone usually wants after up.
 func nextSteps(st ui.Style, doc endpoint.Document) []string {
 	lines := []string{st.Bold("Next")}
 	item := func(what, cmd string) {
-		lines = append(lines, "  "+st.Dim("›")+" "+ui.Pad(what, 22)+st.Cyan(cmd))
+		lines = append(lines, st.Dim("›")+" "+ui.Pad(what, 22)+st.Cyan(cmd))
 	}
 	item("Provision a project", "make new-project NAME=myapp ENGINE=<engine>")
 	if doc.Publish == "none" {
@@ -170,7 +174,7 @@ func nextSteps(st ui.Style, doc endpoint.Document) []string {
 	item("Open the dashboard", "make dashboard")
 	item("Open a shell", "make help  (one shell target per engine)")
 	item("Every endpoint", "dbpantry endpoints -o json")
-	return append(lines, "")
+	return lines
 }
 
 func envFileName(path string) string {

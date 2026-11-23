@@ -14,7 +14,7 @@ import (
 func (a *app) startCmd() *cobra.Command {
 	var projects []string
 	var noDashboard bool
-	var listen string
+	var f dashboardFlags
 	cmd := &cobra.Command{
 		Use:   "start",
 		Short: "Boot the stack, provision projects on it, then serve the dashboard: everything in one command",
@@ -60,13 +60,13 @@ dashboard only; the stack keeps running (make down stops it).`,
 			if noDashboard || a.dryRun {
 				return nil
 			}
-			return a.serveDashboard(c, listen)
+			return a.serveDashboard(c, f)
 		},
 	}
 	a.profilesFlag(cmd)
 	cmd.Flags().StringSliceVar(&projects, "project", nil, "a project to provision, NAME or NAME:ENGINE; repeat or comma-separate for more")
 	cmd.Flags().BoolVar(&noDashboard, "no-dashboard", false, "stop after provisioning instead of serving the dashboard")
-	cmd.Flags().StringVar(&listen, "listen", "127.0.0.1:8484", "the address the dashboard serves on")
+	dashboardFlagsOn(cmd, &f)
 	return cmd
 }
 

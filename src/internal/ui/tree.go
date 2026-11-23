@@ -62,15 +62,17 @@ func (s Style) node(out []string, n *Node, lead, childLead string, width, frame 
 	}
 	if n.State == Running || n.State == Failed {
 		for _, l := range n.Log {
-			out = append(out, fit(childLead+"  "+s.Dim("│ "+l), width))
+			out = append(out, fit(childLead+"  "+s.Dim(l), width))
 		}
 	}
 	for i, c := range n.Children {
-		branch, next := "├─ ", "│  "
+		// Spaces for the continuing lead (not "│"): a dim vertical bar reads as
+		// a column of dots in many terminals and fights the checkmarks.
+		branch, next := "├─ ", "   "
 		if i == len(n.Children)-1 {
 			branch, next = "└─ ", "   "
 		}
-		out = s.node(out, c, childLead+s.Dim(branch), childLead+s.Dim(next), width, frame, now)
+		out = s.node(out, c, childLead+s.Dim(branch), childLead+next, width, frame, now)
 	}
 	return out
 }

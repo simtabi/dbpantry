@@ -157,3 +157,35 @@ ALTER DEFAULT PRIVILEGES FOR ROLE ${user} IN SCHEMA public
     GRANT SELECT ON TABLES TO ${user}_readonly;
 SQL
 }
+
+# The extensions each database has, one "db<TAB>ext,ext" line per database, in
+# one exec rather than one per database. plpgsql is in every database and is
+# left out.
+hook_list_extensions() {
+    local sql="SELECT string_agg(extname, ',' ORDER BY extname) FROM pg_extension WHERE extname <> 'plpgsql'"
+    [ $# -gt 0 ] || return 0
+    # shellcheck disable=SC2016 # expanded by the container's shell
+    engine_exec "$MDB_ENGINE_NAME" sh -c \
+        'q="$1"; shift; for d; do printf "%s\t%s\n" "$d" "$(psql -U postgres -d "$d" -tAc "$q")"; done' \
+        sh "$sql" "$@" | tr -d '\r'
+}
+
+# Drop a project: its database, after ending the sessions on it, then both
+# roles. Every step tolerates a part that is already gone, so a half-dropped
+# project can be dropped again.
+hook_drop_project() {
+    local db="$1" user="$2" role
+    engine_exec "$MDB_ENGINE_NAME" psql -U postgres -q -v ON_ERROR_STOP=1 \
+        -c "SET client_min_messages = warning" \
+        -c "DROP DATABASE IF EXISTS ${db} WITH (FORCE);" || return 1
+    for role in "${user}_readonly" "${user}"; do
+        engine_exec "$MDB_ENGINE_NAME" psql -U postgres -q -v ON_ERROR_STOP=1 <<SQL || return 1
+DO \$mdb\$ BEGIN
+    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '${role}') THEN
+        EXECUTE 'DROP OWNED BY ${role}';
+        EXECUTE 'DROP ROLE ${role}';
+    END IF;
+END \$mdb\$;
+SQL
+    done
+}

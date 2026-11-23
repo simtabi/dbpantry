@@ -3,6 +3,7 @@ package ui
 import (
 	"fmt"
 	"io"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -10,12 +11,16 @@ import (
 
 // Live redraws a region of the terminal while work runs: the spinner and
 // progress frames. On a terminal it moves the cursor back over the previous
-// frame; anywhere else it prints only the final frame, once, so a log or a
-// pipe gets a clean record and no escape sequences.
+// frame. Off a terminal it prints a one-line summary whenever that summary
+// changes (so a log or a dashboard job stream sees motion without escape
+// sequences), and Stop prints the final full frame once.
 type Live struct {
 	w        io.Writer
 	terminal bool
 	draw     func(frame int, now time.Time) []string
+	// summary, when set, is the one-line progress printed off a terminal.
+	// When nil, stream mode stays quiet until Stop.
+	summary func(frame int, now time.Time) string
 
 	mu    sync.Mutex
 	lines int
@@ -29,19 +34,35 @@ func NewLive(w io.Writer, terminal bool, draw func(frame int, now time.Time) []s
 	return &Live{w: w, terminal: terminal, draw: draw}
 }
 
-// Start begins redrawing ten times a second. It does nothing off a terminal.
+// SetSummary sets the one-line progress printer used off a terminal.
+func (l *Live) SetSummary(fn func(frame int, now time.Time) string) {
+	l.summary = fn
+}
+
+// Terminal reports whether Live redraws in place.
+func (l *Live) Terminal() bool { return l.terminal }
+
+// Start begins redrawing. On a terminal it updates ten times a second; off a
+// terminal it prints a progress summary whenever the summary changes.
 func (l *Live) Start() {
-	if !l.terminal {
-		return
-	}
 	l.stop, l.done = make(chan struct{}), make(chan struct{})
-	_, _ = io.WriteString(l.w, "\x1b[?25l") // hide the cursor while drawing
+	interval := 100 * time.Millisecond
+	if !l.terminal {
+		interval = 750 * time.Millisecond
+	} else {
+		_, _ = io.WriteString(l.w, "\x1b[?25l") // hide the cursor while drawing
+	}
 	go func() {
 		defer close(l.done)
-		t := time.NewTicker(100 * time.Millisecond)
+		t := time.NewTicker(interval)
 		defer t.Stop()
+		var last string
 		for {
-			l.Refresh()
+			if l.terminal {
+				l.Refresh()
+			} else {
+				l.streamTick(&last)
+			}
 			select {
 			case <-l.stop:
 				return
@@ -49,6 +70,47 @@ func (l *Live) Start() {
 			}
 		}
 	}()
+}
+
+// streamSpinner matches the braille glyphs Icon uses for Running. Off a
+// terminal those glyphs change every tick; streamStable ignores them so a
+// dashboard job stream does not grow one line per spinner frame.
+var streamSpinner = regexp.MustCompile(`[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]`)
+
+// streamStable is the comparison key for off-terminal progress: spinner
+// animation and sub-second duration flicker do not count as a new line.
+func streamStable(s string) string {
+	s = streamSpinner.ReplaceAllString(s, "…")
+	// Bucket trailing durations like "751ms" / "1.5s" to whole seconds so
+	// the stream only advances when the step or the progress %/ETA moves.
+	if i := strings.LastIndexByte(s, ' '); i >= 0 {
+		tail := s[i+1:]
+		if strings.HasSuffix(tail, "ms") || strings.HasSuffix(tail, "s") {
+			s = s[:i] + " …"
+		}
+	}
+	return s
+}
+
+func (l *Live) streamTick(last *string) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	sumFn := l.summary
+	if sumFn == nil {
+		return
+	}
+	l.frame++
+	frame := l.frame
+	sum := strings.TrimSpace(sumFn(frame, time.Now()))
+	if sum == "" {
+		return
+	}
+	key := streamStable(sum)
+	if key == *last {
+		return
+	}
+	*last = key
+	_, _ = fmt.Fprintln(l.w, sum)
 }
 
 // Refresh redraws the region now.
@@ -76,9 +138,9 @@ func (l *Live) Print(lines ...string) {
 }
 
 // Stop draws the final frame and leaves it on screen; off a terminal it
-// prints that frame, the only one.
+// prints that frame, the only full one.
 func (l *Live) Stop() {
-	if l.terminal && l.stop != nil {
+	if l.stop != nil {
 		close(l.stop)
 		<-l.done
 		l.stop = nil

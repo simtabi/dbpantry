@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/simtabi/dbpantry/src/internal/endpoint"
 	"github.com/simtabi/dbpantry/src/internal/ui"
@@ -13,6 +14,9 @@ func TestFormattedOnlyOnATerminalUnlessForced(t *testing.T) {
 	a := &app{stdout: &bytes.Buffer{}, environ: func() []string { return nil }}
 	if a.formatted() {
 		t.Error("a buffer is not a terminal: the scripts' own output must pass through unchanged")
+	}
+	if a.isTTY() {
+		t.Error("a buffer is not a TTY")
 	}
 	a.pretty = true
 	if !a.formatted() {
@@ -25,6 +29,56 @@ func TestFormattedOnlyOnATerminalUnlessForced(t *testing.T) {
 	a.dryRun, a.pretty, a.plain = false, false, true
 	if a.formatted() {
 		t.Error("--plain is never formatted")
+	}
+}
+
+func TestJobArgvForcesPretty(t *testing.T) {
+	got := strings.Join(jobArgv("/kit", "/home", []string{"up"}), " ")
+	if !strings.Contains(got, "--pretty") || strings.Contains(got, "--plain") {
+		t.Fatalf("dashboard jobs must use --pretty, not --plain: %s", got)
+	}
+	if !strings.Contains(got, "--no-input") || !strings.Contains(got, "--no-color") {
+		t.Fatalf("jobs stay non-interactive and colourless: %s", got)
+	}
+}
+
+func TestScreenSummaryNamesTheRunningStep(t *testing.T) {
+	var buf bytes.Buffer
+	a := &app{stdout: &buf, environ: func() []string { return nil }, pretty: true, noColor: true}
+	sc := a.newScreen("up")
+	n := sc.add("Start the stack")
+	n.Start(time.Now().Add(-5 * time.Second))
+	n.Progress = &ui.Progress{Done: 3, Total: 6, Started: time.Now().Add(-5 * time.Second)}
+	sum := sc.summary(1, time.Now())
+	if !strings.Contains(sum, "Start the stack") || !strings.Contains(sum, "%") {
+		t.Fatalf("summary = %q", sum)
+	}
+}
+
+func TestScreenDrawIsFlushLeft(t *testing.T) {
+	var buf bytes.Buffer
+	a := &app{stdout: &buf, environ: func() []string { return nil }, pretty: true, noColor: true}
+	sc := a.newScreen("up", "profiles pg")
+	n := sc.add("Check configuration")
+	n.Finish(ui.Done, "", time.Now())
+	child := n.Add("config/caddy/Caddyfile", ui.Done)
+	_ = child
+	lines := sc.draw(0, time.Now())
+	if len(lines) < 2 {
+		t.Fatalf("draw returned %d lines", len(lines))
+	}
+	if strings.HasPrefix(lines[0], " ") || lines[0] == "" {
+		t.Errorf("title must be flush-left with no blank under it, got %q", lines[0])
+	}
+	if strings.HasPrefix(lines[1], " ") || lines[1] == "" {
+		t.Errorf("first step must sit flush under the title (no gutter/blank), got %q", lines[1])
+	}
+	joined := strings.Join(lines, "\n")
+	if strings.Contains(joined, "│") {
+		t.Errorf("continuing tree bar must not appear:\n%s", joined)
+	}
+	if !strings.Contains(joined, "dbpantry") || !strings.Contains(joined, "└─") {
+		t.Errorf("draw missing title/tree:\n%s", joined)
 	}
 }
 

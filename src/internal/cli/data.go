@@ -4,13 +4,13 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// Projects and data: project new, backup run|verify, restore, pitr, data
+// Projects and data: project new|ls|rotate|drop, backup run|verify, restore, pitr, data
 // import|export, upgrade. Each wraps the script its make target ran.
 
 func (a *app) projectCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "project",
-		Short: "Provision application databases",
+		Short: "Provision, list and drop application databases",
 	}
 	var name, eng string
 	var noSync, fx bool
@@ -30,7 +30,7 @@ restarted so the new user can log in through it (N8); --no-pooler-sync skips tha
 	newCmd.Flags().StringVar(&eng, "engine", "", "the engine (default: the script's, PostgreSQL)")
 	newCmd.Flags().BoolVar(&noSync, "no-pooler-sync", false, "do not restart a mirroring pooler afterwards")
 	newCmd.Flags().BoolVar(&fx, "fixture", false, "provision in the fixture (`fixture up`), with password files under secrets/fixture/; give each test run its own --name for an isolated database")
-	cmd.AddCommand(newCmd)
+	cmd.AddCommand(newCmd, a.projectLsCmd(), a.projectRotateCmd(), a.projectDropCmd())
 	return cmd
 }
 

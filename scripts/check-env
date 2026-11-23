@@ -355,13 +355,24 @@ fi
 
 # Fall back to the env file when compose or python is unavailable: a partial
 # check beats none, and this path still catches every explicitly-set port.
+# Filter with port_is_active: .env.example always carries HAProxy's 5432/5433
+# and stats 7000 uncommented, and without this filter a host that already runs
+# PostgreSQL (or macOS Control Center on 7000) fails a fresh `init` with
+# PROFILES=pg whenever Compose cannot render (no runtime, sandbox, …) — the
+# exact false positive check 78 hit on a busy developer machine.
 rendered=0
 if [[ "$resolved" == rendered* ]]; then
     rendered=1
     resolved="${resolved#rendered}"
 fi
 if (( ! rendered )); then
-    resolved="$(grep -E '^MDB_[A-Z0-9_]*(HOST_)?PORT=' "$ENV_FILE" 2>/dev/null | cut -d= -f2- | while IFS= read -r v; do mdb_env_unquote "$v"; done || true)"
+    resolved=""
+    while IFS= read -r line; do
+        [[ -n "$line" ]] || continue
+        key="${line%%=*}"
+        port_is_active "$key" || continue
+        resolved="${resolved}$(mdb_env_unquote "${line#*=}")"$'\n'
+    done < <(grep -E '^MDB_[A-Z0-9_]*(HOST_)?PORT=' "$ENV_FILE" 2>/dev/null || true)
 fi
 
 while IFS= read -r value; do

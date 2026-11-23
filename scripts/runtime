@@ -9,6 +9,8 @@
 #   scripts/runtime compose <args>  the Compose command (docker compose ... syntax)
 #   scripts/runtime up [args]       deploy, waiting for health (backend verb)
 #   scripts/runtime down|status|logs [args]
+#   scripts/runtime restart SERVICE...      restart services in place (Compose)
+#   scripts/runtime start|stop SERVICE...   start or stop existing services (Compose)
 #   scripts/runtime exec SVC CMD... a command in a service, with a terminal
 #                                   when there is one (make psql and friends)
 #   scripts/runtime forward         reach the services from this machine
@@ -44,6 +46,15 @@ case "$cmd" in
         mdb_be_status "$@" ;;
     logs)
         mdb_be_logs "$@" ;;
+    restart)
+        [[ $# -gt 0 ]] || { printf 'usage: scripts/runtime restart SERVICE...\n' >&2; exit 64; }
+        mdb_be_restart "$@" ;;
+    start)
+        [[ $# -gt 0 ]] || { printf 'usage: scripts/runtime start SERVICE...\n' >&2; exit 64; }
+        mdb_be_start "$@" ;;
+    stop)
+        [[ $# -gt 0 ]] || { printf 'usage: scripts/runtime stop SERVICE...\n' >&2; exit 64; }
+        mdb_be_stop "$@" ;;
     exec)
         mdb_svc_exec_tty "$@" ;;
     forward)
@@ -69,7 +80,21 @@ case "$cmd" in
             printf 'engine:    reachable, provided by %s\n' "$(mdb_runtime_provider)"
             if mdb_runtime_rootless; then printf 'rootless:  yes\n'; else printf 'rootless:  no\n'; fi
         else
+            err="$(mdb_ctr info 2>&1 | tr '\n' ' ' | sed 's/[[:space:]]\+/ /g' | cut -c1-200 || true)"
             printf 'engine:    NOT reachable (%s info failed)\n' "$MDB_CTR_CMD"
+            if [[ -n "$err" ]]; then
+                printf 'detail:    %s\n' "$err"
+            fi
+            case "$err" in
+                *'permission denied'*|*'Operation not permitted'*)
+                    printf 'hint:      the Docker socket is blocked for this process (agent sandbox, or OS privacy).\n'
+                    printf '           Re-run outside a restricted sandbox, or open Docker Desktop and retry.\n'
+                    printf '           Socket: %s\n' "${DOCKER_HOST:-unix://$HOME/.docker/run/docker.sock}"
+                    ;;
+                *'Cannot connect'*|*'Is the docker daemon running'*)
+                    printf 'hint:      start Docker Desktop / OrbStack / Colima / Podman, then retry.\n'
+                    ;;
+            esac
             exit 1
         fi
         if [[ "$MDB_COMPOSE_FLAVOR" != compose-v2 ]]; then

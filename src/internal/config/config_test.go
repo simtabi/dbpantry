@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -58,6 +59,77 @@ func TestSettingsLayers(t *testing.T) {
 	}
 	if s.EnvFile != filepath.Join(root, ".env") {
 		t.Errorf("env file %s", s.EnvFile)
+	}
+}
+
+func TestQuoteMatchesEnvLib(t *testing.T) {
+	cases := map[string]string{
+		"plain":        "plain",
+		"pg,ui":        `"pg,ui"`,
+		"a b":          `"a b"`,
+		`say "hi"`:     `"say \"hi\""`,
+		"a$USER":       `"a\$USER"`,
+		"127.0.0.1":    "127.0.0.1",
+		"path/to:file": "path/to:file",
+	}
+	for in, want := range cases {
+		if got := Quote(in); got != want {
+			t.Errorf("Quote(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+func TestShowOriginAndSet(t *testing.T) {
+	root := t.TempDir()
+	example := filepath.Join(root, ".env.example")
+	env := filepath.Join(root, ".env")
+	if err := os.WriteFile(example, []byte("# Core\n# ===\n# Profiles to start.\nMDB_PROFILES=pg\nMDB_PUBLISH=none\n#MDB_HOME=\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(env, []byte("MDB_PROFILES=\"pg,ui\"\nMDB_TZ=UTC\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	environ := func() []string { return []string{"MDB_PUBLISH=direct"} }
+	s, err := Load(root, environ)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s.OriginOf("MDB_PUBLISH") != OriginEnv || s.OriginOf("MDB_PROFILES") != OriginFile || s.OriginOf("MDB_HOME") != OriginNone {
+		t.Errorf("origins publish=%s profiles=%s home=%s", s.OriginOf("MDB_PUBLISH"), s.OriginOf("MDB_PROFILES"), s.OriginOf("MDB_HOME"))
+	}
+	entries, err := s.Show(example)
+	if err != nil {
+		t.Fatal(err)
+	}
+	by := map[string]Entry{}
+	for _, e := range entries {
+		by[e.Key] = e
+	}
+	if by["MDB_PROFILES"].Value != "pg,ui" || by["MDB_PROFILES"].Origin != OriginFile {
+		t.Errorf("profiles = %+v", by["MDB_PROFILES"])
+	}
+	if by["MDB_PUBLISH"].Value != "direct" || by["MDB_PUBLISH"].Origin != OriginEnv {
+		t.Errorf("publish = %+v", by["MDB_PUBLISH"])
+	}
+	if err := s.Set("MDB_PROFILES", "pg,mysql,ui"); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Set("MDB_BIND_ADDR", "127.0.0.1"); err != nil {
+		t.Fatal(err)
+	}
+	got, err := ReadEnvFile(env)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got["MDB_PROFILES"] != "pg,mysql,ui" || got["MDB_BIND_ADDR"] != "127.0.0.1" || got["MDB_TZ"] != "UTC" {
+		t.Errorf("after set: %+v", got)
+	}
+	raw, _ := os.ReadFile(env)
+	if !strings.Contains(string(raw), `MDB_PROFILES="pg,mysql,ui"`) {
+		t.Errorf("set did not quote the list: %s", raw)
+	}
+	if err := (&Settings{EnvFile: example}).Set("MDB_PROFILES", "x"); err == nil {
+		t.Error("set must refuse .env.example")
 	}
 }
 

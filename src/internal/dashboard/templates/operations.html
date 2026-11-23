@@ -1,0 +1,41 @@
+{{define "content"}}
+<div class="page-header d-print-none"><div class="container-xl"><div class="row g-2 align-items-center">
+  <div class="col"><div class="page-pretitle">Manage</div><h2 class="page-title">Operations</h2></div>
+  <div class="col-auto ms-auto"><a href="/jobs" class="btn">{{icon "list"}} Jobs and audit log</a></div>
+</div></div></div>
+<div class="page-body"><div class="container-xl">
+  <div class="row row-cards">
+    <div class="col-lg-6" id="security">{{template "area-card" (areaCard . "security" "Security" "Certificates and passwords. Rotating restarts the poolers that mirror credentials.")}}</div>
+    <div class="col-lg-6" id="topology">{{template "area-card" (areaCard . "topology" "Topology" "Primary/replicas (Patroni), poolers and add-ons. Guide: /ha.")}}</div>
+    <div class="col-lg-6" id="environments">{{template "area-card" (areaCard . "environments" "Environments" "Named instance homes by type (localdev, dev, test, qa, uat, trn, spt, stg, preprod, demo, sandbox, prod). Copy/migrate export then restore between homes.")}}</div>
+    <div class="col-lg-6" id="health">{{template "area-card" (areaCard . "health" "Health" "The acceptance harness: the fast subset, or chosen checks.")}}</div>
+    <div class="col-lg-6" id="destroy">{{template "area-card" (areaCard . "destroy" "Delete data" "Deleting a data volume cannot be undone. Off unless allow_destroy is set in dashboard.json.")}}</div>
+    <div class="col-12" id="tokens">
+      <div class="card">
+        <div class="card-header">
+          <div><h3 class="card-title">API tokens</h3><p class="card-subtitle">For scripts: <code>Authorization: Bearer dbpantry_…</code>. A token is shown once, when it is created.</p></div>
+          <div class="card-actions">{{if .Admin}}<button type="button" class="btn btn-primary" data-token-create>{{icon "plus"}} New token</button>{{else}}<span class="d-inline-block" title="needs the admin scope"><button type="button" class="btn" disabled>{{icon "plus"}} New token</button></span>{{end}}</div>
+        </div>
+        <div class="card-body d-none" data-token-created>
+          <div class="alert alert-success mb-0" role="alert">
+            <div class="d-flex align-items-start gap-2"><div>{{icon "key"}}</div><div class="flex-fill"><h4 class="alert-heading">Copy the token now</h4><div class="text-secondary mb-2">It is stored as a hash and never shown again.</div>
+            <div class="input-group"><input class="form-control mdb-mono" id="mdb-new-token" readonly><button type="button" class="btn" data-copy="#mdb-new-token"><span data-copy-label>Copy</span></button></div></div></div>
+          </div>
+        </div>
+        {{if not .Tokens}}
+        <div class="card-body text-secondary">No tokens. Create one here or with <code>dbpantry api token create NAME --scope read</code>.</div>
+        {{else}}
+        <div class="table-responsive"><table class="table table-vcenter card-table">
+          <thead><tr><th>Name</th><th>Scope</th><th>ID</th><th>Created</th><th>Expires</th><th></th></tr></thead>
+          <tbody>{{range .Tokens}}<tr>
+            <td>{{.Name}}</td><td><span class="badge bg-primary-lt">{{.Scope}}</span></td><td class="mdb-mono">{{.ID}}</td>
+            <td class="text-secondary" title="{{.Created}}">{{ago .Created}}</td><td class="text-secondary">{{.Expires.Format "2006-01-02"}}</td>
+            <td class="text-end">{{if $.Admin}}<button type="button" class="btn btn-sm btn-outline-danger" data-token-revoke="{{.ID}}" data-token-name="{{.Name}}">{{icon "trash"}} Revoke</button>{{end}}</td>
+          </tr>{{end}}</tbody>
+        </table></div>
+        {{end}}
+      </div>
+    </div>
+  </div>
+</div></div>
+{{end}}

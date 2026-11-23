@@ -13,7 +13,7 @@
 # engine-specific now lives in the family hooks, so a new engine gets
 # new-project by existing rather than by someone remembering to add a case.
 #
-# Usage: scripts/new-project --name myapp [--engine pg|mysql|mariadb|mongodb|cassandra|ferretdb] [--format text|json]
+# Usage: scripts/new-project --name myapp [--engine pg|mysql|mariadb|mongodb|cassandra|ferretdb] [--format text|json] [--show|--rotate]
 #
 # --format json prints one JSON object on stdout instead of the text block, and
 # sends every log line (the hooks' too) to stderr. `dbpantry project new` reads
@@ -22,6 +22,12 @@
 # --show provisions nothing and generates nothing: it prints the block for a
 # project that already exists, from its password files (the dashboard's project
 # page). It fails when the project has no password file on that engine.
+#
+# --rotate gives an existing project's roles new passwords: it generates them
+# beside the old files, provisions with them (which sets the roles' passwords
+# and touches nothing else), and only then replaces the files, so a failure
+# leaves the old passwords working. Applications using the old ones stop
+# connecting, so it asks for the project name first; CONFIRM=yes answers.
 
 set -euo pipefail
 
@@ -30,8 +36,8 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 . "$ROOT/scripts/backend-lib.sh"
 cd "$ROOT" || exit 1
 
-# shellcheck source=engine-lib.sh
-. "$ROOT/scripts/engine-lib.sh"
+# shellcheck source=project-lib.sh
+. "$ROOT/scripts/project-lib.sh"
 
 ENV_FILE="${MDB_ENV_FILE:-$MDB_HOME/.env}"
 [[ -f "$ENV_FILE" ]] || ENV_FILE="$ROOT/.env.example"
@@ -39,6 +45,7 @@ ENV_FILE="${MDB_ENV_FILE:-$MDB_HOME/.env}"
 get() { mdb_env_get "$1" "$ENV_FILE"; }
 FORMAT=text
 SHOW=0
+ROTATE=0
 log() { if [[ "$FORMAT" == json ]]; then printf '[new-project] %s\n' "$*" >&2; else printf '[new-project] %s\n' "$*"; fi; }
 die() { printf '[new-project] ERROR: %s\n' "$*" >&2; exit 1; }
 
@@ -50,74 +57,19 @@ while (( $# )); do
         --engine) ENGINE="${2:-}"; shift 2 ;;
         --format) FORMAT="${2:-}"; shift 2 ;;
         --show)   SHOW=1; shift ;;
+        --rotate) ROTATE=1; shift ;;
         *) die "unknown argument: $1" ;;
     esac
 done
+(( SHOW && ROTATE )) && die "--show and --rotate do not go together"
 
-[[ -n "$NAME" ]] || die "specify --name <project>"
 [[ "$FORMAT" == text || "$FORMAT" == json ]] || die "--format is text or json, not '$FORMAT'"
-
-# Identifiers go into SQL and CQL, so they are constrained rather than escaped.
-# A name that needs quoting is a name that will cause trouble in a connection
-# string later anyway.
-[[ "$NAME" =~ ^[a-z][a-z0-9_]{0,62}$ ]] \
-    || die "invalid name '$NAME': use lowercase letters, digits and underscores, starting with a letter"
-
-# -----------------------------------------------------------------------------
-# Engine
-# -----------------------------------------------------------------------------
-# Descriptors are keyed by directory name; engines are addressed by their
-# MDB_ENGINE_NAME. `pg` is the descriptor in engines/postgres/, so a lookup by
-# directory alone would reject the toolkit's own default.
-resolved=""
-for candidate in $(engine_list); do
-    engine_load "$candidate" || continue
-    if [[ "$MDB_ENGINE_NAME" == "$ENGINE" || "$candidate" == "$ENGINE" ]]; then
-        resolved="$candidate"
-        break
-    fi
-done
-[[ -n "$resolved" ]] || die "unknown engine: $ENGINE (have: $(engine_list | tr '\n' ' '))"
-engine_load "$resolved" || die "could not load the descriptor for $resolved"
-ENGINE="$MDB_ENGINE_NAME"
-
-engine_load_hooks || die "no hooks for engine family ${MDB_ENGINE_FAMILY:-?}"
-command -v hook_provision_project >/dev/null 2>&1 \
-    || die "the ${MDB_ENGINE_FAMILY} family defines no hook_provision_project"
+project_check_name "$NAME"
+project_load_engine "$ENGINE"
+project_require_hook hook_provision_project
 
 DB="$NAME"
-USER_NAME="${NAME}_user"
-
-# -----------------------------------------------------------------------------
-# The hook contract's environment
-# -----------------------------------------------------------------------------
-# Same shape as scripts/backup: hooks call engine_exec and secret rather than
-# knowing whether they are inside a container or on the host.
-IN_CONTAINER="${MDB_IN_CONTAINER:-0}"
-
-engine_exec() {
-    local engine="$1"; shift
-    if [[ "$IN_CONTAINER" == "1" ]]; then
-        "$@"
-    else
-        ( cd "$ROOT" && mdb_svc_exec "$engine" "$@" )
-    fi
-}
-
-secret() {
-    local file="$1"
-    if [[ "$IN_CONTAINER" == "1" ]]; then
-        [[ -r "/run/secrets/$file" ]] || die "secret not readable: /run/secrets/$file"
-        tr -d '\n' < "/run/secrets/$file"
-    else
-        [[ -r "$MDB_HOME/secrets/$file" ]] || die "secret not readable: secrets/$file"
-        tr -d '\n' < "$MDB_HOME/secrets/$file"
-    fi
-}
-
-# Only the dump path compresses; provisioning has no artefact. Defined because
-# the family files are shared and may reference it at source time.
-compress_ext() { printf ''; }
+project_secret_files "$NAME"
 
 # -----------------------------------------------------------------------------
 # Passwords
@@ -126,39 +78,51 @@ compress_ext() { printf ''; }
 # principals, and a shared credential means leaking the read-only one leaks the
 # writable one too.
 SECRET_ACTIONS=()
+write_password() {
+    mkdir -p "$(dirname "$1")"
+    ( umask 077 && openssl rand -base64 96 | LC_ALL=C tr -dc 'A-Za-z0-9' | cut -c1-40 > "$1" )
+}
 gen_password() {
     local file="$1"
     if [[ -s "$file" ]]; then
         log "reusing the existing password in $file"
         SECRET_ACTIONS+=("reused")
     else
-        mkdir -p "$(dirname "$file")"
-        openssl rand -base64 96 | LC_ALL=C tr -dc 'A-Za-z0-9' | cut -c1-40 > "$file"
-        chmod 0600 "$file"
+        write_password "$file"
         log "generated $file"
         SECRET_ACTIONS+=("generated")
     fi
 }
 
-# A fixture's projects (`dbpantry project new --fixture`, which sets
-# MDB_FIXTURE=1) keep their password files in secrets/fixture/, which
-# `fixture down` removes with the fixture's tmpfs data. The stack's projects
-# keep them in secrets/.
-# Under the instance home (design.md D-84). Reported relative to it, as
-# secrets/<file>, so the manifest reads the same whichever home is in use.
-SECRET_DIR="$MDB_HOME/secrets"
-[[ "${MDB_FIXTURE:-0}" == "1" ]] && SECRET_DIR="$MDB_HOME/secrets/fixture"
-SECRET_FILE="${SECRET_DIR}/${ENGINE}_${USER_NAME}_password.txt"
-RO_SECRET_FILE="${SECRET_DIR}/${ENGINE}_${USER_NAME}_readonly_password.txt"
+# The files the passwords are read from: the new ones beside the old under
+# --rotate, until provisioning has set them.
+PW_FILE="$SECRET_FILE"
+RO_PW_FILE="$RO_SECRET_FILE"
+missing="no project '$NAME' on $ENGINE (no $(project_rel "$SECRET_FILE")); provision it with dbpantry project new --name $NAME --engine $ENGINE"
 if (( SHOW )); then
-    [[ -s "$SECRET_FILE" ]] || die "no project '$NAME' on $ENGINE (no ${SECRET_FILE#"$MDB_HOME"/}); provision it with make new-project NAME=$NAME ENGINE=$ENGINE"
+    [[ -s "$SECRET_FILE" ]] || die "$missing"
     SECRET_ACTIONS=("existing" "$([[ -s "$RO_SECRET_FILE" ]] && echo existing || echo missing)")
+elif (( ROTATE )); then
+    [[ -s "$SECRET_FILE" ]] || die "$missing"
+    if [[ "${CONFIRM:-}" != "yes" ]]; then
+        printf '\nAbout to give the roles of project "%s" on %s new passwords.\n' "$NAME" "$ENGINE" >&2
+        printf 'Applications using the old ones stop connecting until they are given the new.\n\n' >&2
+        printf 'Type the project name to continue: ' >&2
+        read -r answer || answer=""
+        [[ "$answer" == "$NAME" ]] || die "confirmation did not match; nothing was changed"
+    fi
+    PW_FILE="$SECRET_FILE.new"
+    RO_PW_FILE="$RO_SECRET_FILE.new"
+    trap 'rm -f "$PW_FILE" "$RO_PW_FILE"' EXIT
+    write_password "$PW_FILE"
+    write_password "$RO_PW_FILE"
+    SECRET_ACTIONS=("rotated" "rotated")
 else
     gen_password "$SECRET_FILE"
     gen_password "$RO_SECRET_FILE"
 fi
-PASSWORD="$(cat "$SECRET_FILE")"
-RO_PASSWORD="$(cat "$RO_SECRET_FILE" 2>/dev/null || true)"
+PASSWORD="$(cat "$PW_FILE")"
+RO_PASSWORD="$(cat "$RO_PW_FILE" 2>/dev/null || true)"
 
 # -----------------------------------------------------------------------------
 # Provision
@@ -176,9 +140,32 @@ else
 fi \
     || die "provisioning failed on $ENGINE; is it running? (make up PROFILES=$ENGINE)"
 
+if (( ROTATE )); then
+    mv -f "$PW_FILE" "$SECRET_FILE"
+    mv -f "$RO_PW_FILE" "$RO_SECRET_FILE"
+    log "rotated the passwords of '$USER_NAME' and '${USER_NAME}_readonly'; give your applications the new ones"
+fi
+
 if (( ! SHOW )); then
     log "provisioned '$DB' on $ENGINE, owned by '$USER_NAME'"
     [[ -n "$EXTENSIONS" ]] && log "extensions requested: $EXTENSIONS"
+fi
+
+# What the database has, which is not always what was asked for: an extension
+# the image does not ship is warned about and skipped. Unknown (null in JSON)
+# when the family cannot say.
+ACTIVE_EXTENSIONS=""
+HAVE_ACTIVE=0
+if command -v hook_list_extensions >/dev/null 2>&1 \
+        && line="$(hook_list_extensions "$DB" 2>/dev/null)"; then
+    HAVE_ACTIVE=1
+    ACTIVE_EXTENSIONS="${line#*$'\t'}"
+    if (( ! SHOW )); then
+        log "extensions active: ${ACTIVE_EXTENSIONS:-none}"
+        for e in ${EXTENSIONS//,/ }; do
+            [[ ",$ACTIVE_EXTENSIONS," == *",$e,"* ]] || log "WARNING: extension $e was requested but is not active"
+        done
+    fi
 fi
 
 # -----------------------------------------------------------------------------
@@ -251,21 +238,19 @@ fi
 NETWORK="${COMPOSE_PROJECT_NAME:-mdb}_net"
 
 if [[ "$FORMAT" == json ]]; then
-    # Every value is a constrained identifier, a path, or the block, so
-    # escaping backslash, quote, newline and tab is the whole of JSON's rule
-    # that applies here.
-    json_str() {
-        local v="$1"
-        v="${v//\\/\\\\}"; v="${v//\"/\\\"}"; v="${v//$'\n'/\\n}"; v="${v//$'\t'/\\t}"
-        printf '"%s"' "$v"
-    }
     exts="" sep=""
     for e in ${EXTENSIONS//,/ }; do exts+="${sep}$(json_str "$e")"; sep=","; done
+    active="null"
+    if (( HAVE_ACTIVE )); then
+        active="" sep=""
+        for e in ${ACTIVE_EXTENSIONS//,/ }; do active+="${sep}$(json_str "$e")"; sep=","; done
+        active="[${active}]"
+    fi
     pooler="null"
     [[ -n "$POOLER_HOST" ]] && pooler="{\"host\":$(json_str "$POOLER_HOST"),\"port\":$(json_str "$POOLER_PORT")}"
-    printf '{"engine":%s,"title":%s,"database":%s,"owner":%s,"readonly":%s,"extensions":[%s],"secrets":[{"role":%s,"file":%s,"action":%s},{"role":%s,"file":%s,"action":%s}],"tls_always":%s,"pooler":%s,"network":%s,"block":%s}\n' \
+    printf '{"engine":%s,"title":%s,"database":%s,"owner":%s,"readonly":%s,"extensions":[%s],"extensions_active":%s,"secrets":[{"role":%s,"file":%s,"action":%s},{"role":%s,"file":%s,"action":%s}],"tls_always":%s,"pooler":%s,"network":%s,"block":%s}\n' \
         "$(json_str "$ENGINE")" "$(json_str "${MDB_ENGINE_TITLE:-$ENGINE}")" "$(json_str "$DB")" \
-        "$(json_str "$USER_NAME")" "$(json_str "${USER_NAME}_readonly")" "$exts" \
+        "$(json_str "$USER_NAME")" "$(json_str "${USER_NAME}_readonly")" "$exts" "$active" \
         "$(json_str "$USER_NAME")" "$(json_str "${SECRET_FILE#"$MDB_HOME"/}")" "$(json_str "${SECRET_ACTIONS[0]:-}")" \
         "$(json_str "${USER_NAME}_readonly")" "$(json_str "${RO_SECRET_FILE#"$MDB_HOME"/}")" "$(json_str "${SECRET_ACTIONS[1]:-}")" \
         "$(engine_tls_always && echo true || echo false)" "$pooler" "$(json_str "$NETWORK")" "$(json_str "$block")"

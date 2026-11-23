@@ -16,3 +16,11 @@ The icons in `internal/dashboard/icons.go` are drawn in the style of Tabler Icon
 
 To update, replace both files from the new version's tarball, change the version and
 hashes here, and check every page still renders (`make dashboard`).
+
+## Page loader (`js/pageloader.js`)
+
+Fluent TypeScript source lives in `../ts/pageloader/` (seven classes; design.md D-102).
+The embedded `js/pageloader.js` is the browser IIFE kept in sync with that tree. Layout
+binds it with `data-dbpantry-*` and a `data-dbpantry-splash` root (`defer` so the node
+exists). Default gates are DOM + optional ready selector (fast local UX) with determinate
+`%` + stage labels; set `data-dbpantry-wait-window-load=1` / `wait-fonts=1` for heavier waits.
