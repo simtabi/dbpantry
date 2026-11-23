@@ -85,23 +85,14 @@
           <div class="card-body">
             <p class="text-secondary small mb-3">{{t . "status.refresh_blurb"}}</p>
             <div class="datagrid">
+              {{range (stateGroup "live").States}}
               <div class="datagrid-item">
-                <div class="datagrid-title">Live</div>
-                <div class="datagrid-content"><span class="badge bg-green-lt"><span class="status-dot status-dot-animated status-green me-1"></span>refreshing every 5s</span></div>
+                <div class="datagrid-title">{{.Label}}</div>
+                <div class="datagrid-content"><span class="badge bg-{{.Tone}}-lt text-wrap text-start"><span class="status-dot status-{{.Tone}} me-1{{if eq .Key "live"}} status-dot-animated{{end}}"></span>{{.Meaning}}</span></div>
               </div>
-              <div class="datagrid-item">
-                <div class="datagrid-title">Paused</div>
-                <div class="datagrid-content"><span class="badge bg-yellow-lt"><span class="status-dot status-yellow me-1"></span>you stopped it, or the page holds a password</span></div>
-              </div>
-              <div class="datagrid-item">
-                <div class="datagrid-title">Retrying</div>
-                <div class="datagrid-content"><span class="badge bg-yellow-lt"><span class="status-dot status-yellow me-1"></span>one or two failed fetches</span></div>
-              </div>
-              <div class="datagrid-item">
-                <div class="datagrid-title">Disconnected</div>
-                <div class="datagrid-content"><span class="badge bg-red-lt"><span class="status-dot status-red me-1"></span>three failed refreshes in a row</span></div>
-              </div>
+              {{end}}
             </div>
+            <a class="small d-inline-block mt-3" href="/help#statuses">Every status the dashboard shows →</a>
           </div>
         </div>
       </div>

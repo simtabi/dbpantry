@@ -114,6 +114,7 @@ Read once, to learn how the toolkit works and how to set it up.
 - [Kubernetes](docs/guides/kubernetes.md) — the Helm chart, `MDB_BACKEND=kubernetes`, OrbStack, kind and real clusters
 - [Getting started](docs/guides/getting-started.md) — a new project connected in under a minute (after the first image build)
 - [Dashboard](docs/guides/dashboard.md) — manage the stack from the browser (same commands as the CLI); Databases & users, Add-ons, System
+- [What the statuses mean](docs/guides/statuses.md) — running, stopped, leftover, disabled and every other badge, with what to do next
 - [Configuration](docs/guides/configuration.md) — every `MDB_` variable
 - [Supported versions](docs/guides/versions.md) — which versions are maintained, and running any other
 - [Architecture](docs/guides/architecture.md) — how engines are declared rather than hardcoded

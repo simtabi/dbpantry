@@ -64,6 +64,13 @@ waiving them.
   DOM/`#content` reveal (optional full `window` load / fonts via attributes).
 
 ### Changed
+- **Status guide (D-108).** Help has a “What the statuses mean” section, and
+  [docs/guides/statuses.md](docs/guides/statuses.md) the same tables: engine (running, stopped,
+  leftover, disabled), service health, project, job and Live badge, each with what to do next.
+  Stack › By engine, Engines and the Status page link it. Every badge's tooltip and the Live
+  legend now read one table (`StateGuide`), and a test regenerates and checks the doc.
+  `dbpantry endpoints` prints PROFILE `enabled`/`disabled` instead of `true`/`false`, and
+  `status` / `endpoints` help point to the guide.
 - **One button size and radius, per-engine password rotation, quieter engine page (D-107).**
   Every `.btn` and `.btn-sm` is the same 2rem control with the same corner radius as the header
   chips and the search trigger; only `.btn-lg` is bigger, and the drawers no longer square their

@@ -306,18 +306,17 @@
 
 {{define "engines-nav"}}{{/* Synced on every partial refresh so Stack › By engine tracks up/down. */}}
 {{range .S.EndpointsEnabledFirst}}
-{{$st := status $.S .Engine .Enabled}}
-<a class="dropdown-item mdb-nav-row{{if and (eq $.Page "engine") $.Engine (eq .Engine $.Engine.Engine)}} active{{end}}" href="/engines/{{.Engine}}" title="{{if eq $st "running"}}Running and in MDB_PROFILES{{else if eq $st "orphan"}}Still running, but not in MDB_PROFILES — stop it or add the profile{{else if eq $st "stopped"}}In MDB_PROFILES, container not running{{else}}Not in MDB_PROFILES{{end}}">
+{{$st := stateOf "engine" (status $.S .Engine .Enabled)}}
+<a class="dropdown-item mdb-nav-row{{if and (eq $.Page "engine") $.Engine (eq .Engine $.Engine.Engine)}} active{{end}}" href="/engines/{{.Engine}}" title="{{$st.Meaning}}">
   <span class="mdb-nav-row-main">
-    <span class="status-dot {{if eq $st "running"}}status-green{{else if eq $st "orphan"}}status-azure{{else if eq $st "stopped"}}status-yellow{{else}}status-muted{{end}}"></span>
+    <span class="status-dot status-{{if eq $st.Tone "secondary"}}muted{{else}}{{$st.Tone}}{{end}}"></span>
     <span class="text-truncate">{{.Title}}</span>
   </span>
-  {{if eq $st "running"}}<span class="badge bg-green-lt mdb-nav-row-meta">running</span>
-  {{else if eq $st "orphan"}}<span class="badge bg-azure-lt mdb-nav-row-meta">leftover</span>
-  {{else if eq $st "stopped"}}<span class="badge bg-yellow-lt mdb-nav-row-meta">stopped</span>
-  {{else}}<span class="badge bg-secondary-lt mdb-nav-row-meta">disabled</span>{{end}}
+  <span class="badge bg-{{$st.Tone}}-lt mdb-nav-row-meta">{{$st.Label}}</span>
 </a>
 {{end}}
+<div class="dropdown-divider"></div>
+<a class="dropdown-item text-secondary small" href="/help#statuses-engine" data-mdb-states-link>{{icon "info"}}<span class="ms-2">What these statuses mean</span></a>
 {{end}}
 
 {{define "partial"}}{{template "content" .}}
@@ -435,11 +434,11 @@
 {{define "running-job"}}{{with .Running}}<button type="button" class="btn btn-sm btn-outline-warning" data-job-open="{{.ID}}" title="dbpantry {{join .Args " "}}"><span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>{{actionTitle .Action}}</button>{{end}}{{end}}
 
 
-{{define "engine-status"}}{{if eq . "running"}}<span class="badge bg-green-lt" title="Running and in MDB_PROFILES">running</span>{{else if eq . "orphan"}}<span class="badge bg-azure-lt" title="Container is still up, but this engine is not in MDB_PROFILES — stop it or re-add the profile">leftover</span>{{else if eq . "stopped"}}<span class="badge bg-yellow-lt" title="In MDB_PROFILES, but its service is not running">stopped</span>{{else}}<span class="badge bg-secondary-lt" title="Not in MDB_PROFILES">disabled</span>{{end}}{{end}}
+{{define "engine-status"}}{{with stateOf "engine" .}}<span class="badge bg-{{.Tone}}-lt" title="{{.Meaning}}">{{.Label}}</span>{{end}}{{end}}
 
-{{define "project-state"}}{{if eq .State "active"}}<span class="badge bg-green-lt" title="The database exists">active</span>{{else if eq .State "orphaned"}}<span class="badge bg-yellow-lt" title="The engine has no such database; only the password files are left">orphaned</span>{{else if eq .State "unmanaged"}}<span class="badge bg-secondary-lt" title="No password file names it: dbpantry did not provision it">unmanaged</span>{{else}}<span class="badge bg-secondary-lt" title="The engine is not running or did not answer">unknown</span>{{end}}{{end}}
+{{define "project-state"}}{{with stateOf "project" (print .State)}}<span class="badge bg-{{.Tone}}-lt" title="{{.Meaning}}">{{.Label}}</span>{{end}}{{end}}
 
-{{define "health-status"}}{{/* Badge (not Tabler .status): .status has a fixed 1.5rem height, so a long label wraps and spills out of the pill. */}}<span class="badge text-nowrap {{if eq .Health "healthy"}}bg-green-lt{{else if eq .Health "none"}}bg-azure-lt{{else if eq .Health "starting"}}bg-yellow-lt{{else}}bg-red-lt{{end}}" title="{{if eq .Health "none"}}Running with no health check{{else if eq .Health "healthy"}}Healthy{{else if eq .Health "starting"}}Starting{{else if eq .Health "unhealthy"}}Unhealthy{{else}}{{.Health}}{{end}}"><span class="status-dot status-{{health .Health}} me-1{{if eq .Health "starting"}} status-dot-animated{{end}}"></span>{{if eq .Health "none"}}no check{{else}}{{.Health}}{{end}}</span>{{end}}
+{{define "health-status"}}{{/* Badge (not Tabler .status): .status has a fixed 1.5rem height, so a long label wraps and spills out of the pill. */}}<span class="badge text-nowrap {{if eq .Health "healthy"}}bg-green-lt{{else if eq .Health "none"}}bg-azure-lt{{else if eq .Health "starting"}}bg-yellow-lt{{else}}bg-red-lt{{end}}" title="{{(stateOf "health" (print .Health)).Meaning}}"><span class="status-dot status-{{health .Health}} me-1{{if eq .Health "starting"}} status-dot-animated{{end}}"></span>{{if eq .Health "none"}}no check{{else}}{{.Health}}{{end}}</span>{{end}}
 
 {{define "job-state"}}{{if eq .State "running"}}<span class="badge bg-yellow-lt"><span class="spinner-border spinner-border-sm me-1" aria-hidden="true"></span>running</span>{{else if eq .State "succeeded"}}<span class="badge bg-green-lt">succeeded</span>{{else}}<span class="badge bg-red-lt" title="{{.Error}}">failed, exit {{.ExitCode}}</span>{{end}}{{end}}
 

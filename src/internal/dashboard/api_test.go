@@ -323,7 +323,7 @@ func TestLaunchTokenWorksOnce(t *testing.T) {
 		t.Errorf("the launch link worked twice: %d", r.Code)
 	}
 	if r := m.do(call{method: http.MethodGet, path: "/", cookie: r.Result().Cookies()[0]}); r.Code != http.StatusOK {
-		t.Errorf("the session = %d", r.Code)
+		t.Errorf("the session = %d: %.300s", r.Code, r.Body.String())
 	}
 }
 
