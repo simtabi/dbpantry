@@ -456,6 +456,18 @@
 .mdb-job-progress-line { border-left-color: #3d8bfd; color: #8b949e; }
 .mdb-job-tree { border-left-color: #30363d; color: #8b949e; }
 .mdb-job-plain { border-left-color: #30363d; }
+/* Tree/plain rows already carry ├─ / └─ in the message; hide the empty
+   mark column so the drawer does not keep a dotted gutter (D-105). */
+.mdb-job-tree,
+.mdb-job-plain,
+.mdb-job-progress-line {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+.mdb-job-tree .mdb-job-mark,
+.mdb-job-plain .mdb-job-mark,
+.mdb-job-progress-line .mdb-job-mark {
+  display: none;
+}
 .mdb-job-spin {
   display: inline-block;
   width: .7rem;

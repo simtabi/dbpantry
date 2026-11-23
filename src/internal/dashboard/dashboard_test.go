@@ -611,6 +611,29 @@ func TestProjectsShowWhatTheEnginesSay(t *testing.T) {
 	}
 }
 
+// Job drawer markFor must not paint "·" on tree/plain rows — that was the
+// dotted left gutter beside ├─ / └─ lines (design.md D-105).
+func TestJobDrawerMarkOmitsTreeDot(t *testing.T) {
+	js, err := os.ReadFile(filepath.Join("resources", "assets", "js", "manage.js")) // #nosec G304 -- fixed path in this package
+	if err != nil {
+		t.Fatal(err)
+	}
+	src := string(js)
+	if !strings.Contains(src, "kind === 'tree' || kind === 'plain'") {
+		t.Error("markFor must treat tree/plain as mark-less (D-105 job drawer)")
+	}
+	if strings.Contains(src, "return '·'") || strings.Contains(src, `return "·"`) {
+		t.Error("markFor must not fall through to a middle-dot mark")
+	}
+	css, err := os.ReadFile(filepath.Join("resources", "assets", "css", "dashboard.css")) // #nosec G304 -- fixed path in this package
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(css), ".mdb-job-tree .mdb-job-mark") || !strings.Contains(string(css), "display: none") {
+		t.Error("tree/plain rows must collapse the empty mark column in CSS")
+	}
+}
+
 // Connect's compose and CA snippets use .mdb-env; Tabler paints <pre> light,
 // so without an explicit body colour those cards look empty and Copy looks broken.
 func TestConnectSnippetsAreVisible(t *testing.T) {
