@@ -13,20 +13,22 @@ import (
 // progress frames. On a terminal it moves the cursor back over the previous
 // frame. Off a terminal it prints a one-line summary whenever that summary
 // changes (so a log or a dashboard job stream sees motion without escape
-// sequences), and Stop prints the final full frame once.
+// sequences), streams nested tree / progress lines as they change, and Stop
+// prints the final full frame once.
 type Live struct {
 	w        io.Writer
 	terminal bool
 	draw     func(frame int, now time.Time) []string
 	// summary, when set, is the one-line progress printed off a terminal.
-	// When nil, stream mode stays quiet until Stop.
+	// When nil, stream mode stays quiet until Stop (aside from tree lines).
 	summary func(frame int, now time.Time) string
 
-	mu    sync.Mutex
-	lines int
-	frame int
-	stop  chan struct{}
-	done  chan struct{}
+	mu       sync.Mutex
+	lines    int
+	frame    int
+	stop     chan struct{}
+	done     chan struct{}
+	lastTree map[string]string // off-TTY: last printed line per treeStreamKey
 }
 
 // NewLive returns a region drawn by draw. terminal says w is a terminal.
@@ -77,40 +79,112 @@ func (l *Live) Start() {
 // dashboard job stream does not grow one line per spinner frame.
 var streamSpinner = regexp.MustCompile(`[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]`)
 
+// streamANSI strips SGR colour codes so tree keys compare equal with or without colour.
+var streamANSI = regexp.MustCompile(`\x1b\[[0-9;]*[A-Za-z]`)
+
 // streamStable is the comparison key for off-terminal progress: spinner
-// animation and sub-second duration flicker do not count as a new line.
+// animation is ignored; bare elapsed times advance every 3s so the drawer
+// can show a progress bar once a step crosses that threshold; %/ETA changes
+// always count as a new line.
 func streamStable(s string) string {
 	s = streamSpinner.ReplaceAllString(s, "…")
-	// Bucket trailing durations like "751ms" / "1.5s" to whole seconds so
-	// the stream only advances when the step or the progress %/ETA moves.
 	if i := strings.LastIndexByte(s, ' '); i >= 0 {
 		tail := s[i+1:]
-		if strings.HasSuffix(tail, "ms") || strings.HasSuffix(tail, "s") {
-			s = s[:i] + " …"
+		if secs, ok := streamDurationSeconds(tail); ok {
+			// 0–2s stay quiet after the first tick; then one line per 3s.
+			bucket := (secs / 3) * 3
+			if bucket < 3 {
+				return s[:i] + " …"
+			}
+			return s[:i] + " " + fmt.Sprintf("%ds", bucket)
 		}
 	}
 	return s
 }
 
+// streamDurationSeconds parses Duration-style tails (850ms, 4.2s, 25s, 1m05s).
+func streamDurationSeconds(tail string) (int, bool) {
+	if strings.HasSuffix(tail, "ms") {
+		return 0, true
+	}
+	if strings.HasSuffix(tail, "s") && !strings.Contains(tail, "m") {
+		var f float64
+		if _, err := fmt.Sscanf(strings.TrimSuffix(tail, "s"), "%f", &f); err == nil {
+			return int(f), true
+		}
+	}
+	if strings.Contains(tail, "m") && strings.HasSuffix(tail, "s") {
+		var m, sec int
+		if _, err := fmt.Sscanf(tail, "%dm%ds", &m, &sec); err == nil {
+			return m*60 + sec, true
+		}
+	}
+	return 0, false
+}
+
+// treeStreamKey identifies a nested tree / progress row so off-TTY updates
+// replace the previous line for the same resource instead of appending forever.
+func treeStreamKey(line string) string {
+	plain := strings.TrimSpace(streamANSI.ReplaceAllString(line, ""))
+	if plain == "" {
+		return ""
+	}
+	branch := strings.ContainsAny(plain, "├└│")
+	bar := strings.ContainsAny(plain, "█░") && strings.Contains(plain, "%")
+	if !branch && !bar {
+		return ""
+	}
+	plain = strings.TrimLeft(plain, " \t└├│─")
+	plain = streamSpinner.ReplaceAllString(plain, "")
+	for _, icon := range []string{"✔ ", "✖ ", "⚠ ", "○ ", "… ", "▸ ", "– "} {
+		plain = strings.TrimPrefix(plain, icon)
+	}
+	plain = strings.TrimSpace(plain)
+	if bar {
+		// Digits and % change every tick; keep one stream row per bar slot.
+		stable := regexp.MustCompile(`\d+%?`).ReplaceAllString(plain, "#")
+		return "progress:" + strings.TrimSpace(stable)
+	}
+	if i := strings.Index(plain, "  "); i >= 0 {
+		plain = plain[:i]
+	}
+	return "tree:" + strings.TrimSpace(plain)
+}
+
 func (l *Live) streamTick(last *string) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	sumFn := l.summary
-	if sumFn == nil {
-		return
-	}
 	l.frame++
 	frame := l.frame
-	sum := strings.TrimSpace(sumFn(frame, time.Now()))
-	if sum == "" {
+	now := time.Now()
+	if sumFn := l.summary; sumFn != nil {
+		sum := strings.TrimSpace(sumFn(frame, now))
+		if sum != "" {
+			key := streamStable(sum)
+			if key != *last {
+				*last = key
+				_, _ = fmt.Fprintln(l.w, sum)
+			}
+		}
+	}
+	if l.draw == nil {
 		return
 	}
-	key := streamStable(sum)
-	if key == *last {
-		return
+	if l.lastTree == nil {
+		l.lastTree = map[string]string{}
 	}
-	*last = key
-	_, _ = fmt.Fprintln(l.w, sum)
+	for _, line := range l.draw(frame, now) {
+		key := treeStreamKey(line)
+		if key == "" {
+			continue
+		}
+		stable := streamStable(streamANSI.ReplaceAllString(line, ""))
+		if l.lastTree[key] == stable {
+			continue
+		}
+		l.lastTree[key] = stable
+		_, _ = fmt.Fprintln(l.w, line)
+	}
 }
 
 // Refresh redraws the region now.

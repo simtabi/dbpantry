@@ -133,9 +133,11 @@ func (s *screen) summary(frame int, now time.Time) string {
 }
 
 func (s *screen) start() {
-	// Off a terminal the title and finished steps appear once in Stop's
-	// final tree. Printing them here (and again in run via Print) made the
-	// job drawer show every line twice beside a column of "·" marks.
+	// Off a terminal the title appears only in Stop's final tree. Live
+	// streams the running summary, nested tree lines, and (via run) each
+	// finished step so the job drawer can flip spinners to ✔ without waiting
+	// for Stop — the drawer coalesces by step label, so the final tree does
+	// not double the rows.
 	s.live.Start()
 }
 
@@ -203,14 +205,27 @@ func (s *screen) run(ctx context.Context, root string, env []string, node *ui.No
 	s.mu.Lock()
 	node.Log = nil
 	ended := time.Now()
+	label, started := node.Label, node.Started
 	if err != nil {
 		node.Finish(ui.Failed, "", ended)
 	} else {
 		node.Finish(ui.Done, "", ended)
 	}
 	s.mu.Unlock()
-	// Off a terminal, do not Print the finished step: Stop redraws the full
-	// tree once. Mid-flight progress is the Live summary line only.
+	// Off a terminal, print the finished step so the drawer flips the
+	// spinner to ✔ immediately. Stop still prints the full tree once; the
+	// drawer coalesces by label. Nested under-the-hood rows stream from Live.
+	if !s.live.Terminal() {
+		icon := s.st.Icon(ui.Done, 0)
+		if err != nil {
+			icon = s.st.Icon(ui.Failed, 0)
+		}
+		detail := ""
+		if !started.IsZero() {
+			detail = "  " + s.st.Dim(ui.Duration(ended.Sub(started)))
+		}
+		s.live.Print(icon + " " + label + detail)
+	}
 	if err != nil {
 		return all.String(), err
 	}

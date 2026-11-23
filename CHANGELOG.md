@@ -69,7 +69,9 @@ waiving them.
   Connect table and Next hints so `up` / `down` / `project new` read flush and natural. Done
   leaves no longer echo Compose’s `Healthy`/`Built` text; Overview flags leftover engines.
   Job drawer follow-up: stop painting `·` marks on tree/plain rows, collapse that empty mark
-  column in CSS, and off-TTY `--pretty` print the title/tree once on Stop (no mid-flight duplicate).
+  column in CSS, and print the title once on Stop. Interactive follow-up: off-TTY `--pretty`
+  streams nested compose tree lines mid-flight, prints each finished step as ✔, buckets elapsed
+  every 3s, and the drawer shows header + per-row progress bars with %/ETA when known.
 - **Splash could cover the page forever.** A synchronous `<head>` boot captured a null splash
   root, so hide cleared `data-dbpantry-loading` but left the overlay visible. Script is `defer`,
   root is re-queried, maxMs race is cleared, and `<noscript>` reveals the page.
