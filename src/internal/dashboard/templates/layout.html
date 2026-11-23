@@ -1,15 +1,36 @@
 {{define "layout"}}<!doctype html>
-<html lang="en">
+<html lang="{{.Lang}}" data-dbpantry-loading="1" data-dbpantry-loader
+      data-dbpantry-min-ms="140" data-dbpantry-max-ms="900" data-dbpantry-fade-ms="160"
+      data-dbpantry-wait-fonts="0" data-dbpantry-wait-window-load="0"
+      data-dbpantry-ready-selector="#content">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="csrf-token" content="{{.CSRF}}">
   <title>{{.Title}} · dbpantry</title>
   <link rel="icon" type="image/svg+xml" href="/assets/favicons/favicon.svg">
   <link rel="stylesheet" href="/assets/css/tabler.min.css">
   <link rel="stylesheet" href="/assets/css/dashboard.css">
   <script src="/assets/js/theme.js"></script>
+  {{/* defer: splash markup must exist before PageLoaderBootstrap binds it (D-102). */}}
+  <script defer src="/assets/js/pageloader.js"></script>
+  <noscript>
+    <style>
+      html[data-dbpantry-loading] .page,
+      html[data-dbpantry-loading] .skip-link { visibility: visible !important; }
+      [data-dbpantry-splash] { display: none !important; }
+    </style>
+  </noscript>
 </head>
 <body>
+  <div data-dbpantry-splash data-dbpantry-splash-state="visible" role="status" aria-live="polite" aria-busy="true">
+    <img src="/assets/favicons/favicon.svg" alt="" data-dbpantry-splash-mark width="48" height="48">
+    <div data-dbpantry-splash-label>Starting…</div>
+    <div data-dbpantry-splash-pct>0%</div>
+    <div data-dbpantry-splash-progress role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" aria-valuetext="Starting…" data-indeterminate>
+      <span data-dbpantry-splash-bar></span>
+    </div>
+  </div>
   <a href="#content" class="visually-hidden-focusable skip-link">Skip to content</a>
   <div class="page">
     <header class="navbar navbar-expand-md d-print-none">
@@ -18,38 +39,98 @@
           <span class="navbar-toggler-icon"></span>
         </button>
         <div class="navbar-brand navbar-brand-autodark pe-0 pe-md-3">
-          <a href="/" class="d-flex align-items-center gap-2 text-reset text-decoration-none">
+          <a href="/" class="d-flex align-items-center gap-2 text-reset text-decoration-none" title="{{t . "nav.overview"}}">
             <img src="/assets/favicons/favicon.svg" alt="" class="mdb-mark"><span>dbpantry</span>
           </a>
         </div>
-        <div class="navbar-nav flex-row order-md-last">
-          <div class="nav-item d-none d-md-flex me-3">
-            <a href="/connect" class="btn btn-outline-primary">{{icon "plug"}} Connect</a>
+        <div class="navbar-nav flex-row order-md-last align-items-center">
+          <div class="nav-item d-none d-lg-flex me-2 flex-grow-1" style="min-width: 12rem; max-width: 18rem">
+            <button type="button" class="mdb-cmd-trigger d-flex align-items-center gap-2 w-100 text-start" data-cmd-open aria-haspopup="dialog" aria-controls="mdb-cmd" aria-keyshortcuts="Meta+K Control+K /">
+              <span class="mdb-cmd-trigger-icon" aria-hidden="true">{{icon "search"}}</span>
+              <span class="flex-fill text-truncate">Search pages and actions…</span>
+              <kbd class="mdb-cmd-kbd" data-cmd-shortcut aria-hidden="true">⌘K</kbd>
+            </button>
           </div>
-          <div class="nav-item d-flex align-items-center me-2">
-            <span class="mdb-refresh badge bg-green-lt" data-state="live" title="{{if .Refresh}}Refreshes every 5 seconds{{else}}Not refreshed: this page holds a password{{end}}">
-              <span class="status-dot {{if .Refresh}}status-dot-animated{{end}} status-green me-1"></span><span data-refresh-label>{{if .Refresh}}Live{{else}}Paused{{end}}</span>
-            </span>
+          <div class="nav-item d-lg-none me-1">
+            <button type="button" class="nav-link px-0" data-cmd-open aria-haspopup="dialog" aria-controls="mdb-cmd" aria-label="Search pages and actions" title="Search pages and actions">{{icon "search"}}</button>
           </div>
-          <div class="nav-item d-flex">
+          <div class="nav-item d-none d-md-flex me-2" data-sync-target="running">{{template "running-job" .}}</div>
+          <div class="nav-item d-none d-md-flex me-1">{{template "page-history" .}}</div>
+          <div class="nav-item d-none d-md-flex me-1">
+            <button type="button" class="mdb-header-chip mdb-refresh" data-state="{{if .Refresh}}live{{else}}paused{{end}}" data-refresh-toggle{{if not .Refresh}} disabled{{end}}
+              title="{{if .Refresh}}Live: auto-refresh every 5s — click to pause{{else if eq .Page "addons"}}Paused: the Add-ons wizard keeps its step and selection — Live is off here{{else if eq .Page "databases"}}Paused: the Databases wizard keeps its form state — Live is off here{{else if eq .Page "project"}}Paused: this page holds a password, so it never auto-refreshes{{else}}Paused: this page does not auto-refresh{{end}}"
+              aria-pressed="{{if .Refresh}}true{{else}}false{{end}}" aria-label="{{t . "nav.refresh"}}">
+              <span class="status-dot {{if .Refresh}}status-dot-animated status-green{{else}}status-yellow{{end}}" data-refresh-dot></span><span data-refresh-label>{{if .Refresh}}Live{{else}}Paused{{end}}</span>
+            </button>
+          </div>
+          <div class="nav-item dropdown d-none d-md-flex me-1">
+            <button type="button" class="mdb-header-chip mdb-stats-toggle dropdown-toggle" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false" aria-label="{{t . "nav.status"}}" title="{{t . "nav.status_tip"}}">
+              <span data-sync-target="header-stats-trigger">{{template "header-stats-trigger" .}}</span>
+            </button>
+            <div class="dropdown-menu dropdown-menu-end dropdown-menu-arrow dropdown-menu-card mdb-stats-menu">
+              <div class="card" data-sync-target="header-stats">{{template "header-stats" .}}</div>
+            </div>
+          </div>
+          <div class="nav-item">
             <a href="?theme=dark" class="nav-link px-0 hide-theme-dark" data-theme-set="dark" title="Dark mode" aria-label="Dark mode">{{icon "moon"}}</a>
             <a href="?theme=light" class="nav-link px-0 hide-theme-light" data-theme-set="light" title="Light mode" aria-label="Light mode">{{icon "sun"}}</a>
           </div>
           <div class="nav-item dropdown">
-            <a href="#" class="nav-link d-flex lh-1 p-0 px-2" data-bs-toggle="dropdown" aria-label="Stack menu">
+            <a href="#" class="nav-link px-0" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-label="{{t . "nav.notifications"}}" aria-expanded="false" title="{{t . "nav.notifications"}}">
+              <span class="position-relative d-inline-flex" data-sync-target="notify-bell">{{template "notify-bell" .}}</span>
+            </a>
+            <div class="dropdown-menu dropdown-menu-end dropdown-menu-arrow dropdown-menu-card mdb-notify-menu">
+              <div class="card">
+                <div class="card-header">
+                  <h3 class="card-title">{{t . "nav.notifications"}}</h3>
+                  <div class="card-actions">
+                    <a href="/jobs" class="btn btn-sm" title="{{t . "ops.jobs"}}">{{t . "nav.view_jobs"}}</a>
+                  </div>
+                </div>
+                <div class="list-group list-group-flush list-group-hoverable" data-sync-target="notify-list">{{template "notify-list" .}}</div>
+                <div class="card-footer">
+                  <div class="row g-2">
+                    <div class="col"><a href="/jobs" class="btn btn-sm w-100">{{t . "nav.view_jobs"}}</a></div>
+                    <div class="col"><a href="/status" class="btn btn-sm w-100">{{t . "nav.status"}}</a></div>
+                    <div class="col-12"><button type="button" class="btn btn-sm w-100" data-status-json>{{t . "ops.status_json"}}</button></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="nav-item dropdown">
+            <a href="#" class="nav-link px-0" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-label="{{t . "nav.language"}}" aria-expanded="false" title="{{t . "nav.language"}}">{{upper .Lang}}</a>
+            <div class="dropdown-menu dropdown-menu-end dropdown-menu-arrow mdb-lang-menu">
+              {{range .LangLinks}}
+              <a class="dropdown-item{{if .Active}} active{{end}}" href="{{.URL}}" data-lang="{{.Code}}">{{.Name}}</a>
+              {{end}}
+            </div>
+          </div>
+          <div class="nav-item dropdown">
+            <a href="#" class="nav-link d-flex lh-1 text-reset p-0" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false" aria-label="{{t . "nav.instance"}}" title="{{t . "nav.instance"}}">
               <span class="avatar avatar-sm bg-primary-lt">{{icon "database"}}</span>
-              <div class="d-none d-xl-block ps-2">
-                <div>{{.S.Network}}</div>
-                <div class="mt-1 small text-secondary">{{.S.Backend}} · publish {{.S.Endpoints.Publish}}</div>
+              <div class="d-none d-xl-block ps-2 text-start">
+                <div>{{t . "nav.instance"}}</div>
+                <div class="mt-1 small text-secondary text-truncate" style="max-width: 11rem">{{.S.Backend}} · {{.S.Endpoints.Publish}}</div>
               </div>
             </a>
-            <div class="dropdown-menu dropdown-menu-end dropdown-menu-arrow">
-              <span class="dropdown-header">dbpantry {{.S.Version}}</span>
-              <a href="/connect" class="dropdown-item">{{icon "plug"}}<span class="ms-2">How to connect</span></a>
-              <a href="/api/status" class="dropdown-item">{{icon "braces"}}<span class="ms-2">Status as JSON</span></a>
+            <div class="dropdown-menu dropdown-menu-end dropdown-menu-arrow mdb-instance-menu">
+              <div class="dropdown-header">{{.Actor}} · {{.Mode}}</div>
+              <a href="/status" class="dropdown-item">{{icon "activity"}}<span class="ms-2">{{t . "nav.status"}}</span></a>
+              <a href="/config" class="dropdown-item">{{icon "settings"}}<span class="ms-2">{{t . "ops.configuration"}}</span></a>
+              <a href="/connect" class="dropdown-item">{{icon "plug"}}<span class="ms-2">{{t . "nav.connect"}}</span></a>
+              <a href="/jobs" class="dropdown-item">{{icon "list"}}<span class="ms-2">{{t . "ops.jobs"}}</span></a>
+              <button type="button" class="dropdown-item" data-status-json>{{icon "braces"}}<span class="ms-2">{{t . "ops.status_json"}}</span></button>
               <div class="dropdown-divider"></div>
-              <span class="dropdown-item-text small text-secondary">env file {{base .S.Endpoints.EnvFile}}</span>
-              <span class="dropdown-item-text small text-secondary">profiles {{join .S.Endpoints.Profiles ", "}}</span>
+              <a href="/help" class="dropdown-item">{{icon "help"}}<span class="ms-2">{{t . "nav.help"}}</span></a>
+              <a href="/about" class="dropdown-item">{{icon "info"}}<span class="ms-2">{{t . "nav.about"}}</span></a>
+              {{if .S.WebUIs}}
+              <div class="dropdown-divider"></div>
+              {{range .S.WebUIs}}<a href="{{.URL}}" class="dropdown-item" rel="noopener" target="_blank">{{icon "eye"}}<span class="ms-2">{{.Name}}</span></a>{{end}}
+              {{end}}
+              <div class="dropdown-divider"></div>
+              <div class="dropdown-item-text small text-secondary text-truncate" title="{{.S.Version}}">{{.S.Version}}</div>
+              {{if ne .Mode "none"}}<form method="post" action="/logout" class="m-0"><input type="hidden" name="csrf" value="{{.CSRF}}"><button type="submit" class="dropdown-item">{{icon "logout"}}<span class="ms-2">Sign out</span></button></form>{{end}}
             </div>
           </div>
         </div>
@@ -59,36 +140,102 @@
       <div class="collapse navbar-collapse" id="navbar-menu">
         <div class="navbar">
           <div class="container-xl">
-            <ul class="navbar-nav">
-              <li class="nav-item{{if eq .Page "overview"}} active{{end}}"><a class="nav-link" href="/"><span class="nav-link-icon d-md-none d-lg-inline-block">{{icon "home"}}</span><span class="nav-link-title">Overview</span></a></li>
-              <li class="nav-item{{if eq .Page "services"}} active{{end}}"><a class="nav-link" href="/services"><span class="nav-link-icon d-md-none d-lg-inline-block">{{icon "server"}}</span><span class="nav-link-title">Services</span>{{if .S.ServicesErr}}<span class="badge badge-sm bg-red text-red-fg ms-2">!</span>{{end}}</a></li>
-              <li class="nav-item{{if eq .Page "images"}} active{{end}}"><a class="nav-link" href="/images"><span class="nav-link-icon d-md-none d-lg-inline-block">{{icon "package"}}</span><span class="nav-link-title">Images</span></a></li>
-              <li class="nav-item dropdown{{if or (eq .Page "engines") (eq .Page "engine")}} active{{end}}">
-                <a class="nav-link dropdown-toggle" href="/engines" data-bs-toggle="dropdown" data-bs-auto-close="outside" role="button" aria-expanded="false"><span class="nav-link-icon d-md-none d-lg-inline-block">{{icon "database"}}</span><span class="nav-link-title">Engines</span></a>
-                <div class="dropdown-menu">
-                  <a class="dropdown-item" href="/engines">All engines</a>
+            <ul class="navbar-nav mdb-nav">
+              <li class="nav-item{{if eq .Page "overview"}} active{{end}}">
+                <a class="nav-link" href="/" title="Stack health, engines, projects and where to connect"><span class="nav-link-icon d-md-none d-lg-inline-block">{{icon "home"}}</span><span class="nav-link-title">{{t . "nav.overview"}}</span></a>
+              </li>
+              <li class="nav-item dropdown{{if or (eq .Page "services") (eq .Page "images") (eq .Page "engines") (eq .Page "engine") (eq .Page "logs")}} active{{end}}">
+                <a class="nav-link dropdown-toggle" href="#navbar-stack" data-bs-toggle="dropdown" data-bs-auto-close="outside" role="button" aria-expanded="false" title="Services, images and database engines">
+                  <span class="nav-link-icon d-md-none d-lg-inline-block">{{icon "layers"}}</span>
+                  <span class="nav-link-title">{{t . "nav.stack"}}</span>{{if .S.ServicesErr}}<span class="badge badge-sm bg-red text-red-fg ms-2" title="Services could not be listed">!</span>{{end}}
+                </a>
+                <div class="dropdown-menu dropdown-menu-arrow mdb-nav-menu" id="navbar-stack">
+                  <div class="dropdown-header">Runtime</div>
+                  <a class="dropdown-item mdb-nav-row{{if eq .Page "services"}} active{{end}}" href="/services">
+                    <span class="mdb-nav-row-main">{{icon "server"}}<span>Services</span></span>
+                    {{if .S.ServicesErr}}<span class="badge bg-red-lt mdb-nav-row-meta">unavailable</span>
+                    {{else}}<span class="badge bg-primary-lt mdb-nav-row-meta" data-sync-target="stack-services" title="{{.S.ServicesUp}} up · {{.S.ServicesDown}} down">{{.S.ServicesUp}}/{{len .S.Services}}</span>{{end}}
+                  </a>
+                  <a class="dropdown-item mdb-nav-row{{if eq .Page "images"}} active{{end}}" href="/images">
+                    <span class="mdb-nav-row-main">{{icon "package"}}<span>Images</span></span>
+                    <span class="badge bg-secondary-lt mdb-nav-row-meta" data-sync-target="stack-images" title="{{len .S.Images}} local images">{{len .S.Images}}</span>
+                  </a>
                   <div class="dropdown-divider"></div>
-                  {{range .S.Endpoints.Endpoints}}<a class="dropdown-item" href="/engines/{{.Engine}}"><span class="status-dot {{if .Enabled}}status-green{{else}}status-secondary{{end}} me-2"></span>{{.Title}}</a>{{end}}
+                  <a class="dropdown-item mdb-nav-row{{if eq .Page "engines"}} active{{end}}" href="/engines">
+                    <span class="mdb-nav-row-main">{{icon "database"}}<span>All engines</span></span>
+                    <span class="badge bg-primary-lt mdb-nav-row-meta" data-sync-target="stack-engines" title="{{.S.EnginesRunning}} running of {{.S.Enabled}} enabled{{with .S.EnginesLeftover}}; {{.}} leftover{{end}}">{{.S.EnginesRunning}}/{{.S.Enabled}}</span>
+                  </a>
+                  <div class="dropend">
+                    <button type="button" class="dropdown-item dropdown-toggle mdb-nav-row" data-bs-toggle="dropdown" data-bs-auto-close="outside" data-mdb-fixed-dropdown aria-expanded="false">
+                      <span class="mdb-nav-row-main">{{icon "layers"}}<span>By engine</span></span>
+                      <span class="badge bg-secondary-lt mdb-nav-row-meta" data-sync-target="stack-by-engine" title="{{len .S.Endpoints.Endpoints}} engines">{{len .S.Endpoints.Endpoints}}</span>
+                    </button>
+                    <div class="dropdown-menu mdb-nav-submenu" data-sync-target="engines-menu">{{template "engines-nav" .}}</div>
+                  </div>
                 </div>
               </li>
-              <li class="nav-item dropdown{{if or (eq .Page "projects") (eq .Page "project")}} active{{end}}">
-                <a class="nav-link dropdown-toggle" href="/projects" data-bs-toggle="dropdown" data-bs-auto-close="outside" role="button" aria-expanded="false"><span class="nav-link-icon d-md-none d-lg-inline-block">{{icon "folders"}}</span><span class="nav-link-title">Projects</span><span class="badge badge-sm bg-primary-lt ms-2">{{len .S.Projects}}</span></a>
-                <div class="dropdown-menu">
-                  <a class="dropdown-item" href="/projects">All projects</a>
-                  {{if .S.Projects}}<div class="dropdown-divider"></div>{{end}}
-                  {{range .S.Projects}}<a class="dropdown-item" href="/projects/{{.Engine}}/{{.Name}}">{{.Name}}<span class="badge bg-primary-lt ms-auto">{{.Engine}}</span></a>{{end}}
+              <li class="nav-item dropdown{{if or (eq .Page "projects") (eq .Page "project") (eq .Page "databases") (eq .Page "backups")}} active{{end}}">
+                <a class="nav-link dropdown-toggle" href="#navbar-data" data-bs-toggle="dropdown" data-bs-auto-close="outside" role="button" aria-expanded="false" title="Projects and backups">
+                  <span class="nav-link-icon d-md-none d-lg-inline-block">{{icon "folders"}}</span>
+                  <span class="nav-link-title">{{t . "nav.data"}}</span>
+                  <span class="badge badge-sm bg-primary-lt ms-2" data-sync-target="projects" title="{{len .S.Projects}} with password files{{with .S.Orphaned}}; {{len .}} orphaned{{end}}">{{len .S.Projects}}</span>
+                </a>
+                <div class="dropdown-menu dropdown-menu-arrow mdb-nav-menu" id="navbar-data">
+                  <div class="dropdown-header">Projects</div>
+                  <a class="dropdown-item{{if eq .Page "databases"}} active{{end}}" href="/databases">{{icon "database"}}<span class="ms-2">{{t . "nav.databases"}}</span></a>
+                  <div data-sync-target="projects-menu">{{template "projects-nav" .}}</div>
+                  <div class="dropdown-divider"></div>
+                  <div class="dropdown-header">Recovery</div>
+                  <a class="dropdown-item{{if eq .Page "backups"}} active{{end}}" href="/backups" title="Dumps, verify and restore">{{icon "archive"}}<span class="ms-2">Backups</span></a>
                 </div>
               </li>
-              <li class="nav-item{{if eq .Page "backups"}} active{{end}}"><a class="nav-link" href="/backups"><span class="nav-link-icon d-md-none d-lg-inline-block">{{icon "archive"}}</span><span class="nav-link-title">Backups</span></a></li>
-              <li class="nav-item dropdown{{if eq .Page "connect"}} active{{end}}">
-                <a class="nav-link dropdown-toggle" href="/connect" data-bs-toggle="dropdown" role="button" aria-expanded="false"><span class="nav-link-icon d-md-none d-lg-inline-block">{{icon "help"}}</span><span class="nav-link-title">Help</span></a>
-                <div class="dropdown-menu">
-                  <a class="dropdown-item" href="/connect">{{icon "plug"}}<span class="ms-2">Connect an application</span></a>
-                  <a class="dropdown-item" href="/connect#shells">{{icon "terminal"}}<span class="ms-2">Open a shell</span></a>
-                  <a class="dropdown-item" href="/connect#tls">{{icon "lock"}}<span class="ms-2">TLS and the toolkit CA</span></a>
-                  <a class="dropdown-item" href="/api/status">{{icon "braces"}}<span class="ms-2">Status as JSON</span></a>
+              <li class="nav-item dropdown{{if or (eq .Page "operations") (eq .Page "config") (eq .Page "jobs") (eq .Page "status") (eq .Page "system") (eq .Page "addons") (eq .Page "envs") (eq .Page "ha")}} active{{end}}">
+                <a class="nav-link dropdown-toggle" href="#navbar-operate" data-bs-toggle="dropdown" data-bs-auto-close="outside" role="button" aria-expanded="false" title="Run management actions, edit config, review jobs">
+                  <span class="nav-link-icon d-md-none d-lg-inline-block">{{icon "settings"}}</span>
+                  <span class="nav-link-title">{{t . "nav.operate"}}</span>
+                </a>
+                <div class="dropdown-menu dropdown-menu-arrow mdb-nav-menu" id="navbar-operate">
+                  <div class="dropdown-header">{{t . "ops.operations"}}</div>
+                  <a class="dropdown-item" href="/operations">{{icon "activity"}}<span class="ms-2">{{t . "ops.all"}}</span></a>
+                  <a class="dropdown-item{{if eq .Page "envs"}} active{{end}}" href="/envs">{{icon "folders"}}<span class="ms-2">{{t . "nav.envs"}}</span></a>
+                  <a class="dropdown-item{{if eq .Page "ha"}} active{{end}}" href="/ha">{{icon "topology"}}<span class="ms-2">{{t . "nav.ha"}}</span></a>
+                  <a class="dropdown-item{{if eq .Page "addons"}} active{{end}}" href="/addons">{{icon "layers"}}<span class="ms-2">{{t . "nav.addons"}}</span></a>
+                  <a class="dropdown-item{{if eq .Page "system"}} active{{end}}" href="/system">{{icon "server"}}<span class="ms-2">{{t . "nav.system"}}</span></a>
+                  <a class="dropdown-item" href="/operations#security">{{icon "lock"}}<span class="ms-2">{{t . "ops.security"}}</span></a>
+                  <a class="dropdown-item" href="/ha">{{icon "topology"}}<span class="ms-2">{{t . "ops.topology"}}</span></a>
+                  <a class="dropdown-item" href="/operations#health">{{icon "check-circle"}}<span class="ms-2">{{t . "ops.health"}}</span></a>
+                  <a class="dropdown-item" href="/operations#tokens">{{icon "key"}}<span class="ms-2">{{t . "ops.tokens"}}</span></a>
                   <div class="dropdown-divider"></div>
-                  <a class="dropdown-item" href="https://github.com/simtabi/dbpantry/blob/main/docs/reference/cli.md" rel="noopener">{{icon "book"}}<span class="ms-2">Command reference</span></a>
+                  <div class="dropdown-header">{{t . "ops.clients"}}</div>
+                  <a class="dropdown-item" href="/connect">{{icon "plug"}}<span class="ms-2">{{t . "ops.connection_details"}}</span></a>
+                  <a class="dropdown-item" href="/projects">{{icon "folders"}}<span class="ms-2">{{t . "ops.project_env"}}</span></a>
+                  {{actionButton . "project.new" (t . "ops.provision") "class=dropdown-item" "icon=plus"}}
+                  {{actionButton . "verify" (t . "ops.verify") "class=dropdown-item" "icon=activity"}}
+                  <button type="button" class="dropdown-item" data-status-json>{{icon "braces"}}<span class="ms-2">{{t . "ops.status_json"}}</span></button>
+                  <div class="dropdown-divider"></div>
+                  <div class="dropdown-header">{{t . "ops.instance"}}</div>
+                  <a class="dropdown-item{{if eq .Page "status"}} active{{end}}" href="/status">{{icon "activity"}}<span class="ms-2">{{t . "nav.status"}}</span></a>
+                  <a class="dropdown-item{{if eq .Page "config"}} active{{end}}" href="/config">{{icon "settings"}}<span class="ms-2">{{t . "ops.configuration"}}</span></a>
+                  <a class="dropdown-item{{if eq .Page "jobs"}} active{{end}}" href="/jobs">{{icon "list"}}<span class="ms-2">{{t . "ops.jobs"}}</span></a>
+                </div>
+              </li>
+              <li class="nav-item{{if eq .Page "connect"}} active{{end}}">
+                <a class="nav-link" href="/connect" id="nav-connect" title="Addresses, TLS and how apps reach the stack"><span class="nav-link-icon d-md-none d-lg-inline-block">{{icon "plug"}}</span><span class="nav-link-title">{{t . "nav.connect"}}</span></a>
+              </li>
+              <li class="nav-item dropdown{{if or (eq .Page "help") (eq .Page "about")}} active{{end}}">
+                <a class="nav-link dropdown-toggle" href="#navbar-help" data-bs-toggle="dropdown" data-bs-auto-close="outside" role="button" aria-expanded="false" title="Help, About and documentation">
+                  <span class="nav-link-icon d-md-none d-lg-inline-block">{{icon "help"}}</span>
+                  <span class="nav-link-title">{{t . "nav.help"}}</span>
+                </a>
+                <div class="dropdown-menu dropdown-menu-arrow mdb-nav-menu" id="navbar-help">
+                  <a class="dropdown-item{{if eq .Page "help"}} active{{end}}" href="/help">{{icon "help"}}<span class="ms-2">{{t . "help.title"}}</span></a>
+                  <a class="dropdown-item{{if eq .Page "about"}} active{{end}}" href="/about">{{icon "info"}}<span class="ms-2">{{t . "nav.about"}}</span></a>
+                  <a class="dropdown-item{{if eq .Page "status"}} active{{end}}" href="/status">{{icon "activity"}}<span class="ms-2">{{t . "nav.status"}}</span></a>
+                  <div class="dropdown-divider"></div>
+                  <div class="dropdown-header">{{t . "help.docs"}}</div>
+                  <a class="dropdown-item" href="/api/v1/actions" target="_blank" rel="noopener">{{icon "braces"}}<span class="ms-2">{{t . "help.api"}}</span></a>
+                  <a class="dropdown-item" href="https://github.com/simtabi/dbpantry/blob/main/docs/reference/cli.md" rel="noopener">{{icon "book"}}<span class="ms-2">{{t . "help.cli"}}</span></a>
+                  <a class="dropdown-item" href="https://github.com/simtabi/dbpantry/blob/main/docs/guides/licensing.md" rel="noopener">{{icon "shield"}}<span class="ms-2">{{t . "help.licensing"}}</span></a>
                 </div>
               </li>
             </ul>
@@ -105,31 +252,530 @@
           <div class="row text-center align-items-center flex-row-reverse">
             <div class="col-lg-auto ms-lg-auto">
               <ul class="list-inline list-inline-dots mb-0">
-                <li class="list-inline-item"><a href="/api/status" class="link-secondary">JSON</a></li>
-                <li class="list-inline-item"><a href="https://github.com/simtabi/dbpantry" class="link-secondary" rel="noopener">Source</a></li>
+                <li class="list-inline-item"><a href="/status" class="link-secondary">{{t . "nav.status"}}</a></li>
+                <li class="list-inline-item"><button type="button" class="btn btn-link link-secondary p-0 align-baseline" data-status-json title="Open the live stack snapshot">{{t . "footer.json"}}</button></li>
+                <li class="list-inline-item"><a href="/help" class="link-secondary">{{t . "nav.help"}}</a></li>
+                <li class="list-inline-item"><a href="/about" class="link-secondary">{{t . "nav.about"}}</a></li>
+                <li class="list-inline-item"><a href="https://github.com/simtabi/dbpantry" class="link-secondary" rel="noopener">{{t . "footer.source"}}</a></li>
               </ul>
             </div>
             <div class="col-12 col-lg-auto mt-3 mt-lg-0">
-              <span class="text-secondary">dbpantry {{.S.Version}} · read-only · read at <span data-generated>{{clock .S.Generated}}</span></span>
+              <span class="text-secondary">dbpantry {{.S.Version}} · {{.Actor}} · <span class="text-uppercase">{{.Lang}}</span> · read at <span data-generated>{{clock .S.Generated}}</span></span>
             </div>
           </div>
         </div>
       </footer>
     </div>
   </div>
+  {{template "action-modal"}}
+  {{template "job-drawer"}}
+  {{template "status-drawer"}}
+  {{template "toasts"}}
   <script src="/assets/js/tabler.min.js"></script>
   <script src="/assets/js/dashboard.js"></script>
+  <script src="/assets/js/manage.js"></script>
+  <script src="/assets/js/addons.js"></script>
+  <script src="/assets/js/command.js"></script>
 </body>
 </html>
 {{end}}
 
+{{define "status-drawer"}}
+<div class="offcanvas offcanvas-end mdb-status-drawer mdb-panel" tabindex="-1" id="mdb-status" aria-labelledby="mdb-status-title" data-bs-scroll="true">
+  <div class="offcanvas-header mdb-panel-head">
+    <div class="mdb-panel-head-text">
+      <div class="subheader mdb-panel-kicker">Status · live</div>
+      <h2 class="offcanvas-title mdb-panel-title text-truncate" id="mdb-status-title">Status as JSON</h2>
+      <div class="mdb-panel-note">Snapshot from <code class="mdb-mono">GET /api/v1/status</code> — no passwords.</div>
+    </div>
+    <button type="button" class="btn-close text-reset" data-bs-dismiss="offcanvas" aria-label="Close" title="Close"></button>
+  </div>
+  <div class="offcanvas-body d-flex flex-column pt-3">
+    <div class="d-flex align-items-center gap-2 mb-2 flex-wrap">
+      <span class="badge bg-secondary-lt" data-status-state>Idle</span>
+      <div class="btn-list ms-auto">
+        <button type="button" class="btn btn-sm" data-status-refresh title="Fetch again">{{icon "refresh"}} Refresh</button>
+        <button type="button" class="btn btn-sm" data-copy="#mdb-status-json" title="Copy the JSON">{{icon "copy"}} <span data-copy-label>Copy</span></button>
+        <a class="btn btn-sm" href="/api/v1/status" target="_blank" rel="noopener" title="Open the API endpoint in a new tab">{{icon "arrow-right"}} API</a>
+      </div>
+    </div>
+    <pre id="mdb-status-json" class="mdb-log flex-fill mb-0" tabindex="0" data-status-json-out>Click Refresh to load the snapshot.</pre>
+  </div>
+</div>
+{{end}}
 
-{{define "engine-status"}}{{if eq . "running"}}<span class="badge bg-green-lt">running</span>{{else if eq . "stopped"}}<span class="badge bg-yellow-lt" title="In the profiles, but its service is not running">stopped</span>{{else}}<span class="badge bg-secondary-lt">not enabled</span>{{end}}{{end}}
+{{define "engines-nav"}}{{/* Synced on every partial refresh so Stack › By engine tracks up/down. */}}
+{{range .S.EndpointsEnabledFirst}}
+{{$st := stateOf "engine" (status $.S .Engine .Enabled)}}
+<a class="dropdown-item mdb-nav-row{{if and (eq $.Page "engine") $.Engine (eq .Engine $.Engine.Engine)}} active{{end}}" href="/engines/{{.Engine}}" title="{{$st.Meaning}}">
+  <span class="mdb-nav-row-main">
+    <span class="status-dot status-{{if eq $st.Tone "secondary"}}muted{{else}}{{$st.Tone}}{{end}}"></span>
+    <span class="text-truncate">{{.Title}}</span>
+  </span>
+  <span class="badge bg-{{$st.Tone}}-lt mdb-nav-row-meta">{{$st.Label}}</span>
+</a>
+{{end}}
+<div class="dropdown-divider"></div>
+<a class="dropdown-item text-secondary small" href="/help#statuses-engine" data-mdb-states-link>{{icon "info"}}<span class="ms-2">What these statuses mean</span></a>
+{{end}}
 
-{{define "health-status"}}<span class="status status-{{health .Health}}"><span class="status-dot{{if eq .Health "starting"}} status-dot-animated{{end}}"></span>{{if eq .Health "none"}}running, no check{{else}}{{.Health}}{{end}}</span>{{end}}
+{{define "partial"}}{{template "content" .}}
+<div hidden data-sync="running">{{template "running-job" .}}</div>
+<div hidden data-sync="notify-bell">{{template "notify-bell" .}}</div>
+<div hidden data-sync="notify-list">{{template "notify-list" .}}</div>
+<div hidden data-sync="header-stats-trigger">{{template "header-stats-trigger" .}}</div>
+<div hidden data-sync="header-stats">{{template "header-stats" .}}</div>
+<div hidden data-sync="projects">{{len .S.Projects}}</div>
+<div hidden data-sync="projects-menu">{{template "projects-nav" .}}</div>
+<div hidden data-sync="engines-menu">{{template "engines-nav" .}}</div>
+<div hidden data-sync="stack-services">{{.S.ServicesUp}}/{{len .S.Services}}</div>
+<div hidden data-sync="stack-images">{{len .S.Images}}</div>
+<div hidden data-sync="stack-engines">{{.S.EnginesRunning}}/{{.S.Enabled}}</div>
+<div hidden data-sync="stack-by-engine">{{len .S.Endpoints.Endpoints}}</div>
+{{end}}
+
+{{define "header-stats-trigger"}}
+<span class="mdb-stats-summary">
+  <span class="mdb-stats-pill {{if .S.ServicesErr}}is-bad{{else if gt .S.ServicesUp 0}}is-ok{{else}}is-muted{{end}}" title="{{if .S.ServicesErr}}Services unavailable{{else}}{{.S.ServicesUp}} up · {{.S.ServicesDown}} down{{end}}">{{icon "server"}} {{.S.ServicesUp}}/{{len .S.Services}}</span>
+  <span class="mdb-stats-pill {{if eq .S.EnginesRunning .S.Enabled}}{{if gt .S.Enabled 0}}is-ok{{else}}is-muted{{end}}{{else}}is-warn{{end}}" title="{{.S.EnginesRunning}}/{{.S.Enabled}} engines">{{icon "database"}} {{.S.EnginesRunning}}/{{.S.Enabled}}</span>
+  <span class="mdb-stats-pill is-muted" title="{{len .S.Images}} images">{{icon "package"}} {{len .S.Images}}</span>
+</span>
+{{end}}
+
+{{define "header-stats"}}
+<div class="card-header">
+  <h3 class="card-title">{{t . "nav.status"}}</h3>
+  <div class="card-actions"><a href="/status" class="btn btn-sm">{{t . "nav.status_open"}}</a></div>
+</div>
+<div class="list-group list-group-flush">
+  <a class="list-group-item list-group-item-action" href="/services">
+    <div class="row align-items-center">
+      <div class="col-auto">{{icon "server"}}</div>
+      <div class="col">
+        <div class="fw-medium">{{t . "status.services"}}</div>
+        <div class="text-secondary small">{{if .S.ServicesErr}}unavailable{{else}}{{.S.ServicesUp}} up · {{.S.ServicesDown}} down · {{len .S.Services}} total{{end}}</div>
+      </div>
+      <div class="col-auto"><span class="badge {{if .S.ServicesErr}}bg-red-lt{{else if gt .S.ServicesUp 0}}bg-green-lt{{else}}bg-secondary-lt{{end}}">{{.S.ServicesUp}}/{{len .S.Services}}</span></div>
+    </div>
+  </a>
+  <a class="list-group-item list-group-item-action" href="/engines">
+    <div class="row align-items-center">
+      <div class="col-auto">{{icon "database"}}</div>
+      <div class="col">
+        <div class="fw-medium">{{t . "status.engines"}}</div>
+        <div class="text-secondary small">{{.S.EnginesRunning}} running of {{.S.Enabled}} enabled</div>
+      </div>
+      <div class="col-auto"><span class="badge {{if eq .S.EnginesRunning .S.Enabled}}{{if gt .S.Enabled 0}}bg-green-lt{{else}}bg-secondary-lt{{end}}{{else}}bg-yellow-lt{{end}}">{{.S.EnginesRunning}}/{{.S.Enabled}}</span></div>
+    </div>
+  </a>
+  <a class="list-group-item list-group-item-action" href="/images">
+    <div class="row align-items-center">
+      <div class="col-auto">{{icon "package"}}</div>
+      <div class="col">
+        <div class="fw-medium">{{t . "nav.images"}}</div>
+        <div class="text-secondary small">{{len .S.Images}} images · {{len .S.Projects}} projects</div>
+      </div>
+      <div class="col-auto"><span class="badge bg-secondary-lt">{{len .S.Images}}</span></div>
+    </div>
+  </a>
+</div>
+<div class="card-footer">
+  <div class="row g-2">
+    <div class="col"><a href="/status" class="btn btn-sm w-100">{{t . "nav.status"}}</a></div>
+    <div class="col"><button type="button" class="btn btn-sm w-100" data-status-json>{{t . "ops.status_json"}}</button></div>
+  </div>
+</div>
+{{end}}
+
+{{define "notify-bell"}}
+{{icon "bell"}}{{if .Running}}<span class="badge bg-red badge-notification badge-blink"></span>{{else if .Jobs}}{{$j := index .Jobs 0}}{{if eq $j.State "failed"}}<span class="badge bg-red badge-notification"></span>{{else if eq $j.State "succeeded"}}<span class="badge bg-green badge-notification"></span>{{end}}{{end}}
+{{end}}
+
+{{define "notify-list"}}
+{{range $i, $j := .Jobs}}
+{{if lt $i 6}}
+<a class="list-group-item list-group-item-action" href="/jobs"{{if eq $j.State "running"}} data-job-open="{{$j.ID}}"{{end}} title="dbpantry {{join $j.Args " "}}">
+  <div class="row align-items-center">
+    <div class="col-auto"><span class="status-dot {{if eq $j.State "running"}}status-yellow status-dot-animated{{else if eq $j.State "succeeded"}}status-green{{else}}status-red{{end}}"></span></div>
+    <div class="col text-truncate">
+      <div class="text-body d-block">{{actionTitle $j.Action}}</div>
+      <div class="text-secondary text-truncate small">{{if eq $j.State "running"}}running{{else if eq $j.State "succeeded"}}succeeded{{else}}failed{{end}}{{with $j.Actor}} · {{.}}{{end}}</div>
+    </div>
+  </div>
+</a>
+{{end}}
+{{end}}
+{{if not .Jobs}}
+<div class="list-group-item">
+  <div class="text-secondary small py-2">{{t . "nav.no_jobs"}}</div>
+</div>
+{{end}}
+{{end}}
+
+{{/* Page history: back / forward live in the top navbar beside Live (not the page title row). */}}
+{{define "page-history"}}
+<div class="d-flex align-items-center gap-1 mdb-page-history" role="group" aria-label="{{t . "nav.history"}}">
+  <button type="button" class="mdb-header-chip mdb-header-chip-icon" data-nav-back data-nav-back-fallback="/" title="{{t . "nav.back"}}" aria-label="{{t . "nav.back"}}">{{icon "arrow-left"}}</button>
+  <button type="button" class="mdb-header-chip mdb-header-chip-icon" data-nav-forward title="{{t . "nav.forward"}}" aria-label="{{t . "nav.forward"}}">{{icon "arrow-right"}}</button>
+</div>
+{{end}}
+
+{{define "projects-nav"}}
+                  <a class="dropdown-item{{if eq .Page "projects"}} active{{end}}" href="/projects">{{icon "folders"}}<span class="ms-2">All projects</span></a>
+                  {{range .S.SortedProjects}}
+                  {{if eq .State "orphaned"}}
+                  <a class="dropdown-item" href="/projects" title="The engine has no such database; only the password files remain">{{.Name}}<span class="badge bg-yellow-lt ms-auto">orphaned</span><span class="badge bg-primary-lt ms-1">{{.Engine}}</span></a>
+                  {{else}}
+                  <a class="dropdown-item{{if and (eq $.Page "project") $.Project (eq .Name $.Project.Database) (eq .Engine $.Project.Engine)}} active{{end}}" href="/projects/{{.Engine}}/{{.Name}}">{{.Name}}<span class="badge bg-primary-lt ms-auto">{{.Engine}}</span></a>
+                  {{end}}
+                  {{end}}
+{{end}}
+
+{{define "running-job"}}{{with .Running}}<button type="button" class="btn btn-sm btn-outline-warning" data-job-open="{{.ID}}" title="dbpantry {{join .Args " "}}"><span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>{{actionTitle .Action}}</button>{{end}}{{end}}
+
+
+{{define "engine-status"}}{{with stateOf "engine" .}}<span class="badge bg-{{.Tone}}-lt" title="{{.Meaning}}">{{.Label}}</span>{{end}}{{end}}
+
+{{define "project-state"}}{{with stateOf "project" (print .State)}}<span class="badge bg-{{.Tone}}-lt" title="{{.Meaning}}">{{.Label}}</span>{{end}}{{end}}
+
+{{define "health-status"}}{{/* Badge (not Tabler .status): .status has a fixed 1.5rem height, so a long label wraps and spills out of the pill. */}}<span class="badge text-nowrap {{if eq .Health "healthy"}}bg-green-lt{{else if eq .Health "none"}}bg-azure-lt{{else if eq .Health "starting"}}bg-yellow-lt{{else}}bg-red-lt{{end}}" title="{{(stateOf "health" (print .Health)).Meaning}}"><span class="status-dot status-{{health .Health}} me-1{{if eq .Health "starting"}} status-dot-animated{{end}}"></span>{{if eq .Health "none"}}no check{{else}}{{.Health}}{{end}}</span>{{end}}
+
+{{define "job-state"}}{{if eq .State "running"}}<span class="badge bg-yellow-lt"><span class="spinner-border spinner-border-sm me-1" aria-hidden="true"></span>running</span>{{else if eq .State "succeeded"}}<span class="badge bg-green-lt">succeeded</span>{{else}}<span class="badge bg-red-lt" title="{{.Error}}">failed, exit {{.ExitCode}}</span>{{end}}{{end}}
+
+{{/* addon-manage: engine-grouped catalog with on/off toggles (Status, Engine, Add-ons).
+     Compact=true (engine page): hide the redundant engine head; show On/Total in the card header instead. */}}
+{{define "addon-manage"}}
+{{$page := .Page}}
+{{$compact := .Compact}}
+{{with .Groups}}
+<div class="mdb-addon-manage{{if $compact}} mdb-addon-manage-compact{{end}}" data-mdb-addon-manage>
+  {{range .}}
+  <div class="mdb-addon-engine" data-addon-engine-group="{{.Engine}}">
+    {{if not $compact}}
+    <div class="mdb-addon-engine-head">
+      <div class="d-flex align-items-center gap-2 min-w-0">
+        <a href="/engines/{{.Engine}}" class="fw-medium text-reset text-truncate">{{.Title}}</a>
+        <span class="badge bg-primary-lt mdb-mono">{{.Engine}}</span>
+      </div>
+      <div class="d-flex align-items-center gap-2">
+        <span class="text-secondary small">{{.On}}/{{.Total}} on</span>
+        <a href="/addons?engine={{.Engine}}" class="btn btn-sm">Manage</a>
+      </div>
+    </div>
+    {{else}}
+    <div class="mdb-addon-engine-meta" aria-hidden="true">
+      <span class="text-secondary small">{{.On}}/{{.Total}} on</span>
+    </div>
+    {{end}}
+    {{range .Kinds}}
+    <div class="mdb-addon-kind" data-addon-kind="{{.Kind}}">
+      <div class="mdb-addon-kind-label">{{.Label}}</div>
+      <div class="list-group list-group-flush">
+        {{range .Rows}}
+        <div class="list-group-item d-flex align-items-center gap-3 py-2 mdb-addon-row" data-addon-id="{{.ID}}" data-addon-engine="{{.Engine}}" data-addon-enabled="{{.Enabled}}">
+          <div class="flex-fill min-w-0">
+            <div class="fw-medium text-truncate">{{.Title}}</div>
+            <div class="small text-secondary text-truncate">
+              <span class="mdb-mono">{{.ID}}</span>
+              {{if .NeedsPreload}} · preload{{end}}
+              {{if .Running}} · running{{end}}
+              {{with .ActiveOn}} · on {{join . ", "}}{{end}}{{/* join = strings.Join */}}
+            </div>
+          </div>
+          {{if .Supported}}
+          <label class="form-check form-switch m-0" title="{{if .Enabled}}Disable{{else}}Enable{{end}} {{.Title}}">
+            <input class="form-check-input" type="checkbox" role="switch"
+              {{if .Enabled}}checked{{end}}
+              data-addon-toggle
+              data-id="{{.ID}}"
+              data-engine="{{.Engine}}"
+              data-title="{{.Title}}"
+              data-preload="{{.NeedsPreload}}"
+              aria-label="{{if .Enabled}}Disable{{else}}Enable{{end}} {{.Title}}">
+          </label>
+          {{else}}
+          <span class="badge bg-secondary-lt" title="{{.Rationale}}">unsupported</span>
+          {{end}}
+        </div>
+        {{end}}
+      </div>
+    </div>
+    {{end}}
+  </div>
+  {{end}}
+</div>
+{{else}}
+<div class="empty py-4">
+  <p class="empty-title">No add-ons on enabled engines</p>
+  <p class="empty-subtitle text-secondary">Enable an engine profile, then open Add-ons to turn poolers, extensions and UIs on.</p>
+  <div class="empty-action"><a href="/addons" class="btn btn-primary">Open Add-ons</a></div>
+</div>
+{{end}}
+{{end}}
+
+{{define "action-modal"}}
+<div class="modal modal-blur fade" id="mdb-action-modal" tabindex="-1" aria-labelledby="mdb-action-title" aria-hidden="true" data-bs-backdrop="true" data-bs-keyboard="true">
+  <div class="modal-dialog modal-dialog-centered" role="document">
+    <form class="modal-content" data-action-form novalidate>
+      <div class="modal-status bg-primary" data-action-status></div>
+      <div class="modal-header">
+        <h5 class="modal-title" id="mdb-action-title" data-action-title>Confirm</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" data-action-dismiss aria-label="Close" title="Close without starting a job"></button>
+      </div>
+      <div class="modal-body">
+        <div class="alert alert-warning d-none" role="alert" data-action-soft>
+          <div class="d-flex"><div>{{icon "alert"}}</div><div class="ms-2" data-action-soft-text>This changes the running stack. Review the command, then confirm.</div></div>
+        </div>
+        <div class="alert alert-danger d-none" role="alert" data-action-danger>
+          <div class="d-flex"><div>{{icon "alert"}}</div><div class="ms-2"><strong>Destructive.</strong> Type the confirmation value exactly; the same check the CLI uses.</div></div>
+        </div>
+        <p class="text-secondary small mb-3">Runs <code class="mdb-mono" data-action-command>dbpantry</code>, the same command as on the command line.</p>
+        <div data-action-fields></div>
+        <div class="mb-0 d-none" data-action-confirm>
+          <label class="form-label required" for="mdb-confirm">Type <code data-action-confirm-hint></code> to confirm</label>
+          <input class="form-control" id="mdb-confirm" name="__confirm" autocomplete="off" spellcheck="false" required>
+        </div>
+        <div class="alert alert-danger mt-3 mb-0 d-none" role="alert" data-action-error></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn me-auto" data-bs-dismiss="modal" data-action-dismiss title="Close without starting a job">Cancel</button>
+        <button type="submit" class="btn btn-primary" data-action-submit title="Start the dbpantry command and stream its progress">Run</button>
+      </div>
+    </form>
+  </div>
+</div>
+{{end}}
+
+{{define "job-drawer"}}
+<div class="offcanvas offcanvas-end mdb-job-drawer mdb-panel" tabindex="-1" id="mdb-job" aria-labelledby="mdb-job-title" data-bs-scroll="true">
+  <div class="offcanvas-header mdb-panel-head">
+    <div class="mdb-panel-head-text">
+      <div class="subheader mdb-panel-kicker" data-job-kicker>Run · local</div>
+      <h2 class="offcanvas-title mdb-panel-title text-truncate" id="mdb-job-title" data-job-title>Job</h2>
+      <div class="mdb-job-cmd">
+        <code class="mdb-mono text-truncate" data-job-command></code>
+        <button type="button" class="btn btn-icon btn-sm btn-ghost-secondary" data-copy="[data-job-command]" title="Copy the command" aria-label="Copy the command">{{icon "copy"}}</button>
+      </div>
+    </div>
+    <span class="mdb-job-locked-pill d-none" role="status" data-job-locked title="Close is disabled until the command finishes">
+      <span class="mdb-job-locked-dot" aria-hidden="true"></span><span data-job-locked-text>Running — drawer stays open</span>
+    </span>
+    <button type="button" class="btn-close text-reset" data-bs-dismiss="offcanvas" data-job-close aria-label="Close" title="Close the job drawer"></button>
+  </div>
+  <div class="offcanvas-body d-flex flex-column p-0 min-h-0">
+    <div class="datagrid mdb-job-facts" data-job-facts>
+      <div class="datagrid-item"><div class="datagrid-title">Status</div><div class="datagrid-content" data-job-state></div></div>
+      <div class="datagrid-item"><div class="datagrid-title">Duration</div><div class="datagrid-content mdb-tabular" data-job-elapsed>—</div></div>
+    </div>
+    <div class="mdb-job-segments d-none" data-job-segments aria-label="Steps"></div>
+    <div class="mdb-job-banner d-none" data-job-banner role="status"></div>
+    <div class="mdb-job-toolbar">
+      <nav class="nav nav-segmented mdb-job-views" role="group" aria-label="Output view">
+        <button type="button" class="nav-link active" data-job-view="steps" aria-pressed="true" title="One row per step, updated in place">{{icon "list"}} Steps</button>
+        <button type="button" class="nav-link" data-job-view="raw" aria-pressed="false" title="Every line the command printed">{{icon "terminal"}} Raw log <span class="badge badge-sm bg-secondary-lt" data-job-lines>0 lines</span></button>
+      </nav>
+      <div class="btn-list ms-auto" data-job-controls>
+        <button type="button" class="btn btn-sm d-none" data-job-follow-btn aria-pressed="true" title="Keep the newest output in view">{{icon "arrow-down"}} <span data-job-follow-label>Following</span></button>
+        <button type="button" class="btn btn-sm d-none" data-job-pause title="Pause output (stalls the command on its next write)">{{icon "stop"}} Pause</button>
+        <button type="button" class="btn btn-sm d-none" data-job-continue title="Resume a paused command">{{icon "play"}} Continue</button>
+        <button type="button" class="btn btn-sm btn-outline-danger d-none" data-job-abort title="Abort this command">{{icon "x"}} Stop</button>
+        <button type="button" class="btn btn-sm d-none" data-job-restart title="Run the same command again">{{icon "refresh"}} <span data-job-restart-label>Restart</span></button>
+        <button type="button" class="btn btn-sm" data-copy="#mdb-job-plain" title="Copy the raw log as plain text">{{icon "copy"}} <span data-copy-label>Copy log</span></button>
+      </div>
+    </div>
+    <div class="mdb-job-console flex-fill d-flex flex-column min-h-0" data-bs-theme="dark">
+      <div class="mdb-job-console-bar">
+        <span class="mdb-job-console-title">Output</span>
+        <label class="mdb-job-search" title="Search the output (press / to focus, Esc to clear)">
+          {{icon "search"}}
+          <input type="search" data-job-search placeholder="Search output   /" spellcheck="false" autocomplete="off" aria-label="Search output">
+        </label>
+        <div class="mdb-job-levels" role="group" aria-label="Filter">
+          <button type="button" class="active" data-job-level="all" aria-pressed="true">All</button>
+          <button type="button" data-job-level="issues" aria-pressed="false" title="Failures, warnings and what did not start">Issues <span data-job-issues>0</span></button>
+        </div>
+        <button type="button" class="mdb-job-tsbtn active d-none" data-job-ts aria-pressed="true" title="Show when each line was written">Timestamps</button>
+        <span class="mdb-job-count" data-job-count>0 lines</span>
+      </div>
+      <div class="mdb-job-body flex-fill" data-job-body tabindex="0" role="log" aria-live="polite" aria-label="Job output">
+        <div class="mdb-job-empty d-none" data-job-empty>
+          <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Waiting for output…
+        </div>
+        <div class="mdb-job-steps" data-job-steps></div>
+        <div class="mdb-job-raw d-none" id="mdb-job-output"></div>
+        <div class="mdb-job-noresults d-none" data-job-noresults>
+          <span data-job-noresults-text>No lines match</span>
+          <button type="button" class="mdb-job-linkbtn" data-job-reset>Clear filters</button>
+        </div>
+      </div>
+      <pre id="mdb-job-plain" class="visually-hidden" aria-hidden="true"></pre>
+    </div>
+  </div>
+</div>
+{{end}}
+
+{{define "toasts"}}
+<div class="modal modal-blur fade" id="mdb-cmd" tabindex="-1" aria-labelledby="mdb-cmd-title" aria-hidden="true" data-bs-backdrop="true" data-bs-keyboard="false">
+  <div class="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable">
+    <div class="modal-content mdb-cmd-panel">
+      <div class="modal-header border-0 pb-0">
+        <h2 class="visually-hidden" id="mdb-cmd-title">Command palette</h2>
+        <div class="input-icon w-100">
+          <span class="input-icon-addon">{{icon "search"}}</span>
+          <input type="search" class="form-control form-control-lg border-0 shadow-none" id="mdb-cmd-q" placeholder="Search pages, actions and shortcuts…" autocomplete="off" spellcheck="false" aria-autocomplete="list" aria-controls="mdb-cmd-list" aria-label="Search pages and actions">
+          <span class="input-icon-addon"><kbd class="mdb-cmd-kbd">Esc</kbd></span>
+        </div>
+      </div>
+      <div class="modal-body pt-2" id="mdb-cmd-list" role="listbox" aria-label="Results"></div>
+      <div class="modal-footer mdb-cmd-footer border-0 pt-0">
+        <span class="text-secondary small"><kbd class="mdb-cmd-kbd">↑</kbd> <kbd class="mdb-cmd-kbd">↓</kbd> move · <kbd class="mdb-cmd-kbd">↵</kbd> open · <kbd class="mdb-cmd-kbd">Esc</kbd> close · <kbd class="mdb-cmd-kbd">g</kbd> then letter jumps</span>
+        <a href="/help" class="small text-secondary ms-auto">all shortcuts</a>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="mdb-busy-bar" id="mdb-busy-bar" hidden aria-hidden="true">
+  <div class="mdb-busy-bar-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuetext="Working">
+    <div class="mdb-busy-bar-indeterminate"></div>
+  </div>
+  <div class="mdb-busy-bar-label" data-busy-label>Working…</div>
+</div>
+<div class="toast-container position-fixed bottom-0 end-0 p-3 mdb-toasts" id="mdb-toasts" aria-live="polite" aria-atomic="true"></div>
+{{end}}
+
+{{define "area-card"}}
+<div class="card h-100">
+  <div class="card-header"><div><h3 class="card-title">{{.Title}}</h3><p class="card-subtitle">{{.Note}}</p></div></div>
+  <div class="list-group list-group-flush">
+    {{range .Items}}<div class="list-group-item"><div class="row align-items-center g-2">
+      <div class="col text-truncate"
+           data-bs-toggle="popover" data-bs-trigger="hover focus" data-bs-placement="left"
+           title="{{.Title}}"
+           data-bs-content="Runs {{.Command}}.{{if .Destructive}} Requires typing a confirmation value.{{else if .Confirm}} Asks for confirmation before running.{{else}} Streams a progress tree into the job drawer.{{end}}{{if not .Allowed}} Currently unavailable: {{.Reason}}.{{end}}">
+        <div>{{.Title}}{{if .Destructive}} <span class="badge bg-red-lt ms-1">typed confirmation</span>{{end}}</div>
+        <div class="small text-secondary mdb-mono text-truncate">{{.Command}}</div>
+      </div>
+      <div class="col-auto"><span class="badge bg-secondary-lt" title="Least scope that may run this action">{{.Scope}}</span></div>
+      <div class="col-auto">{{actionButton $.P .Name "Run" "class=btn-sm" "icon=play"}}</div>
+    </div></div>{{end}}
+  </div>
+</div>
+{{end}}
 
 {{define "services-unavailable"}}
 <div class="alert alert-danger mb-0" role="alert">
   <div class="d-flex"><div>{{icon "alert"}}</div><div class="ms-2"><h4 class="alert-heading">Services are unavailable</h4><div class="text-secondary">The container runtime did not answer, so nothing here says whether the stack is running. {{.}}</div></div></div>
+</div>
+{{end}}
+
+{{/* engine-menu: short root + dropend submenus (Operate / Stop). No scroll.
+     Popper strategy:fixed (dashboard.js). Live refresh skips while a menu is open. */}}
+{{define "engine-menu"}}
+{{$p := .P}}{{$e := .E}}{{$s := $p.S}}
+<div class="dropdown" data-mdb-engine-menu>
+  <button type="button" class="btn btn-sm btn-ghost-secondary btn-icon" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false" aria-label="Actions for {{$e.Title}}" title="Actions for {{$e.Title}}" data-bs-placement="left">{{icon "dots"}}</button>
+  <div class="dropdown-menu dropdown-menu-end mdb-engine-menu">
+    <div class="dropdown-header">{{$e.Title}}</div>
+    <a class="dropdown-item" href="/engines/{{$e.Engine}}">{{icon "database"}}<span class="ms-2">Open details</span></a>
+    <a class="dropdown-item" href="/connect">{{icon "plug"}}<span class="ms-2">Connection guide</span></a>
+    {{if $s.Running $e.Engine}}
+    <a class="dropdown-item" href="/services/{{$e.Engine}}/logs">{{icon "file"}}<span class="ms-2">Logs (debug)</span></a>
+    <span class="d-none" id="shell-menu-{{$e.Engine}}">dbpantry shell {{$e.Engine}} -- bash</span>
+    <button type="button" class="dropdown-item" data-copy="#shell-menu-{{$e.Engine}}">{{icon "terminal"}}<span class="ms-2">Copy shell command</span></button>
+    <div class="dropdown-divider"></div>
+    <div class="dropend">
+      <button type="button" class="dropdown-item dropdown-toggle" data-bs-toggle="dropdown" data-bs-auto-close="outside" data-mdb-fixed-dropdown aria-expanded="false">{{icon "activity"}}<span class="ms-2">Operate</span></button>
+      <div class="dropdown-menu mdb-engine-submenu">
+        {{actionButton $p "service.restart" "Restart" (print "service=" $e.Engine) "class=dropdown-item" "icon=refresh"}}
+        {{actionButton $p "images.build" "Rebuild / update image" (print "engine=" $e.Engine) "class=dropdown-item" "icon=hammer"}}
+        {{actionButton $p "images.scan" "Scan image" (print "engine=" $e.Engine) "class=dropdown-item" "icon=shield"}}
+        {{actionButton $p "backup.run" "Back up" (print "engine=" $e.Engine) "class=dropdown-item" "icon=download"}}
+        {{if $e.Pooled}}{{actionButton $p "pooler.sync" "Sync pooler" (print "engine=" $e.Engine) "class=dropdown-item" "icon=refresh"}}{{end}}
+        {{actionButton $p "verify" "Run checks (debug)" "class=dropdown-item" "icon=activity"}}
+      </div>
+    </div>
+    <div class="dropend">
+      <button type="button" class="dropdown-item dropdown-toggle" data-bs-toggle="dropdown" data-bs-auto-close="outside" data-mdb-fixed-dropdown aria-expanded="false">{{icon "stop"}}<span class="ms-2">Stop and destroy</span></button>
+      <div class="dropdown-menu mdb-engine-submenu">
+        {{actionButton $p "stack.down" "Disconnect (stop stack)" "class=dropdown-item" "icon=stop"}}
+        {{actionButton $p "destroy.volume" "Destroy data volume…" "class=dropdown-item" "icon=trash"}}
+      </div>
+    </div>
+    {{else if $e.Enabled}}
+    <div class="dropdown-divider"></div>
+    {{if ne $p.Page "engine"}}{{actionButton $p "stack.up" "Start the stack" (print "profiles=" (join $s.Endpoints.Profiles ",")) "class=dropdown-item" "icon=play"}}{{end}}
+    <div class="dropend">
+      <button type="button" class="dropdown-item dropdown-toggle" data-bs-toggle="dropdown" data-bs-auto-close="outside" data-mdb-fixed-dropdown aria-expanded="false">{{icon "activity"}}<span class="ms-2">Operate</span></button>
+      <div class="dropdown-menu mdb-engine-submenu">
+        {{actionButton $p "images.build" "Rebuild / update image" (print "engine=" $e.Engine) "class=dropdown-item" "icon=hammer"}}
+        {{actionButton $p "verify" "Run checks (debug)" "class=dropdown-item" "icon=activity"}}
+      </div>
+    </div>
+    {{else}}
+    <div class="dropdown-divider"></div>
+    {{if ne $p.Page "engine"}}{{actionButton $p "stack.up" "Enable in profiles" (print "profiles=" (profilesWith $s.Endpoints.Profiles $e.Engine)) "class=dropdown-item" "icon=play"}}{{end}}
+    <div class="dropend">
+      <button type="button" class="dropdown-item dropdown-toggle" data-bs-toggle="dropdown" data-bs-auto-close="outside" data-mdb-fixed-dropdown aria-expanded="false">{{icon "activity"}}<span class="ms-2">Operate</span></button>
+      <div class="dropdown-menu mdb-engine-submenu">
+        {{actionButton $p "images.build" "Rebuild / update image" (print "engine=" $e.Engine) "class=dropdown-item" "icon=hammer"}}
+        {{actionButton $p "verify" "Run checks (debug)" "class=dropdown-item" "icon=activity"}}
+      </div>
+    </div>
+    {{end}}
+  </div>
+</div>
+{{end}}
+
+{{define "service-menu"}}
+{{$p := .P}}{{$svc := .S}}{{$running := eq $svc.State "running"}}
+<div class="dropdown" data-mdb-service-menu>
+  <button type="button" class="btn btn-sm btn-ghost-secondary btn-icon" data-bs-toggle="dropdown" data-bs-auto-close="outside" data-mdb-fixed-dropdown aria-expanded="false" aria-label="Manage {{$svc.Name}}" title="Manage {{$svc.Name}}" data-bs-placement="left">{{icon "dots"}}</button>
+  <div class="dropdown-menu dropdown-menu-end mdb-service-menu">
+    <div class="dropdown-header mdb-mono">{{$svc.Name}}</div>
+    <a class="dropdown-item" href="/services/{{$svc.Name}}/logs">{{icon "file"}}<span class="ms-2">Logs</span></a>
+    <span class="d-none" id="shell-{{$svc.Name}}">dbpantry shell {{$svc.Name}} -- bash</span>
+    <button type="button" class="dropdown-item" data-copy="#shell-{{$svc.Name}}">{{icon "terminal"}}<span class="ms-2">Copy shell command</span></button>
+    <div class="dropdown-divider"></div>
+    {{if $running}}
+    {{actionButton $p "service.restart" "Restart" (print "service=" $svc.Name) "class=dropdown-item" "icon=refresh"}}
+    {{actionButton $p "service.stop" "Stop" (print "service=" $svc.Name) "class=dropdown-item" "icon=stop"}}
+    {{else}}
+    {{actionButton $p "service.start" "Start" (print "service=" $svc.Name) "class=dropdown-item" "icon=play"}}
+    {{actionButton $p "service.restart" "Restart" (print "service=" $svc.Name) "class=dropdown-item" "icon=refresh"}}
+    {{end}}
+    <div class="dropdown-divider"></div>
+    <a class="dropdown-item" href="/engines/{{$svc.Name}}" title="Open engine page when this service is an engine">{{icon "database"}}<span class="ms-2">Engine details</span></a>
+    {{actionButton $p "images.build" "Rebuild image" (print "engine=" $svc.Name) "class=dropdown-item" "icon=hammer"}}
+  </div>
+</div>
+{{end}}
+
+{{define "project-menu"}}
+{{$p := .P}}{{$r := .R}}{{$s := $p.S}}
+<div class="dropdown" data-mdb-project-menu>
+  <button type="button" class="btn btn-sm btn-ghost-secondary btn-icon" data-bs-toggle="dropdown" data-bs-auto-close="outside" data-mdb-fixed-dropdown aria-expanded="false" aria-label="Actions for {{$r.Name}}" title="Actions for {{$r.Name}}" data-bs-placement="left">{{icon "dots"}}</button>
+  <div class="dropdown-menu dropdown-menu-end mdb-project-menu">
+    <div class="dropdown-header">{{$r.Name}} <span class="text-secondary">· {{$r.Engine}}</span></div>
+    {{if ne $r.State "orphaned"}}
+    <a class="dropdown-item" href="/projects/{{$r.Engine}}/{{$r.Name}}">{{icon "key"}}<span class="ms-2">Connection details</span></a>
+    <a class="dropdown-item" href="/engines/{{$r.Engine}}">{{icon "database"}}<span class="ms-2">Open engine</span></a>
+    {{else}}
+    <div class="dropdown-item-text text-secondary small">Orphaned: only password files remain. Drop to remove them.</div>
+    {{end}}
+    {{if $s.Running $r.Engine}}
+    <div class="dropdown-divider"></div>
+    {{if eq $r.State "active"}}
+    {{actionButton $p "backup.run" "Back up" (print "engine=" $r.Engine) (print "db=" $r.Name) "class=dropdown-item" "icon=download"}}
+    {{actionButton $p "project.rotate" "Rotate passwords" (print "engine=" $r.Engine) (print "name=" $r.Name) "class=dropdown-item" "icon=refresh"}}
+    {{end}}
+    {{actionButton $p "project.drop" "Drop project…" (print "engine=" $r.Engine) (print "name=" $r.Name) "class=dropdown-item" "icon=trash"}}
+    {{else if eq $r.State "orphaned"}}
+    <div class="dropdown-divider"></div>
+    <div class="dropdown-item-text text-secondary small">Start the {{$r.Engine}} engine to drop this project from the dashboard, or run <code class="mdb-mono">dbpantry project drop</code>.</div>
+    {{else}}
+    <div class="dropdown-divider"></div>
+    {{actionButton $p "stack.up" "Start the stack" "class=dropdown-item" "icon=play"}}
+    {{end}}
+  </div>
 </div>
 {{end}}

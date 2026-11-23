@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 
 	"github.com/knadh/koanf/providers/confmap"
@@ -30,7 +31,8 @@ type Settings struct {
 }
 
 // Load reads the env file for a checkout, chosen as scripts/gen-compose
-// chooses it: MDB_ENV_FILE, else <root>/.env, else <root>/.env.example.
+// chooses it: MDB_ENV_FILE, else the instance's .env ($MDB_HOME/.env, where
+// MDB_HOME defaults to root; design.md D-84), else <root>/.env.example.
 // environ supplies the process environment (os.Environ when nil).
 func Load(root string, environ func() []string) (*Settings, error) {
 	if environ == nil {
@@ -38,7 +40,7 @@ func Load(root string, environ func() []string) (*Settings, error) {
 	}
 	path := lookup(environ, "MDB_ENV_FILE")
 	if path == "" {
-		path = filepath.Join(root, ".env")
+		path = filepath.Join(Home(root, environ), ".env")
 		if _, err := os.Stat(path); err != nil {
 			path = filepath.Join(root, ".env.example")
 		}
@@ -84,4 +86,45 @@ func lookup(environ func() []string, key string) string {
 		}
 	}
 	return ""
+}
+
+// Home is the instance home (design.md D-84): MDB_HOME from environ, made
+// absolute, else the checkout itself. It holds .env, secrets/, certs/,
+// backups/ and the generated compose files; the checkout (the kit) holds
+// what ships. environ supplies the process environment (os.Environ when nil).
+func Home(root string, environ func() []string) string {
+	if environ == nil {
+		environ = os.Environ
+	}
+	h := lookup(environ, "MDB_HOME")
+	if h == "" {
+		return root
+	}
+	if abs, err := filepath.Abs(h); err == nil {
+		return abs
+	}
+	return h
+}
+
+// DefaultHome is where the dbpantry binary keeps an instance when it runs
+// from its built-in kit (design.md D-85): $XDG_CONFIG_HOME/dbpantry, else
+// ~/.config/dbpantry on every Unix, macOS included (the org's XDG rule), and
+// %AppData%\dbpantry on Windows.
+func DefaultHome(environ func() []string) string {
+	if environ == nil {
+		environ = os.Environ
+	}
+	if runtime.GOOS == "windows" {
+		if d := lookup(environ, "APPDATA"); d != "" {
+			return filepath.Join(d, "dbpantry")
+		}
+	}
+	if d := lookup(environ, "XDG_CONFIG_HOME"); d != "" && filepath.IsAbs(d) {
+		return filepath.Join(d, "dbpantry")
+	}
+	h := lookup(environ, "HOME")
+	if h == "" {
+		h, _ = os.UserHomeDir()
+	}
+	return filepath.Join(h, ".config", "dbpantry")
 }

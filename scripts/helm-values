@@ -53,8 +53,8 @@ for _e in $(engine_list); do
 done
 unset _e
 [[ -n "$ENGINES" ]] || { printf 'helm-values: no implemented engine in %s\n' "$MDB_ENGINES_DIR" >&2; exit 1; }
-COMPOSE_ENGINES="${MDB_HELM_COMPOSE_FILE:-$ROOT/compose.engines.yml}"
-ENV_FILE="${MDB_HELM_ENV_FILE:-$ROOT/.env}"
+COMPOSE_ENGINES="${MDB_HELM_COMPOSE_FILE:-$MDB_HOME/compose.engines.yml}"
+ENV_FILE="${MDB_HELM_ENV_FILE:-$MDB_HOME/.env}"
 out=""
 
 while (( $# )); do

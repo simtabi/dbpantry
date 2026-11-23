@@ -1,0 +1,100 @@
+{{define "content"}}
+{{$s := .S}}
+{{$page := .}}
+{{$ha := hasProfile $s.Endpoints.Profiles "ha"}}
+<div class="page-header d-print-none">
+  <div class="container-xl">
+    <div class="row g-2 align-items-center">
+      <div class="col">
+        <div class="d-flex align-items-center flex-wrap gap-2">
+          <span class="mdb-page-icon bg-azure-lt text-azure" aria-hidden="true">{{icon "topology"}}</span>
+          <h2 class="page-title mb-0">Primary &amp; replicas</h2>
+        </div>
+        <nav class="mdb-page-crumbs" aria-label="breadcrumb">
+          <ol class="breadcrumb breadcrumb-arrows breadcrumb-muted">
+            <li class="breadcrumb-item"><a href="/">{{t . "nav.overview"}}</a></li>
+            <li class="breadcrumb-item"><a href="/operations">{{t . "ops.operations"}}</a></li>
+            <li class="breadcrumb-item active" aria-current="page">High availability</li>
+          </ol>
+        </nav>
+        <div class="text-secondary mt-1">PostgreSQL primary (writes) and replicas (reads) via the <code>ha</code> profile — Patroni rehearsal topology. Prefer “primary / replica” over master/slave.</div>
+      </div>
+      <div class="col-auto btn-list">
+        {{if $ha}}
+        {{actionButton . "ha.status" "Cluster status" "class=btn-primary" "icon=activity"}}
+        {{else}}
+        {{actionButton . "stack.up" "Start HA cluster" "profiles=ha" "class=btn-primary" "icon=play"}}
+        {{end}}
+        <a class="btn" href="/engines" title="Run several engines in one stack">Engines</a>
+        <a class="btn" href="/envs" title="Separate stacks in other homes">Environments</a>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="page-body">
+  <div class="container-xl">
+    <div class="row row-cards">
+      <div class="col-lg-7">
+        <div class="card">
+          <div class="card-header">
+            <h3 class="card-title">Roles</h3>
+            <div class="card-actions">{{if $ha}}<span class="badge bg-green-lt">ha profile on</span>{{else}}<span class="badge bg-secondary-lt">ha profile off</span>{{end}}</div>
+          </div>
+          <div class="list-group list-group-flush">
+            <div class="list-group-item">
+              <div class="row align-items-center">
+                <div class="col-auto"><span class="badge bg-green-lt">Primary</span></div>
+                <div class="col">Accepts writes. HAProxy write port (or Service <code>pg</code> on Kubernetes) follows the current leader.</div>
+              </div>
+            </div>
+            <div class="list-group-item">
+              <div class="row align-items-center">
+                <div class="col-auto"><span class="badge bg-azure-lt">Replica</span></div>
+                <div class="col">Streaming copy for reads. HAProxy read port (or <code>pg-ro</code>) balances over healthy replicas; writes are refused.</div>
+              </div>
+            </div>
+          </div>
+          <div class="card-body text-secondary small">
+            {{if $ha}}
+            The <code>ha</code> profile replaces standalone <code>pg</code> on this host (one write port). Run <strong>Cluster status</strong> for topology and lag, then failover or rebuild a replica from Operate actions below.
+            {{else}}
+            Start with profiles <code>ha</code> (optionally <code>ha,pooler</code>). That boots a 3-node Patroni cluster with etcd and HAProxy — a <em>rehearsal</em> topology on one machine, not multi-host production HA.
+            {{end}}
+          </div>
+          <div class="card-footer btn-list">
+            {{actionButton . "ha.status" "Show topology" "class=btn-sm" "icon=activity"}}
+            {{actionButton . "ha.failover" "Switch primary…" "class=btn-sm" "icon=topology"}}
+            {{actionButton . "ha.reinit" "Rebuild replica…" "class=btn-sm" "icon=refresh"}}
+            {{if not $ha}}{{actionButton . "stack.up" "Enable ha profile" "profiles=ha" "class=btn-sm btn-primary" "icon=play"}}{{end}}
+          </div>
+        </div>
+      </div>
+      <div class="col-lg-5">
+        <div class="card mb-3">
+          <div class="card-header"><h3 class="card-title">Several engines at once</h3></div>
+          <div class="card-body text-secondary">
+            One stack runs Cassandra, MySQL, MariaDB, PostgreSQL and the rest <strong>concurrently</strong> when their profiles are in <code>MDB_PROFILES</code> (comma list). Start them together from Engines or Configuration — each keeps its own ports, volumes and projects.
+          </div>
+          <div class="card-footer btn-list">
+            {{actionButton . "stack.up" "Start several engines…" "class=btn-sm btn-primary" "icon=play"}}
+            <a class="btn btn-sm" href="/config">Manage profiles</a>
+          </div>
+        </div>
+        <div class="card mb-3">
+          <div class="card-header"><h3 class="card-title">Several stacks at once</h3></div>
+          <div class="card-body text-secondary">
+            Concurrent <em>stacks</em> are separate instance homes (<code>MDB_HOME</code> / Environments): each has its own project name, network subnet (auto-picked if busy) and volumes. Use Environments to init or switch.
+          </div>
+          <div class="card-footer"><a class="btn btn-sm" href="/envs">{{t . "nav.envs"}}</a></div>
+        </div>
+        <div class="card">
+          <div class="card-header"><h3 class="card-title">Other engines</h3></div>
+          <div class="card-body text-secondary small">
+            MySQL / MariaDB replication is documented as a runbook, not automated like Patroni. Cassandra and MongoDB use their own clustering models — see the operators and pooling guides.
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{{end}}

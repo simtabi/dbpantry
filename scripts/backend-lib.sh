@@ -18,6 +18,8 @@
 #   mdb_be_status [args]       what is running, for people
 #   mdb_be_running             running services, one per line, for scripts
 #   mdb_be_logs [args]         logs of the stack
+#   mdb_be_restart SVC...      restart services in place, keeping their data
+#                              (optional: a backend without it refuses by name)
 #   mdb_svc_exec [-u USER] SVC CMD...    run CMD in service SVC, stdin attached
 #   mdb_svc_exec_tty [-u USER] SVC CMD... the same with a terminal (psql, mysql shells)
 #   mdb_svc_health SVC         healthy | unhealthy | starting | none | absent
@@ -111,6 +113,9 @@ mdb_be_down()         { _mdb_be_call down "$@"; }
 mdb_be_status()       { _mdb_be_call status "$@"; }
 mdb_be_running()      { _mdb_be_call running "$@"; }
 mdb_be_logs()         { _mdb_be_call logs "$@"; }
+mdb_be_restart()      { _mdb_be_call restart "$@"; }
+mdb_be_start()        { _mdb_be_call start "$@"; }
+mdb_be_stop()         { _mdb_be_call stop "$@"; }
 mdb_svc_exec()        { _mdb_be_call exec "$@"; }
 mdb_svc_exec_tty()    { _mdb_be_call exec_tty "$@"; }
 mdb_svc_health()      { _mdb_be_call health "$@"; }
@@ -143,6 +148,6 @@ _mdb_svc_args() {
 _mdb_be_load
 
 export -f mdb_backend_register mdb_backend_init _mdb_be_call mdb_backend_require _mdb_be_load \
-    mdb_be_up mdb_be_down mdb_be_status mdb_be_running mdb_be_logs mdb_svc_exec mdb_svc_exec_tty mdb_svc_health \
+    mdb_be_up mdb_be_down mdb_be_status mdb_be_running mdb_be_logs mdb_be_restart mdb_be_start mdb_be_stop mdb_svc_exec mdb_svc_exec_tty mdb_svc_health \
     mdb_svc_healthy mdb_svc_cp mdb_be_volumes mdb_be_volume_rm mdb_be_image_load \
     mdb_be_secrets_sync mdb_be_info mdb_be_forward _mdb_svc_args 2>/dev/null || true

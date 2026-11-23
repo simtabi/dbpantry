@@ -16,6 +16,22 @@ import (
 	"github.com/simtabi/dbpantry/src/internal/endpoint"
 )
 
+// ctxKeyJobKill marks a context from a dashboard job: Cancel must end the
+// child process. Interactive shells keep the opposite (wait for the script).
+type ctxKeyJobKill struct{}
+
+// ContextWithJobKill returns ctx that makes runStepTo kill scripts on cancel
+// (dashboard abort). Without it, non-Interruptible steps ignore cancel so a
+// Ctrl-C in psql cancels a query instead of ending the session.
+func ContextWithJobKill(ctx context.Context) context.Context {
+	return context.WithValue(ctx, ctxKeyJobKill{}, true)
+}
+
+func jobKillOnCancel(ctx context.Context) bool {
+	v, _ := ctx.Value(ctxKeyJobKill{}).(bool)
+	return v
+}
+
 // step is one script run from the checkout's root. Phase 2 of the refactor
 // plan puts the binary in front of the scripts without changing them: every
 // command below runs the script `make` ran, with the arguments `make` passed.
@@ -29,6 +45,9 @@ type step struct {
 	Input *string
 	// Quiet discards the script's standard output.
 	Quiet bool
+	// Interruptible ends the script when the context is done (a log stream
+	// whose page went away). Otherwise the binary waits for the script.
+	Interruptible bool
 }
 
 func (s step) String() string {
@@ -101,8 +120,11 @@ func (a *app) runStepTo(ctx context.Context, root string, env []string, s step, 
 	cmd := exec.CommandContext(ctx, filepath.Join(root, s.Args[0]), s.Args[1:]...) // #nosec G204 -- a fixed script of this repository; the arguments are the caller's, as make passed them
 	// An interrupt reaches the script from the terminal, as it did under
 	// make; the binary waits for it rather than killing it, so Ctrl-C in a
-	// psql shell cancels a query and does not end the session.
-	cmd.Cancel = func() error { return nil }
+	// psql shell cancels a query and does not end the session. Dashboard
+	// jobs (ContextWithJobKill) keep the default Cancel so Abort ends them.
+	if !s.Interruptible && !jobKillOnCancel(ctx) {
+		cmd.Cancel = func() error { return nil }
+	}
 	cmd.Dir = root
 	cmd.Env = append(append([]string{}, env...), s.Env...)
 	cmd.Stdout, cmd.Stderr = stdout, stderr
@@ -135,9 +157,11 @@ func (a *app) runStepTo(ctx context.Context, root string, env []string, s step, 
 // Makefile exports when it is not already set. make computes
 // COMPOSE_PROFILES from PROFILES, then MDB_PROFILES in the env file, then
 // the default, through scripts/profiles; run directly, the binary does the
-// same, and --profiles wins over all three.
+// same, and --profiles wins over all three. PATH always gains the well-known
+// container CLI directories (D-88), so a thin launchd/agent PATH still finds
+// Docker Desktop.
 func (a *app) scriptEnv(ctx context.Context, root string) ([]string, error) {
-	env := append([]string{}, a.environ()...)
+	env := withContainerPath(append([]string{}, a.environ()...))
 	if a.noColor {
 		env = append(env, "NO_COLOR=1")
 	}
@@ -187,7 +211,7 @@ func (a *app) confirmed(what, value string, satisfied bool) (*string, error) {
 func (a *app) libValue(ctx context.Context, root, expr string) (string, error) {
 	var out bytes.Buffer
 	cmd := exec.CommandContext(ctx, "bash", "-c", expr) // #nosec G204 -- a fixed expression of this package
-	cmd.Dir, cmd.Env, cmd.Stdout, cmd.Stderr = root, a.environ(), &out, a.stderr
+	cmd.Dir, cmd.Env, cmd.Stdout, cmd.Stderr = root, withContainerPath(a.environ()), &out, a.stderr
 	if err := cmd.Run(); err != nil {
 		return "", fmt.Errorf("%s: %w", expr, err)
 	}

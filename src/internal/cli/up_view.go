@@ -44,10 +44,11 @@ func (a *app) upFormatted(c *cobra.Command) error {
 	}
 
 	sc := a.newScreen("up", "profiles "+profiles, "publish "+doc.Publish, "backend "+backend)
-	check := sc.add("Check configuration")
-	render := sc.add("Render config files")
-	gen := sc.add("Generate engine services")
-	stack := sc.add("Start the stack")
+	sc.project = composeProject(env, s.Effective("COMPOSE_PROJECT_NAME"))
+	check := sc.add("Check configuration", "🔍")
+	render := sc.add("Render config files", "📝")
+	gen := sc.add("Generate engine services", "🧩")
+	stack := sc.add("Start the stack", "🚀")
 	sc.start()
 
 	ctx := c.Context()
@@ -83,6 +84,9 @@ func (a *app) upFormatted(c *cobra.Command) error {
 		return sc.fail("scripts/runtime up", strings.Join(view.Log(), "\n"), err)
 	}
 	sc.update(func() { stack.Detail = upSummary(view.Nodes()) })
+	if backend == "compose" {
+		sc.setTail(connectRows(doc), nextItems(doc))
+	}
 	sc.stop()
 
 	if backend != "compose" {
@@ -90,9 +94,26 @@ func (a *app) upFormatted(c *cobra.Command) error {
 		// port-forward, an Incus address); the table below describes Compose.
 		return a.runSteps(c, script("scripts/exposure-notice"))
 	}
-	a.printLines(connectTable(a.style(), doc, a.width()-2))
-	a.printLines(nextSteps(a.style(), doc))
+	st := sc.st
+	_, _ = fmt.Fprintln(a.stdout)
+	a.printLines(connectTable(st, doc, a.width()))
+	if next := nextSteps(st, doc); len(next) > 0 {
+		_, _ = fmt.Fprintln(a.stdout)
+		a.printLines(next)
+	}
 	return nil
+}
+
+// composeProject is the Compose project as scripts/runtime-lib.sh resolves
+// it: the environment, then the env file, then "mdb".
+func composeProject(env []string, fromFile string) string {
+	if p := envValue(env, "COMPOSE_PROJECT_NAME"); p != "" {
+		return p
+	}
+	if fromFile != "" {
+		return fromFile
+	}
+	return "mdb"
 }
 
 // renderedFiles turns render-config's "rendered A -> B" lines into children.
@@ -120,57 +141,111 @@ func upSummary(groups []*ui.Node) string {
 	return strings.Join(parts, " · ")
 }
 
-// connectTable is where each running engine listens, from a container on the
-// stack's network and from this machine.
-func connectTable(st ui.Style, doc endpoint.Document, width int) []string {
-	t := ui.Table{Title: "Connect", Headers: []string{"Engine", "From containers", "From this machine", "Pooled", "TLS"}}
+// connectRow is where one running engine listens. Host is empty when the
+// engine is not published to this machine; Pooled is empty with no pooler,
+// and PoolerOff says the pooler profile is not running.
+type connectRow struct {
+	Engine    string `json:"engine"`
+	Network   string `json:"network"`
+	Host      string `json:"host,omitempty"`
+	Pooled    string `json:"pooled,omitempty"`
+	PoolerOff bool   `json:"pooler_off,omitempty"`
+	TLSAlways bool   `json:"tls_always,omitempty"`
+}
+
+func connectRows(doc endpoint.Document) []connectRow {
+	var rows []connectRow
 	for _, e := range doc.Endpoints {
 		if !e.Enabled {
 			continue
 		}
-		host := st.Dim("not published")
-		if p := e.Direct.Published; p != nil {
-			host = st.Green(fmt.Sprintf("%s:%d", p.Address, p.Port))
+		r := connectRow{
+			Engine:    sanitize(e.Title),
+			Network:   fmt.Sprintf("%s:%d", sanitize(e.Direct.Network.Host), e.Direct.Network.Port),
+			TLSAlways: e.TLSAlways,
 		}
-		pooled := st.Dim("–")
+		if p := e.Direct.Published; p != nil {
+			r.Host = fmt.Sprintf("%s:%d", p.Address, p.Port)
+		}
 		if e.Pooled != nil {
-			pooled = sanitize(fmt.Sprintf("%s:%d", e.Pooled.Network.Host, e.Pooled.Network.Port))
+			r.Pooled = sanitize(fmt.Sprintf("%s:%d", e.Pooled.Network.Host, e.Pooled.Network.Port))
 			if !e.Pooled.Enabled {
 				// The pooler profile is not running; say so rather than
 				// list an address nothing answers on.
-				pooled = st.Dim(sanitize(e.Pooled.Network.Host) + " · off")
+				r.Pooled, r.PoolerOff = sanitize(e.Pooled.Network.Host), true
 			}
 		}
+		rows = append(rows, r)
+	}
+	return rows
+}
+
+// connectTable is where each running engine listens, from a container on the
+// stack's network and from this machine.
+func connectTable(st ui.Style, doc endpoint.Document, width int) []string {
+	title := "Connect"
+	if st.Emoji {
+		title = "🔌 " + title
+	}
+	t := ui.Table{Title: title, Headers: []string{"Engine", "From containers", "From this machine", "Pooled", "TLS"}}
+	for _, r := range connectRows(doc) {
+		host := st.Dim("not published")
+		if r.Host != "" {
+			host = st.Green(r.Host)
+		}
+		pooled := st.Dim("–")
+		switch {
+		case r.PoolerOff:
+			pooled = st.Dim(r.Pooled + " · off")
+		case r.Pooled != "":
+			pooled = r.Pooled
+		}
 		tls := st.Dim("prod only")
-		if e.TLSAlways {
+		if r.TLSAlways {
 			tls = st.Green("always")
 		}
-		t.Rows = append(t.Rows, []string{
-			st.Bold(sanitize(e.Title)),
-			fmt.Sprintf("%s:%d", sanitize(e.Direct.Network.Host), e.Direct.Network.Port),
-			host, pooled, tls,
-		})
+		t.Rows = append(t.Rows, []string{st.Bold(r.Engine), r.Network, host, pooled, tls})
 	}
 	if len(t.Rows) == 0 {
 		return nil
 	}
-	return append(st.Table(t, width), "")
+	return st.Table(t, width)
+}
+
+// nextItem is one command someone usually wants after up.
+type nextItem struct {
+	Label string `json:"label"`
+	Cmd   string `json:"cmd"`
+	Note  string `json:"note,omitempty"`
+}
+
+func nextItems(doc endpoint.Document) []nextItem {
+	items := []nextItem{{Label: "Provision a project", Cmd: "make new-project NAME=myapp ENGINE=<engine>"}}
+	if doc.Publish == "none" {
+		items = append(items, nextItem{Label: "Reach from a GUI client", Cmd: "set MDB_PUBLISH=direct in " + envFileName(doc.EnvFile) + ", then make up"})
+	}
+	return append(items,
+		nextItem{Label: "Open the dashboard", Cmd: "make dashboard"},
+		nextItem{Label: "Open a shell", Cmd: "make help", Note: "one shell target per engine"},
+		nextItem{Label: "Every endpoint", Cmd: "dbpantry endpoints -o json"},
+	)
 }
 
 // nextSteps are the commands someone usually wants after up.
 func nextSteps(st ui.Style, doc endpoint.Document) []string {
-	lines := []string{st.Bold("Next")}
-	item := func(what, cmd string) {
-		lines = append(lines, "  "+st.Dim("›")+" "+ui.Pad(what, 22)+st.Cyan(cmd))
+	title := "Next"
+	if st.Emoji {
+		title = "👉 " + title
 	}
-	item("Provision a project", "make new-project NAME=myapp ENGINE=<engine>")
-	if doc.Publish == "none" {
-		item("Reach from a GUI client", "set MDB_PUBLISH=direct in "+envFileName(doc.EnvFile)+", then make up")
+	lines := []string{st.Bold(title)}
+	for _, it := range nextItems(doc) {
+		line := st.Dim("›") + " " + ui.Pad(it.Label, 24) + st.Cyan(it.Cmd)
+		if it.Note != "" {
+			line += st.Dim("  — " + it.Note)
+		}
+		lines = append(lines, line)
 	}
-	item("Open the dashboard", "make dashboard")
-	item("Open a shell", "make help  (one shell target per engine)")
-	item("Every endpoint", "dbpantry endpoints -o json")
-	return append(lines, "")
+	return lines
 }
 
 func envFileName(path string) string {
@@ -216,7 +291,7 @@ func (a *app) downFormatted(c *cobra.Command) error {
 		return err
 	}
 	sc := a.newScreen("down", "data volumes are kept")
-	stack := sc.add("Stop the stack")
+	stack := sc.add("Stop the stack", "🛑")
 	sc.start()
 	view := stackview.New()
 	started := time.Now()

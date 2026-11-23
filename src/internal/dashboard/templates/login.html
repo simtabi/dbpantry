@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Sign in · dbpantry</title>
+  <link rel="icon" type="image/svg+xml" href="/assets/favicons/favicon.svg">
+  <link rel="stylesheet" href="/assets/css/tabler.min.css">
+  <link rel="stylesheet" href="/assets/css/dashboard.css">
+  <script src="/assets/js/theme.js"></script>
+</head>
+<body class="d-flex flex-column">
+  <div class="page page-center">
+    <div class="container container-tight py-4">
+      <div class="text-center mb-4">
+        <span class="d-inline-flex align-items-center gap-2 h2"><img src="/assets/favicons/favicon.svg" alt="" class="mdb-mark">dbpantry</span>
+      </div>
+      <div class="card card-md">
+        <div class="card-body">
+          <h2 class="h2 text-center mb-4">Sign in to the dashboard</h2>
+          {{if .Failed}}<div class="alert alert-danger" role="alert">That password is not the dashboard's.</div>{{end}}
+          <form action="/login?next={{.Next}}" method="post" autocomplete="off">
+            <div class="mb-3">
+              <label class="form-label" for="password">Password</label>
+              <input type="password" class="form-control" id="password" name="password" autocomplete="current-password" required autofocus>
+              <small class="form-hint">The dashboard password is in <code>secrets/dashboard_password.txt</code> in the instance home.</small>
+            </div>
+            <div class="form-footer"><button type="submit" class="btn btn-primary w-100">Sign in</button></div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

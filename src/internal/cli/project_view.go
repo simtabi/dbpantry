@@ -32,7 +32,7 @@ func (a *app) projectFormatted(c *cobra.Command, argv, stepEnv []string) (*proje
 		}
 	}
 	sc := a.newScreen("project new", name)
-	node := sc.add("Provision " + name)
+	node := sc.add("Provision "+name, "🧱")
 	sc.start()
 
 	var stdout bytes.Buffer
@@ -89,13 +89,15 @@ func (a *app) projectFormatted(c *cobra.Command, argv, stepEnv []string) (*proje
 	sc.stop()
 
 	st := a.style()
-	a.printLines(projectTable(st, p, a.width()-2))
+	_, _ = fmt.Fprintln(a.stdout)
+	a.printLines(projectTable(st, p, a.width()))
 	if len(warnings) > 0 {
+		_, _ = fmt.Fprintln(a.stdout)
 		lines := []string{st.Yellow(st.Bold(plural(len(warnings), "⚠ 1 warning", "⚠ %d warnings")))}
 		for _, w := range warnings {
-			lines = append(lines, "  "+st.Dim("›")+" "+sanitize(w))
+			lines = append(lines, st.Dim("›")+" "+sanitize(w))
 		}
-		a.printLines(append(lines, ""))
+		a.printLines(lines)
 	}
 	// The block is printed flush left, so it pastes into an .env unchanged.
 	w := a.width()

@@ -17,7 +17,7 @@ Phase 2 of the Go port (the refactor plan's §10) puts the binary in front of th
 | `--no-input` | Never prompt: a command that needs a typed confirmation and has no `--confirm` exits 7 without running anything |
 | `--no-color` | No colour (`NO_COLOR=1` for the scripts) |
 | `--plain` | Print the scripts' own output even on a terminal, with no step tree, progress bars or tables |
-| `--pretty` | Draw the step tree, progress bars and tables even when output is not a terminal (for `less -R`) |
+| `--pretty` | Draw the step tree, progress bars and tables even when output is not a terminal (dashboard jobs, `less -R`). Off a terminal it streams one-line progress with percentage and ETA (elapsed buckets every 3s when % is not yet known), streams nested tree lines as Compose reports them, prints each finished step as it completes, then prints the final tree once |
 | `-o FORMAT` | Per command. The formats are `table`, `plain`, `json`, `ndjson`, `csv`, `tsv` and `yaml`; a command refuses one it cannot write with exit 64. With `-o json` a failure is a JSON object on stderr: `{"error": {"code": "usage", "exit": 64, "message": "..."}}` |
 
 Abbreviations are refused (`dbpantry vers` exits 64), and so is an unknown subcommand. A typed confirmation is answered with `--confirm=<name>`, never with `--yes`. `secrets rotate --yes` is the one exception: it is the `make rotate-secrets YES=1` that already existed. Values printed in a table have terminal control sequences removed.
@@ -26,27 +26,30 @@ Abbreviations are refused (`dbpantry vers` exits 64), and so is an unknown subco
 
 On a terminal, `up`, `down` and `project new` draw their work as a tree of steps with spinners and elapsed times, and then show tables. `up` and `down` read Compose's machine-readable progress (`COMPOSE_PROGRESS=json`). They group what Compose reports into Networks, Volumes, Images and Containers. An image being built shows a bar with its percentage and an estimate of the time left. The bar counts the build steps BuildKit has finished out of those it has reported so far, so the estimate firms up as the build goes. A download shows bytes. `up` ends with a **Connect** table for the engines in the selected profiles and a short list of next commands. `project new` shows what it generated or reused, the roles, each extension (with a warning when one could not be created), a table of the project, and then the paste-ready `.env` block. The block is flush left between rules, so it copies cleanly.
 
-A step that fails prints what its script said in full, below the tree. Anywhere else (a pipe, a log, CI, the verify harness), and with `--plain`, these commands print exactly what their scripts print, so nothing that reads that output changes. `scripts/new-project --format json` is the machine-readable form `project new` draws from.
+A step that fails prints what its script said in full, below the tree. Anywhere else (a pipe, a log, CI, the verify harness), and with `--plain`, these commands print exactly what their scripts print, so nothing that reads that output changes. `--pretty` overrides that for people reading a non-TTY stream (the dashboard job drawer uses it). `scripts/new-project --format json` is the machine-readable form `project new` draws from.
 
 `start` runs those same views in turn: `up`, then `project new` once per project and engine, then the dashboard.
 
 ## Dashboard
 
-`make dashboard` (or `dbpantry dashboard`) serves a read-only web dashboard on `http://127.0.0.1:8484/`. It is part of the Go binary, built with [Tabler](https://tabler.io) 1.7.5's own CSS and JavaScript, both embedded, so it needs no Node and no second server. It uses Tabler's two-row header: the brand, a Connect button, the live indicator, the light/dark switch and a stack menu on top, then a menu with icons and dropdowns. Its pages:
+`make dashboard` (or `dbpantry dashboard`) serves the web dashboard on `http://127.0.0.1:8484/`. It is part of the Go binary, built with [Tabler](https://tabler.io) 1.7.5's own CSS and JavaScript, both embedded, so it needs no Node and no second server. It shows the stack and runs the same `dbpantry` commands as jobs (design.md D-86). Header chrome: Live refresh, stack-stats dropdown, notifications, language (`EN`), Instance menu, then grouped nav (Overview · Stack · Data · Operate · Connect · Help). Open the printed URL on `localhost` / `127.0.0.1` only (other Hosts get 421). Auth: `token` (default one-time link), `password`, or `none` on loopback (`make dashboard AUTH=none`). Pages:
 
 | Page | Shows |
 |---|---|
-| Overview | Services healthy, engines enabled, projects and images, the publish mode with what it means, the running services, where to connect, the projects |
-| Services | Every container: state, health, time up, image (state, uptime and image on the Compose backend; health on every backend), and the fixture's containers when `fixture up` is running |
+| Overview | CRM-style KPIs, stack funnel, needs-attention, services, where to connect, projects, recent jobs |
+| Status | Health %, services, engines, images/projects, jobs, Live badge legend |
+| Services | Every container: state, health, time up, image; fixture containers when `fixture up` is running |
 | Images | The locally built `dbpantry-*` images, their size and age |
-| Engines, and one page per engine | Addresses from containers and from this machine, the pooler and whether it runs, TLS, boot budget, the extensions created per project, the principals and their password files, the engine's projects and backups |
-| Projects, and one page per project | The paste-ready `.env` block, the password blurred until shown, with copy buttons. Also the compose snippet that joins the network, the roles, password files, TLS, pooler and extensions |
-| Backups | The dumps in the backup directory, newest first |
-| Connect | The three publish modes and which is set, every engine's address, the network snippet, TLS and the toolkit CA, shells |
+| Engines, and one page per engine | Addresses, pooler, TLS, extensions, principals, projects and backups; ⋮ scoped actions |
+| Projects, and one page per project | Active / orphaned / unmanaged; paste-ready `.env` (password blurred until Show); ⋮ actions |
+| Databases & users | Shared-hosting wizard over projects (privileges matrix, rename-via-recreate) |
+| Add-ons / System | Declarative poolers/extensions/UIs; host + runtime facts (`doctor`) |
+| Backups | Dumps, PITR, last verify |
+| Connect | Publish modes (`#publish`), engine addresses, network snippet, TLS, Run-from-dashboard jobs |
+| Configuration / Operations / Jobs | Env keys, security/topology/health/tokens, job list + audit |
+| Help / About | Localised help; version, MIT and engine licences |
 
-Each engine is marked running, stopped (in the profiles, but its service is not up) or not enabled, in "Where to connect", on the engine cards and pages, and beside every project. A project's page also warns when its engine is not running. A project's `.env` block shows the toolkit CA's real path in place of the script's `/path/to/dbpantry`.
-
-The dashboard refreshes every five seconds by fetching the current page's content again; a project's page, which holds a password, does not. Reading the stack runs the runtime's CLI several times and takes seconds, so pages are served from the latest reading at once. When that reading is more than two seconds old, one new reading starts in the background, and the footer shows the time of the reading on screen. A page that does not exist, or a stack that cannot be read, gets a dashboard error page (404 or 500), not plain text. It serves the stack as JSON at `/api/status`, which carries no passwords. It answers only requests addressed to `localhost`, so another web page cannot read it through DNS rebinding. A project's page also refuses a cross-site request (`Sec-Fetch-Site`). `--listen` on another address works, with a warning, because the dashboard has no login. When the container runtime does not answer, the dashboard says services are unavailable rather than showing an empty stack.
+Each engine is marked running, stopped (in the profiles, but its service is not up) or not enabled. A project's page also warns when its engine is not running. The dashboard refreshes every five seconds (`X-Partial: 1`); a project's page does not. Readings are stale-while-revalidate (design.md D-83). JSON without passwords: `/api/v1/status` (and legacy `/api/status`). Management API: `GET /api/v1/actions`, `POST /api/v1/jobs` — see [api.md](api.md) and `/help`. When the container runtime does not answer, services show as unavailable rather than an empty stack.
 
 A project's page reads its block through `scripts/new-project --show`, which provisions nothing and generates nothing; it prints the block of a project that already exists, from its password files.
 
@@ -73,21 +76,37 @@ These follow the table dbpantry shares with mesobia (refactor plan §7). Codes 2
 | `self-update` | `scripts/self-update` | `self-update` |
 | `config validate [--quiet]` | `scripts/check-env` | `check-env` |
 | `config render` | `scripts/render-config`, `scripts/gen-compose` | `render` |
+| `config show [--origin] [-o text\|json]` | the binary: every documented `MDB_` key's effective value; `--origin` adds `env`, `file` or `unset` | none |
+| `config set KEY VALUE` | the binary: write one `MDB_` key into the instance's `.env`, quoted per check 50 | none |
 | `config prod-overlay [ENV_FILE]` | `scripts/prod-overlay` | `prod-overlay` |
 | `manifest [-o …] [--matrix …]`, `manifest check-helm` | the binary (phase 1) | `manifest` |
 | `start [--profiles LIST] [--project NAME[:ENGINE]…] [--no-dashboard] [--listen ADDR]` | `up`, then `project new` for each project on each engine in the profiles (or the one named), then `dashboard` | `start` (`PROJECTS=`, `NO_DASHBOARD=1`, `LISTEN=`) |
 | `up [--profiles LIST] [--profile test]` | `check-env --quiet`, `render-config`, `gen-compose`, `scripts/runtime up`, `exposure-notice`; with `--profile test`, the test overlay | `up`, `test-profile` |
 | `down`, `status` | `scripts/runtime down`, `status` | `down`, `status` |
 | `logs [SERVICE…] [--follow] [--tail N]` | `scripts/runtime logs -f --tail=100` | `logs` |
-| `endpoints [-o table\|json]` | the binary (phase 1) | `endpoints` |
-| `dashboard [--listen ADDR]` | the binary: a read-only web dashboard, `127.0.0.1:8484` by default | `dashboard` |
+| `restart SERVICE…` | `scripts/runtime restart` (Compose: `compose restart`; other backends refuse it by name) | none |
+| `endpoints [-o table\|json]` | the binary (phase 1); the table's PROFILE column is `enabled` or `disabled` ([statuses](../guides/statuses.md)) | `endpoints` |
+| `dashboard [--listen ADDR] [--auth token\|password\|none] [--allow-destroy] [--tls-cert F --tls-key F]` | the binary: the web dashboard, `127.0.0.1:8484` by default; every action runs one of these commands as a job (`GET /api/v1/actions`, Help in the UI; full write-up in the checkout's `docs/reference/api.md`) | `dashboard` |
+| `api token create NAME [--scope read\|operate\|admin] [--expires DUR]`, `api token ls`, `api token revoke NAME\|ID` | the binary: API tokens for the dashboard API, stored as SHA-256 in `api-tokens.json` in the instance home | none |
 | `forward [SERVICE…]` | `scripts/runtime forward` | none |
 | `destroy (--volume NAME \| --all) [--include-recovery] [--confirm …]` | `scripts/destroy` | `destroy` |
 | `fixture up\|down` | the binary (phase 1) | `fixture-up`, `fixture-down` |
 | `runtime info\|name\|backend` | `scripts/runtime` | `runtime` |
+| `doctor [-o table\|json]` | the binary: host, binary and `runtime info` facts (dashboard `/system`, design.md D-93) | none |
+| `addon ls [--engine E] [-o table\|json]` | the binary: declarative add-on catalog with effective state (design.md D-96) | none |
+| `addon enable\|disable ID [--engine E] [--project N]` | the binary: merge profiles / env / init-extensions; disable never `DROP EXTENSION` | none |
+| `env types` | the binary: catalog of environment kinds (localdev, dev, test, qa, uat, trn, spt, stg, preprod, demo, sandbox, prod + aliases) | none |
+| `env ls` | the binary: registered instance homes (`~/.config/dbpantry/envs.json`) | none |
+| `env init --name N --type T [--home PATH] [--project P]` | `init` into a new home, set `MDB_ENV_TYPE` / `COMPOSE_PROJECT_NAME`, register | none |
+| `env use NAME` | print `export MDB_HOME=…` lines for `eval "$(…)"` | none |
+| `env copy\|migrate\|move --from A --to B --engine E --db D [--confirm D]` | `scripts/transfer export` then `scripts/restore` between two homes (design.md D-100) | none |
+| `env remove NAME [--purge]` | unregister (optionally delete the home) | none |
 | `shell SERVICE -- COMMAND…` | `scripts/runtime exec` | `psql`, `mysql`, `mariadb`, `mongo`, `cassandra` |
 | `tools [--image IMAGE]` | the cli image on the stack's network | `shell` |
 | `project new --name N [--engine E] [--no-pooler-sync]` | `scripts/new-project`, then `pooler sync` | `new-project` |
+| `project ls [-o table\|json]` | `scripts/project ls`, joined with the password files: each project active, orphaned (the engine has no such database) or unknown (the engine is not answering), with the extensions it has; databases no password file names are listed as unmanaged | none |
+| `project rotate --name N [--engine E] [--confirm N] [--no-pooler-sync]` | `scripts/new-project --rotate`: new passwords for both roles, set on the engine before the password files are replaced; then `pooler sync` | none |
+| `project drop --name N [--engine E] [--confirm N] [--no-pooler-sync]` | `scripts/project drop`: the database, both roles, their password files and client certificate; backups are kept. Only a project with a password file, never a reserved name, never while the engine is not answering; then `pooler sync` | none |
 | `backup run (--engine E [--db D] \| --all)` | `scripts/backup` | `backup`, `backup-all` |
 | `backup verify` | `scripts/verify-backups` | `verify-backups` |
 | `restore --engine --db --file [--confirm DB]` | `scripts/restore` | `restore` |
@@ -97,8 +116,8 @@ These follow the table dbpantry shares with mesobia (refactor plan §7). Codes 2
 | `ha status\|failover\|reinit` | `scripts/ha` | `ha-status`, `ha-failover`, `ha-reinit` |
 | `pooler sync ENGINE` | restarts the engine's pooler when it mirrors credentials at start | none |
 | `certs init\|renew` | `scripts/certs`, `scripts/certs-renew` | `certs`, `certs-renew` |
-| `secrets rotate [--yes] [--confirm ROTATE]` | `scripts/rotate-secrets`, then `pooler sync` | `rotate-secrets` |
-| `images build`, `images scan [ENGINE]` | `scripts/build`, `scripts/scan` | `build`, `scan` |
+| `secrets rotate [--yes] [--confirm ROTATE] [--engine pg\|mysql\|mariadb]` | `scripts/rotate-secrets [--engine E]`, then `pooler sync` (only E's pooler with `--engine`) | `rotate-secrets` |
+| `images build [ENGINE…]`, `images scan [ENGINE]` | `scripts/build`, `scripts/scan` | `build`, `scan` |
 | `verify [--checks …] [--tags …] [--fast] [--structure]` | `scripts/verify/run.sh` | `verify`, `verify-fast`, `verify-structure` |
 | `dev lint`, `dev release-notes VERSION` | `scripts/lint.sh`, `scripts/release-notes` | `lint` |
 
@@ -114,7 +133,7 @@ ProxySQL cannot look a credential up when a client logs in. It copies the server
 
 ## Not in phase 2
 
-The plan's §7 marks some commands **(new)**, and none of them has a script behind it yet: `doctor`, `uninstall`, `config show|diff|get|set|schema`, `engines`, `versions`, `exec`, `restart`, `project ls|show|drop`, the new `backup` verbs, `target`, `ha switchover`, `pooler status`, `certs show`, `secrets ls`, `posture`, `images verify`, `health`, `monitor`, `dashboards`, `provider`, `host`, `server`, `deploy`, `api` and `reset`. Each one lands with a ledger row and a check in the phase that builds it.
+The plan's §7 marks some commands **(new)**. The management plan (2026-11-22) brought forward what the dashboard needed: `config show --origin`, `config set`, `restart`, `project ls|rotate|drop`, `api token …`, plus `doctor` and `addon ls|enable|disable` (see the table above). Still not built: `uninstall`, `config diff|get|schema`, `engines`, `versions`, `exec`, `project show`, the rest of the new backup verbs, `target`, `ha switchover`, `pooler status`, `certs show`, `secrets ls`, `posture`, `images verify`, `health`, `monitor`, `dashboards`, `provider`, `host`, `server`, `deploy` and `reset`. Each one lands with a ledger row and a check in the phase that builds it.
 
 ---
 

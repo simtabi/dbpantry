@@ -56,6 +56,7 @@ so a green `make verify` is the criteria being met rather than a proxy for it.
 | Every relative link in the Markdown docs resolves | `46-doc-links-resolve` |
 | Every compose mount source, build context and dockerfile exists or is generated | `47-compose-paths-exist` |
 | Runtime detection (Docker, Podman, nerdctl, overrides) is correct, a new adapter plugs in without core changes, make honours the env file's project name, and no script calls a container CLI directly | `48-runtime-detection` |
+| The binary finds the container runtime when PATH is only `/usr/bin:/bin` (Docker Desktop and peers live under well-known dirs) | `79-runtime-path-extras` |
 | Every image reference is fully qualified, so Podman and nerdctl resolve the same image as Docker | `49-images-fully-qualified` |
 | Env values with spaces or special characters are double-quoted, and every reader unquotes them | `50-env-values-quoted` |
 | Markdown files use lowercase slug names, except git and GitHub conventional files (README.md, CHANGELOG.md, ...) | `51-markdown-names` |

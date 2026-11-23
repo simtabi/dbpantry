@@ -1,21 +1,40 @@
 {{define "content"}}
 <div class="page-header d-print-none"><div class="container-xl"><div class="row g-2 align-items-center">
-  <div class="col"><div class="page-pretitle">Built locally</div><h2 class="page-title">Images</h2></div>
+  <div class="col"><div class="page-pretitle">Built locally{{with .S.ImagePrefix}} · {{.}}{{end}}</div><h2 class="page-title">Images</h2></div>
+  <div class="col-auto ms-auto"><div class="btn-list">
+    {{actionButton . "images.build" "Build" "icon=hammer"}}
+    {{actionButton . "images.scan" "Scan" "icon=shield"}}
+  </div></div>
 </div></div></div>
 <div class="page-body"><div class="container-xl">
+  {{if .S.ImagesErr}}<div class="card"><div class="card-body"><div class="alert alert-warning mb-0" role="alert">Images could not be listed: {{.S.ImagesErr}}</div></div></div>
+  {{else if not .S.Images}}
   <div class="card">
-    {{if .S.ImagesErr}}<div class="card-body"><div class="alert alert-warning mb-0" role="alert">Images could not be listed: {{.S.ImagesErr}}</div></div>
-    {{else if not .S.Images}}
-    <div class="empty"><div class="empty-icon">{{icon "package"}}</div><p class="empty-title">No images built yet</p><p class="empty-subtitle text-secondary">The first <code>make up</code> builds each engine's image (several minutes each); <code>make build</code> builds them all.</p></div>
-    {{else}}
+    <div class="empty"><div class="empty-icon">{{icon "package"}}</div><p class="empty-title">No images built yet</p><p class="empty-subtitle text-secondary">The first start builds each engine's image (several minutes each); building them here does it ahead of time.</p><div class="empty-action">{{actionButton . "images.build" "Build every image" "class=btn-primary" "icon=hammer"}}</div></div>
+    <div class="card-footer text-secondary small">The same as <code>dbpantry images build [ENGINE…]</code> and <code>dbpantry images scan [ENGINE]</code>. A scan fails on a fixable HIGH or CRITICAL finding.</div>
+  </div>
+  {{else}}
+  {{range $i, $g := imageGroups .S.Images .S.ImagePrefix}}
+  <div class="card{{if $i}} mt-3{{end}}">
+    <div class="card-header">
+      <h3 class="card-title mdb-mono mb-0">{{if $g.Prefix}}{{$g.Prefix}}{{else}}(no prefix){{end}}</h3>
+      {{if and $.S.ImagePrefix (eq $g.Prefix $.S.ImagePrefix)}}<span class="badge bg-green-lt ms-2">current</span>
+      {{else if $.S.ImagePrefix}}<span class="badge bg-secondary-lt ms-2">other prefix</span>{{end}}
+    </div>
     <div class="table-responsive">
       <table class="table table-vcenter card-table">
-        <thead><tr><th>Image</th><th class="text-end">Size</th><th class="text-end">Built</th></tr></thead>
-        <tbody>{{range .S.Images}}<tr><td class="mdb-mono">{{.Ref}}</td><td class="text-end text-nowrap">{{.Size}}</td><td class="text-end text-secondary text-nowrap">{{.Created}}</td></tr>{{end}}</tbody>
+        <thead><tr><th>Image</th><th></th><th class="text-end">Size</th><th class="text-end">Built</th></tr></thead>
+        <tbody>{{range $g.Images}}<tr>
+          <td class="mdb-mono mdb-cell-ref" title="{{.Ref}}">{{.Ref}}</td>
+          <td>{{if .Unsupported}}<span class="badge bg-yellow-lt" title="Built with MDB_*_BASE_IMAGE; outside the maintained versions (D-57)">unsupported</span>{{end}}</td>
+          <td class="text-end text-nowrap">{{.Size}}</td>
+          <td class="text-end text-secondary text-nowrap">{{.Created}}</td>
+        </tr>{{end}}</tbody>
       </table>
     </div>
-    {{end}}
-    <div class="card-footer text-secondary small">Rebuild: <code>make build</code> · scan for vulnerabilities: <code>make scan</code></div>
   </div>
+  {{end}}
+  <div class="card mt-3"><div class="card-body text-secondary small mb-0">The same as <code>dbpantry images build [ENGINE…]</code> and <code>dbpantry images scan [ENGINE]</code>. A scan fails on a fixable HIGH or CRITICAL finding. Images under another prefix stay listed so an old <code>MDB_IMAGE_PREFIX</code> build is not invisible.</div></div>
+  {{end}}
 </div></div>
 {{end}}

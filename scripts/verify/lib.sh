@@ -97,6 +97,11 @@ need_dbpantry() {
     local dir
     dir="$(mktemp -d "${TMPDIR:-/tmp}/mdb-verify-bin.XXXXXX")" || vfail "mktemp failed"
     add_cleanup "rm -rf '$dir'"
+    # The kit first (design.md D-85), so the binary embeds the scripts as they
+    # are now, not as the last `make kit` left them. It writes only
+    # src/internal/kit/files, which is gitignored build output.
+    make -C "$MDB_ROOT" --no-print-directory kit >&2 \
+        || vfail "could not generate the embedded kit (make kit)"
     CGO_ENABLED=0 go -C "$MDB_ROOT/src" build -o "$dir/dbpantry" ./cmd/dbpantry >&2 \
         || vfail "could not build the dbpantry binary (go -C src build ./cmd/dbpantry)"
     DBPANTRY_BIN="$dir/dbpantry"
@@ -436,7 +441,13 @@ add_cleanup "rm -rf '$MDB_VERIFY_BACKUP_DIR'"
 # by the project name) and then the tree. It refuses to clean anything whose
 # project name is not the generated one.
 #
-# Usage: scratch_stack PROFILES; then use $SCRATCH_DIR and $SCRATCH_PROJECT.
+# With SCRATCH_SEPARATE_HOME=1 the instance (.env, secrets/, certs/, backups/
+# and the generated files) goes to a directory of its own, $SCRATCH_HOME, as
+# the dbpantry binary's ~/.config/dbpantry does (design.md D-84), and the copy
+# of the tree is only the kit. Otherwise SCRATCH_HOME is the tree itself.
+#
+# Usage: scratch_stack PROFILES; then use $SCRATCH_DIR, $SCRATCH_HOME and
+# $SCRATCH_PROJECT.
 # Not in $(...): the cleanup it registers would be lost with the subshell.
 _port_busy() {
     if command -v lsof >/dev/null 2>&1; then
@@ -456,35 +467,56 @@ _fixture_ports_busy() {
     return 1
 }
 
+# Every path in the scratch kit with its checksum, sorted: two calls agree
+# exactly when nothing was added, removed or changed. Directories are listed
+# too, so an empty directory created in the kit counts as a write.
+scratch_kit_manifest() {
+    ( cd "$SCRATCH_DIR" && find . -type d -print | sort | sed 's/^/dir  /'
+      find . \( -type f -o -type l \) -print0 | sort -z | xargs -0 shasum -a 256 )
+}
+
 scratch_stack() {
-    local profiles="$1" sdir proj base key
+    local profiles="$1" sdir proj base key home=""
     sdir="$(mktemp -d "${TMPDIR:-/tmp}/mdb-scratch.XXXXXX")" || vfail "mktemp failed"
     proj="mdbscratch$(od -An -N4 -tx1 /dev/urandom | tr -d ' \n')"
-    SCRATCH_PROJECT="$proj"; SCRATCH_DIR="$sdir"
+    if [[ "${SCRATCH_SEPARATE_HOME:-0}" == 1 ]]; then
+        home="$(mktemp -d "${TMPDIR:-/tmp}/mdb-scratch-home.XXXXXX")" || vfail "mktemp failed"
+    fi
+    SCRATCH_PROJECT="$proj"; SCRATCH_DIR="$sdir"; SCRATCH_HOME="${home:-$sdir}"
     # Registered first, so a failure below still removes the tree.
-    add_cleanup "scratch_stack_cleanup '$sdir' '$proj'"
-    export SCRATCH_PROJECT SCRATCH_DIR
+    add_cleanup "scratch_stack_cleanup '$sdir' '$proj' '$home'"
+    export SCRATCH_PROJECT SCRATCH_DIR SCRATCH_HOME
     # Anchored: an unanchored "certs" also drops scripts/certs.
+    # With a separate home the copy is only the kit, so the files the
+    # instance generates are left out too: a check can then say they were
+    # never written there, rather than merely not changed.
+    local -a generated=()
+    [[ -n "$home" ]] && generated=(--exclude /compose.engines.yml --exclude /compose.prod.engines.yml
+        --exclude /compose.proxy.yml --exclude /config/caddy/Caddyfile
+        --exclude /config/caddy/servers.json --exclude /config/caddy/layer4.caddy)
     rsync -a --exclude /.git --exclude /backups --exclude /secrets --exclude /certs \
-        --exclude /.env --exclude /.env.prod --exclude /overrides/local "$MDB_ROOT/" "$sdir/" \
+        --exclude /.env --exclude /.env.prod --exclude /overrides/local ${generated[@]+"${generated[@]}"} \
+        "$MDB_ROOT/" "$sdir/" \
         || vfail "could not copy the checkout to $sdir"
-    mkdir -p "$sdir/backups"
+    # What the kit held before anything ran, for a check to compare against.
+    [[ -n "$home" ]] && scratch_kit_manifest > "$home/.verify-kit-manifest"
+    mkdir -p "$SCRATCH_HOME/backups"
     # init ends with check-env, which fails here whenever the operator's own
     # stack holds the default ports; the ports are moved below and checked then.
-    ( cd "$sdir" && scripts/init >/dev/null 2>&1 ) || true
-    [[ -s "$sdir/.env" && -s "$sdir/secrets/pg_superuser_password.txt" && -s "$sdir/certs/ca.crt" \
-       && "$sdir/secrets" != "$MDB_ROOT/secrets" ]] \
-        || vfail "scripts/init did not create the scratch checkout's .env, secrets and certs"
+    scratch_run scripts/init >/dev/null 2>&1 || true
+    [[ -s "$SCRATCH_HOME/.env" && -s "$SCRATCH_HOME/secrets/pg_superuser_password.txt" \
+       && -s "$SCRATCH_HOME/certs/ca.crt" && "$SCRATCH_HOME/secrets" != "$MDB_ROOT/secrets" ]] \
+        || vfail "scripts/init did not create the scratch instance's .env, secrets and certs in $SCRATCH_HOME"
     # Every port key moves to a run of free high ports. The active lines are
     # deleted rather than overridden: check-env reads every assignment.
     base=$(( 41000 + (RANDOM % 200) * 100 ))
-    sed -i.bak -E '/^(COMPOSE_PROJECT_NAME|MDB_PROFILES|MDB_BACKUP_DIR|MDB_NETWORK_SUBNET|MDB_FIXTURE_NETWORK_SUBNET|MDB_FIXTURE_PORT_BASE|MDB_[A-Z0-9_]*PORT)=/d' "$sdir/.env" \
-        && rm -f "$sdir/.env.bak"
+    sed -i.bak -E '/^(COMPOSE_PROJECT_NAME|MDB_PROFILES|MDB_BACKUP_DIR|MDB_NETWORK_SUBNET|MDB_FIXTURE_NETWORK_SUBNET|MDB_FIXTURE_PORT_BASE|MDB_[A-Z0-9_]*PORT)=/d' "$SCRATCH_HOME/.env" \
+        && rm -f "$SCRATCH_HOME/.env.bak"
     {
         printf '\n# scratch_stack (verify): never the operator project\n'
         printf 'COMPOSE_PROJECT_NAME=%s\n' "$proj"
         printf 'MDB_PROFILES="%s"\n' "$profiles"
-        printf 'MDB_BACKUP_DIR="%s"\n' "$sdir/backups"
+        printf 'MDB_BACKUP_DIR="%s"\n' "$SCRATCH_HOME/backups"
         # Its own subnet too: the operator's mdb_net already holds the default.
         printf 'MDB_NETWORK_SUBNET=10.%s.%s.0/24\n' "$(( 200 + RANDOM % 50 ))" "$(( RANDOM % 250 ))"
         # And its fixture's (`dbpantry fixture` in a scratch stack): every fixture
@@ -503,9 +535,9 @@ scratch_stack() {
             printf '%s=%s\n' "$key" "$base"
             base=$(( base + 1 ))
         done
-    } >> "$sdir/.env"
+    } >> "$SCRATCH_HOME/.env"
     # Last assignment wins for both Compose and mdb_env_get; make sure.
-    [[ "$(mdb_env_get COMPOSE_PROJECT_NAME "$sdir/.env")" == "$proj" ]] \
+    [[ "$(mdb_env_get COMPOSE_PROJECT_NAME "$SCRATCH_HOME/.env")" == "$proj" ]] \
         || vfail "the scratch .env does not resolve to the scratch project"
     scratch_run scripts/check-env --quiet >/dev/null 2>&1 \
         || vfail "check-env rejects the scratch .env: $(scratch_run scripts/check-env 2>&1 | tail -5)"
@@ -513,12 +545,16 @@ scratch_stack() {
 
 # Run a command in the scratch checkout, with nothing from this process that
 # could point it back at the operator's: Compose reads COMPOSE_* from the
-# environment before .env.
+# environment before .env, and MDB_HOME names the instance (design.md D-84),
+# so an operator's exported one is dropped and the scratch home, when it is
+# separate, is named instead.
 scratch_run() {
     [[ -n "${SCRATCH_DIR:-}" && "$SCRATCH_DIR" != "$MDB_ROOT" ]] || vfail "scratch_run before scratch_stack"
+    local -a home_env=()
+    [[ -n "${SCRATCH_HOME:-}" && "$SCRATCH_HOME" != "$SCRATCH_DIR" ]] && home_env=(MDB_HOME="$SCRATCH_HOME")
     ( cd "$SCRATCH_DIR" && env -u COMPOSE_PROJECT_NAME -u COMPOSE_FILE -u COMPOSE_PROFILES \
         -u MDB_ENV_FILE -u ENV_FILE -u MDB_BACKUP_DIR -u MDB_UPGRADE_DIR -u MDB_BACKEND -u MDB_BACKEND_READY \
-        MDB_RT_ROOT="$SCRATCH_DIR" "$@" )
+        -u MDB_HOME MDB_RT_ROOT="$SCRATCH_DIR" ${home_env[@]+"${home_env[@]}"} "$@" )
 }
 
 # `make up` in the scratch stack, with mdb_up's failure tail.
@@ -552,15 +588,18 @@ scratch_call() {
 }
 
 scratch_stack_cleanup() {
-    local sdir="$1" proj="$2" v
+    local sdir="$1" proj="$2" home="${3:-}" v
     [[ "$proj" == mdbscratch* && -d "$sdir" && "$sdir" != "$MDB_ROOT" && "$sdir" == */mdb-scratch.* ]] || return 0
-    if [[ "$(mdb_env_get COMPOSE_PROJECT_NAME "$sdir/.env" 2>/dev/null)" == "$proj" ]]; then
-        SCRATCH_DIR="$sdir" scratch_run make down >/dev/null 2>&1 || true
+    [[ -z "$home" || "$home" == */mdb-scratch-home.* ]] || home=""
+    if [[ "$(mdb_env_get COMPOSE_PROJECT_NAME "${home:-$sdir}/.env" 2>/dev/null)" == "$proj" ]]; then
+        SCRATCH_DIR="$sdir" SCRATCH_HOME="${home:-$sdir}" scratch_run make down >/dev/null 2>&1 || true
     fi
     for v in $(mdb_ctr volume ls -q --filter "label=com.docker.compose.project=$proj" 2>/dev/null); do
         mdb_ctr volume rm -f "$v" >/dev/null 2>&1 || true
     done
     rm -rf "$sdir"
+    [[ -n "$home" && -d "$home" ]] && rm -rf "$home"
+    return 0
 }
 
 # Wait until a command succeeds, or fail after a budget in seconds.

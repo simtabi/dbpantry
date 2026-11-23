@@ -14,6 +14,17 @@ copy would drift and the check would not catch it.
 grep -A3 MDB_PGBOUNCER_POOL_MODE .env.example
 ```
 
+List or edit from the command line (or the dashboard's Configuration page):
+
+```bash
+dbpantry config show --origin          # key, value, env|file|unset
+dbpantry config set MDB_PROFILES "pg,ui"
+dbpantry config validate
+```
+
+`config set` writes the instance's `.env` only (never `.env.example`), quoting
+values the same way as `scripts/env-lib.sh` (check 50).
+
 ## Sections
 
 | Section | Covers |
@@ -25,6 +36,26 @@ grep -A3 MDB_PGBOUNCER_POOL_MODE .env.example
 | Backup | schedule, retention, destination, encryption |
 | UIs | Adminer, pgAdmin, the Caddy front door, basic auth |
 | Scale and HA | Patroni, etcd, HAProxy, synchronous commit |
+
+## Where the instance lives
+
+`.env` sits in the instance home, with everything else `make init` and
+`make up` create: `secrets/`, `certs/`, `backups/`, the generated compose
+files (`compose.engines.yml`, `compose.proxy.yml`, `compose.prod.engines.yml`)
+and the rendered config (`config/caddy/Caddyfile`, `servers.json`,
+`layer4.caddy`). The home is the checkout unless `MDB_HOME` names another
+directory. Set it in the environment, not in `.env`, because it is where
+`.env` is looked for:
+
+```bash
+MDB_HOME=~/.config/dbpantry make init
+MDB_HOME=~/.config/dbpantry make up
+```
+
+With a separate home nothing is written into the checkout, which stays the
+kit: the scripts, compose files, engines and image sources. Engine overrides
+(`overrides/<engine>/`) stay in the kit. Check 77 boots a stack this way and
+fails if any file in the kit changes (design.md D-84).
 
 ## Naming
 
@@ -76,7 +107,14 @@ MDB_PORT_BASE=54000
 MDB_BIND_ADDR=127.0.0.1
 ```
 
-Publishing a host port is the only thing here that can collide with software
+The internal Compose network subnet (`MDB_NETWORK_SUBNET`, default
+`172.28.0.0/16`) is a second collision surface: if that CIDR already belongs to
+another engine network, Docker refuses create with “Pool overlaps…”. On `up`,
+dbpantry picks a free `172.16–31.0.0/16` (skipping the fixture default
+`172.29.0.0/16`), writes it into `.env`, and continues (design.md D-103). Set
+`MDB_NETWORK_SUBNET_LOCK=1` to fail instead of moving.
+
+Publishing a host port is the other thing that can collide with software
 you already run, and a collision surfaces as a Docker error at the end of a
 boot. So it is a decision:
 
@@ -187,6 +225,12 @@ Set a default so you can type `make up`:
 ```
 MDB_PROFILES=pg,ui
 ```
+
+Several engines run **at the same time** in one stack when listed together
+(e.g. `pg,mysql,mariadb,cassandra`). PostgreSQL **primary + replicas** use the
+`ha` profile instead of standalone `pg` (dashboard `/ha`). Concurrent *stacks*
+are separate instance homes (`dbpantry env` / Environments), not more profiles
+in the same home (design.md D-104).
 
 Precedence is `PROFILES=` on the command line, then `MDB_PROFILES` in `.env`,
 then `pg,ui`.

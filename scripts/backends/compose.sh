@@ -4,11 +4,24 @@
 # Docker-API products, including Apple container through socktainer). The
 # runtime is chosen by runtime-lib.sh (CONTAINER_RUNTIME, D-60).
 
-_mdb_be_compose_up()     { mdb_compose_up_wait "$@"; }
+_mdb_be_compose_up() {
+    # Auto-heal overlapping MDB_NETWORK_SUBNET before compose creates the net
+    # (Docker: "Pool overlaps with other one on this address space", D-103).
+    # shellcheck source=../network-lib.sh
+    . "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/network-lib.sh"
+    mdb_network_ensure_subnet || return 1
+    mdb_compose_up_wait "$@"
+}
 _mdb_be_compose_down()   { mdb_compose --profile '*' "$@" down --remove-orphans; }
 _mdb_be_compose_status() { mdb_compose --profile '*' "$@" ps; }
 _mdb_be_compose_running() { mdb_running_services "$@"; }
 _mdb_be_compose_logs()   { mdb_compose --profile '*' logs "$@"; }
+# Restart in place: the container keeps its volumes and configuration; a
+# changed compose file needs `up`, which recreates it.
+_mdb_be_compose_restart() { mdb_compose --profile '*' restart "$@"; }
+# Start / stop existing services without recreating them (Compose start/stop).
+_mdb_be_compose_start() { mdb_compose --profile '*' start "$@"; }
+_mdb_be_compose_stop()  { mdb_compose --profile '*' stop "$@"; }
 
 _mdb_be_compose_exec() {
     _mdb_svc_args "$@" || return; shift "$_MDB_SVC_SHIFT"

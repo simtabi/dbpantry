@@ -1,78 +1,340 @@
 {{define "content"}}
 {{$s := .S}}
+{{$page := .}}
+{{$pub := $s.Endpoints.Publish}}
 <div class="page-header d-print-none"><div class="container-xl"><div class="row g-2 align-items-center">
-  <div class="col"><div class="page-pretitle">Help</div><h2 class="page-title">Connect an application</h2></div>
+  <div class="col">
+    <div class="page-pretitle"><a href="/" class="text-reset" data-nav-back-fallback="/" title="{{t . "nav.back_overview"}}">{{t . "nav.overview"}}</a> · {{t . "nav.help"}}</div>
+    <h2 class="page-title">How to connect</h2>
+  </div>
+  <div class="col-auto ms-auto"><div class="btn-list">
+    <a href="/config" class="btn" title="Edit MDB_PUBLISH and other keys">{{icon "settings"}} Configuration</a>
+    <a href="/projects" class="btn btn-primary" title="Provisioned databases and connection blocks">{{icon "folders"}} Projects</a>
+  </div></div>
 </div></div></div>
 <div class="page-body"><div class="container-xl">
   <div class="row row-cards">
-    <div class="col-12">
-      <div class="card">
-        <div class="card-header"><h3 class="card-title">{{icon "network"}} <span class="ms-2">How this stack is reached</span></h3><div class="card-actions"><span class="badge bg-primary-lt">MDB_PUBLISH={{$s.Endpoints.Publish}}</span></div></div>
-        <div class="card-body">
-          <div class="row g-3">
-            <div class="col-md-4"><div class="card card-sm{{if eq $s.Endpoints.Publish "none"}} border-primary{{end}}"><div class="card-body">
-              <div class="fw-medium mb-1">none {{if eq $s.Endpoints.Publish "none"}}<span class="badge bg-primary-lt ms-1">current</span>{{end}}</div>
-              <div class="text-secondary small">No host port at all, so nothing can collide with software already on the machine. Applications join <code>{{$s.Network}}</code> and connect by service name.</div>
-            </div></div></div>
-            <div class="col-md-4"><div class="card card-sm{{if eq $s.Endpoints.Publish "direct"}} border-primary{{end}}"><div class="card-body">
-              <div class="fw-medium mb-1">direct {{if eq $s.Endpoints.Publish "direct"}}<span class="badge bg-primary-lt ms-1">current</span>{{end}}</div>
-              <div class="text-secondary small">Each engine gets a port on <code>127.0.0.1</code> from <code>MDB_PORT_BASE</code>, for GUI clients and tests on this machine.</div>
-            </div></div></div>
-            <div class="col-md-4"><div class="card card-sm{{if eq $s.Endpoints.Publish "proxy"}} border-primary{{end}}"><div class="card-body">
-              <div class="fw-medium mb-1">proxy {{if eq $s.Endpoints.Publish "proxy"}}<span class="badge bg-primary-lt ms-1">current</span>{{end}}</div>
-              <div class="text-secondary small">The same ports, served through the front-door proxy.</div>
-            </div></div></div>
+
+    <div class="col-12" id="publish">
+      <div class="card mdb-publish">
+        <div class="card-header">
+          <div>
+            <h3 class="card-title">{{icon "network"}} <span class="ms-2">How this stack is reached</span></h3>
+            <p class="card-subtitle mb-0">Host exposure is <code>MDB_PUBLISH</code> in <code>{{base $s.Endpoints.EnvFile}}</code> — not a flag on the command line. After switching, run Start so Compose republishes ports.</p>
           </div>
-          <p class="text-secondary mt-3 mb-0">Change it in <code>{{base $s.Endpoints.EnvFile}}</code>, not on the command line (dbpantry refuses <code>MDB_PUBLISH</code> set outside that file), then run <code>make up</code> again.</p>
+          <div class="card-actions">
+            <span class="badge bg-azure-lt mdb-mono" title="Current MDB_PUBLISH value">MDB_PUBLISH={{$pub}}</span>
+          </div>
+        </div>
+        <div class="card-body">
+          {{if eq $pub "none"}}
+          <div class="alert alert-info mb-3" role="status">
+            <div class="d-flex">
+              <div>{{icon "info"}}</div>
+              <div class="ms-2">
+                <h4 class="alert-title">No host ports published</h4>
+                <div class="text-secondary">Apps reach engines only on <code>{{$s.Network}}</code> (service names like <code>pg:5432</code>). To open ports on this machine, click <strong>Switch to direct</strong> or <strong>Switch to proxy</strong> below — that writes <code>MDB_PUBLISH</code> into <code>.env</code> — then run <strong>Start to apply</strong> so Compose republishes.</div>
+              </div>
+            </div>
+          </div>
+          {{else}}
+          <div class="alert alert-success mb-3" role="status">
+            <div class="d-flex">
+              <div>{{icon "check-circle"}}</div>
+              <div class="ms-2">
+                <h4 class="alert-title">Publishing via <code class="mdb-mono">{{$pub}}</code></h4>
+                <div class="text-secondary">Host ports follow <code>MDB_PORT_BASE</code> ({{$s.Endpoints.PortBase}}). After any mode change, run <strong>Start to apply</strong> so Compose matches <code>.env</code>.</div>
+              </div>
+            </div>
+          </div>
+          {{end}}
+          <div class="row row-deck g-3 mdb-publish-modes">
+            <div class="col-md-4">
+              <div class="card card-sm mdb-publish-mode{{if eq $pub "none"}} mdb-publish-mode-current{{end}} h-100">
+                <div class="card-body d-flex flex-column">
+                  <div class="d-flex align-items-start justify-content-between gap-2 mb-2">
+                    <div>
+                      <div class="subheader text-secondary">Mode</div>
+                      <div class="fw-bold mdb-mono fs-3">none</div>
+                    </div>
+                    {{if eq $pub "none"}}
+                    <span class="badge bg-green-lt" title="This is the active MDB_PUBLISH value">In use</span>
+                    {{else}}
+                    <span class="badge bg-secondary-lt" title="Not the active MDB_PUBLISH value">Available</span>
+                    {{end}}
+                  </div>
+                  <p class="text-secondary small flex-fill mb-3">No host ports. Apps join <code>{{$s.Network}}</code> and use service names — nothing collides with software already on this machine.</p>
+                  <div class="mt-auto">
+                    {{if eq $pub "none"}}
+                    <button type="button" class="btn btn-sm" disabled title="Already the current publish mode — pick another card to switch">{{icon "check"}} Current</button>
+                    {{else}}
+                    {{actionButton $page "config.set" "Switch to none" "key=MDB_PUBLISH" "value=none" "class=btn-sm" "icon=settings"}}
+                    {{end}}
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="col-md-4">
+              <div class="card card-sm mdb-publish-mode{{if eq $pub "direct"}} mdb-publish-mode-current{{end}} h-100">
+                <div class="card-body d-flex flex-column">
+                  <div class="d-flex align-items-start justify-content-between gap-2 mb-2">
+                    <div>
+                      <div class="subheader text-secondary">Mode</div>
+                      <div class="fw-bold mdb-mono fs-3">direct</div>
+                    </div>
+                    {{if eq $pub "direct"}}
+                    <span class="badge bg-green-lt" title="This is the active MDB_PUBLISH value">In use</span>
+                    {{else}}
+                    <span class="badge bg-secondary-lt" title="Not the active MDB_PUBLISH value">Available</span>
+                    {{end}}
+                  </div>
+                  <p class="text-secondary small flex-fill mb-3">Each enabled engine gets a port on <code>{{$s.Endpoints.BindAddr}}</code> from <code>MDB_PORT_BASE</code> ({{$s.Endpoints.PortBase}}) — for GUI clients and local tests.</p>
+                  <div class="mt-auto">
+                    {{if eq $pub "direct"}}
+                    <button type="button" class="btn btn-sm" disabled title="Already the current publish mode — pick another card to switch">{{icon "check"}} Current</button>
+                    {{else}}
+                    {{actionButton $page "config.set" "Switch to direct" "key=MDB_PUBLISH" "value=direct" "class=btn-sm btn-primary" "icon=settings"}}
+                    {{end}}
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="col-md-4">
+              <div class="card card-sm mdb-publish-mode{{if eq $pub "proxy"}} mdb-publish-mode-current{{end}} h-100">
+                <div class="card-body d-flex flex-column">
+                  <div class="d-flex align-items-start justify-content-between gap-2 mb-2">
+                    <div>
+                      <div class="subheader text-secondary">Mode</div>
+                      <div class="fw-bold mdb-mono fs-3">proxy</div>
+                    </div>
+                    {{if eq $pub "proxy"}}
+                    <span class="badge bg-green-lt" title="This is the active MDB_PUBLISH value">In use</span>
+                    {{else}}
+                    <span class="badge bg-secondary-lt" title="Not the active MDB_PUBLISH value">Available</span>
+                    {{end}}
+                  </div>
+                  <p class="text-secondary small flex-fill mb-3">The same host ports as direct, served through the front-door proxy instead of each engine's own publish.</p>
+                  <div class="mt-auto">
+                    {{if eq $pub "proxy"}}
+                    <button type="button" class="btn btn-sm" disabled title="Already the current publish mode — pick another card to switch">{{icon "check"}} Current</button>
+                    {{else}}
+                    {{actionButton $page "config.set" "Switch to proxy" "key=MDB_PUBLISH" "value=proxy" "class=btn-sm" "icon=settings"}}
+                    {{end}}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="card-footer">
+          <div class="d-flex flex-wrap align-items-center gap-2 justify-content-between">
+            <div class="text-secondary small">Switch writes <code>.env</code> only. <strong>Start to apply</strong> restarts Compose so published ports match the new mode.</div>
+            <div class="btn-list">
+              <a href="/config" class="btn btn-sm" title="Open Configuration to edit MDB_PUBLISH and related keys">{{icon "settings"}} Edit in Configuration</a>
+              {{actionButton $page "stack.up" "Start to apply" "class=btn-sm btn-primary" "icon=play"}}
+            </div>
+          </div>
         </div>
       </div>
     </div>
 
-    <div class="col-lg-7">
-      <div class="card">
-        <div class="card-header"><h3 class="card-title">Every engine's address</h3></div>
+    <div class="col-12">
+      <div class="card mdb-engine-addresses">
+        <div class="card-header">
+          <div>
+            <h3 class="card-title">Every engine's address</h3>
+            <p class="card-subtitle mb-0">Enabled engines first. Copy and actions live under Quick access; the ⋮ menu runs declared <code>dbpantry</code> jobs (restart, rebuild, disconnect, destroy…).</p>
+          </div>
+        </div>
         <div class="table-responsive">
-          <table class="table table-vcenter card-table">
-            <thead><tr><th>Engine</th><th>host and port, from containers</th><th>From this machine</th></tr></thead>
-            <tbody>{{range $s.Endpoints.Endpoints}}<tr{{if not .Enabled}} class="text-secondary"{{end}}><td>{{.Title}}{{if not .Enabled}} <span class="small">(not enabled)</span>{{end}}</td><td class="mdb-mono text-nowrap">host={{.Direct.Network.Host}} port={{.Direct.Network.Port}}</td><td class="mdb-mono text-nowrap">{{if and .Enabled .Direct.Published}}{{.Direct.Published.Address}}:{{.Direct.Published.Port}}{{else}}–{{end}}</td></tr>{{end}}</tbody>
+          <table class="table table-vcenter card-table table-hover mb-0">
+            <thead>
+              <tr>
+                <th>Engine</th>
+                <th class="w-1">Status</th>
+                <th>From containers</th>
+                <th>From this machine</th>
+                <th class="text-end">Quick access</th>
+              </tr>
+            </thead>
+            <tbody>
+              {{range $s.EndpointsEnabledFirst}}
+              {{$hostport := printf "%s:%d" .Direct.Network.Host .Direct.Network.Port}}
+              {{$running := $s.Running .Engine}}
+              <tr{{if not .Enabled}} class="text-secondary"{{end}}>
+                <td>
+                  <div class="d-flex align-items-center">
+                    <span class="avatar avatar-sm me-2{{if $running}} bg-green-lt{{else if .Enabled}} bg-yellow-lt{{else}} bg-secondary-lt{{end}}">{{icon "database"}}</span>
+                    <div class="min-w-0">
+                      <a href="/engines/{{.Engine}}" class="fw-medium text-reset text-decoration-none" title="Open {{.Title}}">{{.Title}}</a>
+                      {{if not .Enabled}}<div class="small">not in profiles</div>{{else if not $running}}<div class="small">enabled · not running</div>{{end}}
+                    </div>
+                  </div>
+                </td>
+                <td>{{template "engine-status" (status $s .Engine .Enabled)}}</td>
+                <td>
+                  <code class="mdb-mono" id="addr-net-{{.Engine}}">{{$hostport}}</code>
+                </td>
+                <td>
+                  {{if and .Enabled .Direct.Published}}
+                  <code class="mdb-mono" id="addr-pub-{{.Engine}}">{{.Direct.Published.Address}}:{{.Direct.Published.Port}}</code>
+                  <div class="small text-secondary">{{.Direct.Published.Via}}</div>
+                  {{else if .Enabled}}
+                  <span class="badge bg-secondary-lt" title="MDB_PUBLISH={{$pub}} — no host port for this engine">not published</span>
+                  {{else}}
+                  <span class="text-secondary">—</span>
+                  {{end}}
+                </td>
+                <td class="text-end">
+                  <div class="btn-list flex-nowrap justify-content-end align-items-center">
+                    <button type="button" class="btn btn-sm btn-icon" data-copy="#addr-net-{{.Engine}}" title="Copy container address {{$hostport}}" aria-label="Copy container address">{{icon "copy"}}</button>
+                    {{if and .Enabled .Direct.Published}}
+                    <button type="button" class="btn btn-sm btn-icon" data-copy="#addr-pub-{{.Engine}}" title="Copy published address" aria-label="Copy published address">{{icon "copy"}}</button>
+                    {{end}}
+                    <a href="/engines/{{.Engine}}" class="btn btn-sm" title="Principals and addresses">{{icon "database"}} <span class="d-none d-xl-inline">Details</span></a>
+                    {{if $running}}
+                    {{actionButton $page "project.new" "New" (print "engine=" .Engine) "class=btn-sm btn-primary" "icon=plus"}}
+                    {{else if .Enabled}}
+                    {{actionButton $page "stack.up" "Start" "class=btn-sm" "icon=play"}}
+                    {{else}}
+                    {{actionButton $page "stack.up" "Enable" (print "profiles=" (printf "%s,%s" (join $s.Endpoints.Profiles ",") .Engine)) "class=btn-sm" "icon=play"}}
+                    {{end}}
+                    {{template "engine-menu" (engineMenu $page .)}}
+                  </div>
+                </td>
+              </tr>
+              {{end}}
+            </tbody>
           </table>
         </div>
       </div>
     </div>
 
-    <div class="col-lg-5">
-      <div class="card">
-        <div class="card-header"><h3 class="card-title">Join the network</h3><div class="card-actions"><button type="button" class="btn btn-sm" data-copy="#network-snippet">{{icon "copy"}} <span data-copy-label>Copy</span></button></div></div>
-        <div class="card-body p-0"><pre id="network-snippet" class="mdb-env m-0">networks:
+    <div class="col-12">
+      <div class="row row-deck row-cards">
+        <div class="col-lg-6">
+          <div class="card h-100">
+            <div class="card-header"><h3 class="card-title">Join the network</h3><div class="card-actions"><button type="button" class="btn btn-sm" data-copy="#network-snippet" title="Copy the compose snippet">{{icon "copy"}} <span data-copy-label>Copy</span></button></div></div>
+            <div class="card-body d-flex flex-column p-0">
+              <pre id="network-snippet" class="mdb-env m-0 flex-fill" tabindex="0">networks:
   default:
     external: true
-    name: {{$s.Network}}</pre></div>
-        <div class="card-footer text-secondary small">Add this to your application's compose file, then use the service names on the left as hosts.</div>
-      </div>
-    </div>
-
-    <div class="col-md-6" id="tls">
-      <div class="card">
-        <div class="card-header"><h3 class="card-title">{{icon "lock"}} <span class="ms-2">TLS</span></h3></div>
-        <div class="card-body">
-          <p>Engines that always use TLS want <code>sslmode=verify-full</code>, the only mode that checks the host name. The others require TLS in the prod profile. Either way, point the client at the toolkit CA:</p>
-          <pre class="mdb-env m-0">{{path $s.Root "certs" "ca.crt"}}</pre>
-          <p class="text-secondary small mt-3 mb-0">Each project's page shows the exact settings for its engine.</p>
+    name: {{$s.Network}}</pre>
+            </div>
+            <div class="card-footer text-secondary small">Add this to your application's compose file, then use the service names above as hosts. If Copy is blocked, select the snippet and copy it yourself.</div>
+          </div>
+        </div>
+        <div class="col-lg-6" id="tls">
+          <div class="card h-100">
+            <div class="card-header"><h3 class="card-title">{{icon "lock"}} <span class="ms-2">TLS</span></h3><div class="card-actions"><button type="button" class="btn btn-sm" data-copy="#tls-ca-path" title="Copy the CA path">{{icon "copy"}} <span data-copy-label>Copy</span></button></div></div>
+            <div class="card-body d-flex flex-column">
+              <p class="mb-3">Engines that always use TLS want <code>sslmode=verify-full</code>. The others require TLS in the prod profile. Point the client at the toolkit CA:</p>
+              <pre id="tls-ca-path" class="mdb-env m-0" tabindex="0">{{path $s.Root "certs" "ca.crt"}}</pre>
+              <p class="text-secondary small mt-auto mb-0 pt-3">Each project's page shows the exact settings for its engine. Issue or renew the CA under <a href="/operations#security">Operations → Security</a>.</p>
+            </div>
+          </div>
         </div>
       </div>
     </div>
 
-    <div class="col-md-6" id="shells">
+    {{if $s.WebUIs}}
+    <div class="col-12" id="web-uis">
       <div class="card">
-        <div class="card-header"><h3 class="card-title">{{icon "terminal"}} <span class="ms-2">Shells and next steps</span></h3></div>
+        <div class="card-header"><h3 class="card-title">{{icon "eye"}} <span class="ms-2">Browser front ends</span></h3><p class="card-subtitle mb-0">The <code>ui</code> profile's Adminer, phpMyAdmin and pgAdmin, behind Caddy.</p></div>
         <div class="list-group list-group-flush">
-          <div class="list-group-item"><div class="fw-medium">A shell in an engine</div><div class="text-secondary small"><code>make help</code> lists one per engine, for example <code>make psql</code>. They work whatever MDB_PUBLISH says.</div></div>
-          <div class="list-group-item"><div class="fw-medium">A new project</div><div class="text-secondary small"><code>make new-project NAME=myapp ENGINE=&lt;engine&gt;</code></div></div>
-          <div class="list-group-item"><div class="fw-medium">Everything at once</div><div class="text-secondary small"><code>make start PROFILES=&lt;engines&gt; PROJECTS=myapp</code> boots, provisions and opens this dashboard.</div></div>
-          <div class="list-group-item"><div class="fw-medium">Every endpoint, for scripts</div><div class="text-secondary small"><code>dbpantry endpoints -o json</code> or <a href="/api/status">/api/status</a></div></div>
+          {{range $s.WebUIs}}
+          <a class="list-group-item list-group-item-action" href="{{.URL}}" rel="noopener" target="_blank">{{.Name}}<span class="mdb-mono text-secondary ms-2">{{.URL}}</span></a>
+          {{end}}
         </div>
       </div>
     </div>
+    {{end}}
+
+    <div class="col-12" id="shells">
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <h3 class="card-title">{{icon "terminal"}} <span class="ms-2">Run from this dashboard</span></h3>
+            <p class="card-subtitle mb-0">Each button starts a scoped job (CSRF + confirm). Interactive shells stay on your terminal — copy the command instead of pasting secrets into the page.</p>
+          </div>
+        </div>
+        <div class="list-group list-group-flush">
+          <div class="list-group-item">
+            <div class="row align-items-center g-2">
+              <div class="col-md-4 fw-medium">A shell in an engine</div>
+              <div class="col-md">
+                <code class="mdb-mono small" id="cmd-shell-pg">dbpantry shell pg -- psql -U postgres</code>
+                <div class="text-secondary small mt-1">Interactive — runs in your terminal, not as a background job.</div>
+              </div>
+              <div class="col-md-auto">
+                <div class="btn-list">
+                  <button type="button" class="btn btn-sm" data-copy="#cmd-shell-pg" title="Copy the shell command">{{icon "copy"}} <span data-copy-label>Copy</span></button>
+                  <a href="/services/pg/logs" class="btn btn-sm" title="Stream pg logs for debugging">{{icon "file"}} Logs</a>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="list-group-item">
+            <div class="row align-items-center g-2">
+              <div class="col-md-4 fw-medium">Provision a project</div>
+              <div class="col-md">
+                <code class="mdb-mono small">dbpantry project new --name myapp --engine &lt;engine&gt;</code>
+                <div class="text-secondary small mt-1">Asks for the name and engine, then streams progress in the job drawer.</div>
+              </div>
+              <div class="col-md-auto">{{actionButton $page "project.new" "New project" "class=btn-sm btn-primary" "icon=plus"}}</div>
+            </div>
+          </div>
+          <div class="list-group-item">
+            <div class="row align-items-center g-2">
+              <div class="col-md-4 fw-medium">Boot and provision</div>
+              <div class="col-md">
+                <code class="mdb-mono small">dbpantry start --no-dashboard --profiles … --project …</code>
+                <div class="text-secondary small mt-1">Starts the stack and optionally provisions a project. Does not open a second dashboard.</div>
+              </div>
+              <div class="col-md-auto">{{actionButton $page "stack.start" "Boot and provision" "class=btn-sm btn-primary" "icon=play"}}</div>
+            </div>
+          </div>
+          <div class="list-group-item">
+            <div class="row align-items-center g-2">
+              <div class="col-md-4 fw-medium">Start / stop the stack</div>
+              <div class="col-md text-secondary small">The same <code>up</code> / <code>down</code> as the Overview buttons, with soft confirmation when required.</div>
+              <div class="col-md-auto">
+                <div class="btn-list">
+                  {{actionButton $page "stack.up" "Start" "class=btn-sm" "icon=play"}}
+                  {{actionButton $page "stack.down" "Stop" "class=btn-sm" "icon=stop"}}
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="list-group-item">
+            <div class="row align-items-center g-2">
+              <div class="col-md-4 fw-medium">Run checks (debug)</div>
+              <div class="col-md">
+                <code class="mdb-mono small">dbpantry verify --fast</code>
+                <div class="text-secondary small mt-1">Acceptance harness; optional check numbers in the confirm modal.</div>
+              </div>
+              <div class="col-md-auto">{{actionButton $page "verify" "Run checks" "class=btn-sm" "icon=activity"}}</div>
+            </div>
+          </div>
+          <div class="list-group-item">
+            <div class="row align-items-center g-2">
+              <div class="col-md-4 fw-medium">Every endpoint, for scripts</div>
+              <div class="col-md">
+                <code class="mdb-mono small" id="cmd-endpoints">dbpantry endpoints -o json</code>
+                <div class="text-secondary small mt-1">Or read the live snapshot as JSON from this process.</div>
+              </div>
+              <div class="col-md-auto">
+                <div class="btn-list">
+                  <button type="button" class="btn btn-sm" data-copy="#cmd-endpoints" title="Copy the endpoints command">{{icon "copy"}} <span data-copy-label>Copy</span></button>
+                  <button type="button" class="btn btn-sm" data-status-json title="Open the live stack snapshot">{{icon "braces"}} Status JSON</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
   </div>
 </div></div>
 {{end}}

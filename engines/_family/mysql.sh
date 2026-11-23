@@ -144,7 +144,20 @@ CREATE USER IF NOT EXISTS '${user}'@'%' IDENTIFIED BY '${esc_pw}';
 ALTER USER '${user}'@'%' IDENTIFIED BY '${esc_pw}';
 GRANT ALL PRIVILEGES ON \`${db}\`.* TO '${user}'@'%';
 CREATE USER IF NOT EXISTS '${user}_readonly'@'%' IDENTIFIED BY '${esc_ro}';
+ALTER USER '${user}_readonly'@'%' IDENTIFIED BY '${esc_ro}';
 GRANT SELECT ON \`${db}\`.* TO '${user}_readonly'@'%';
+FLUSH PRIVILEGES;
+SQL
+}
+
+# Drop a project: its database and both users. IF EXISTS throughout, so a
+# half-dropped project can be dropped again.
+hook_drop_project() {
+    local db="$1" user="$2"
+    _mysql_run <<SQL 2>/dev/null || return 1
+DROP DATABASE IF EXISTS \`${db}\`;
+DROP USER IF EXISTS '${user}'@'%';
+DROP USER IF EXISTS '${user}_readonly'@'%';
 FLUSH PRIVILEGES;
 SQL
 }

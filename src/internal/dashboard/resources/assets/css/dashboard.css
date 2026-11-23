@@ -1,10 +1,106 @@
 /* dbpantry's few additions to Tabler. */
 .mdb-mark { width: 1.75rem; height: 1.75rem; }
+/* Page history: icon chips in the top navbar (beside Live), not the title row. */
+.mdb-page-history .mdb-header-chip:disabled {
+  opacity: .4;
+  cursor: default;
+}
+.mdb-header-chip-icon {
+  width: var(--mdb-control-h);
+  padding: 0;
+  justify-content: center;
+  color: var(--tblr-primary);
+  background: var(--tblr-primary-lt);
+  border-color: transparent;
+}
+.mdb-header-chip-icon:hover:not(:disabled) {
+  background: var(--tblr-primary);
+  color: var(--tblr-primary-fg, #fff);
+}
+/* Page crumbs sit under the title (owner: after, not first). Every item except
+   the current page is a real href (NN/g: no IA-only labels). */
+.mdb-page-crumbs {
+  --tblr-breadcrumb-divider-color: var(--tblr-secondary);
+  margin-top: .4rem;
+}
+.mdb-page-crumbs .breadcrumb {
+  margin-bottom: 0;
+  flex-wrap: wrap;
+  row-gap: .15rem;
+  font-size: .8125rem;
+}
+.mdb-page-crumbs .breadcrumb-item a {
+  color: var(--tblr-primary);
+  text-decoration: none;
+  padding: .15rem .1rem;
+  border-radius: var(--tblr-border-radius);
+}
+.mdb-page-crumbs .breadcrumb-item a:hover {
+  color: var(--tblr-primary);
+  background: var(--tblr-primary-lt);
+  text-decoration: none;
+}
+.mdb-page-crumbs .breadcrumb-item.active {
+  color: var(--tblr-secondary);
+  font-weight: 500;
+}
+.mdb-page-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: var(--tblr-border-radius);
+  flex: 0 0 auto;
+}
+.mdb-page-icon .icon {
+  width: 1.15rem;
+  height: 1.15rem;
+}
+.mdb-env-crumb {
+  max-width: min(28rem, 55vw);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mdb-project-list .mdb-project-row,
+.mdb-unmanaged .list-group-item {
+  padding-top: .9rem;
+  padding-bottom: .9rem;
+}
+.mdb-project-menu {
+  min-width: 16rem;
+  max-height: min(70vh, 28rem);
+  overflow-y: auto;
+}
 .mdb-mono { font-family: var(--tblr-font-monospace); font-size: .8125rem; }
+/* Long image digests / refs in tables: one line + ellipsis; full value is in title. */
+.mdb-cell-ref {
+  max-width: min(28rem, 40vw);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* Health badges align the Tabler status-dot with the label. */
+.badge .status-dot {
+  vertical-align: 0.05em;
+}
+/* If a Tabler .status pill is used in a tight cell, grow with the text instead
+   of clipping (Tabler sets a fixed 1.5rem height). Prefer badges for health. */
+.card-table .status,
+.list-group .status {
+  height: auto;
+  min-height: var(--tblr-status-height, 1.5rem);
+  white-space: nowrap;
+  max-width: 100%;
+}
+/* Tabler paints every <pre> with --tblr-light (for dark code blocks). Our
+   snippets sit on the light surface, so without an explicit body colour the
+   Join-network / TLS / .env blocks render as empty boxes. */
 .mdb-env {
   font-family: var(--tblr-font-monospace);
   font-size: .8125rem;
   padding: 1rem 1.25rem;
+  color: var(--tblr-body-color);
   background: var(--tblr-bg-surface-secondary);
   border-radius: 0 0 var(--tblr-card-border-radius) var(--tblr-card-border-radius);
   white-space: pre-wrap;
@@ -14,5 +110,1569 @@
    copies it either way, because the text is whole. */
 .mdb-secret { filter: blur(5px); }
 [data-revealed] .mdb-secret { filter: none; }
-.mdb-refresh[data-state="stale"] { --tblr-badge-bg: var(--tblr-yellow-lt); }
-.mdb-refresh[data-state="error"] { --tblr-badge-bg: var(--tblr-red-lt); }
+/* Command output: the job drawer and the Logs view. */
+.mdb-log {
+  font-family: var(--tblr-font-monospace);
+  font-size: .78rem;
+  line-height: 1.45;
+  padding: .75rem 1rem;
+  background: var(--tblr-bg-surface-dark, #182433);
+  color: #e6edf3;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow: auto;
+  min-height: 12rem;
+}
+.card > .mdb-log { max-height: 70vh; border-radius: 0 0 var(--tblr-card-border-radius) var(--tblr-card-border-radius); }
+/* Structured live log viewer (services/{svc}/logs). */
+.mdb-logs-card { position: relative; }
+.mdb-log-viewer {
+  white-space: normal;
+  padding: .5rem 0;
+  max-height: 70vh;
+  border-radius: 0;
+}
+.mdb-log-viewer.mdb-log-nowrap .mdb-log-msg {
+  white-space: nowrap;
+}
+.mdb-log-line {
+  display: grid;
+  grid-template-columns: minmax(5rem, max-content) 3.5rem minmax(0, 1fr);
+  gap: .5rem;
+  padding: .2rem 1rem;
+  border-left: 3px solid transparent;
+  color: #c9d1d9;
+}
+.mdb-log-line:hover { background: rgba(255, 255, 255, .04); }
+.mdb-log-line[hidden] { display: none !important; }
+.mdb-log-prefix {
+  color: #8b949e;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mdb-log-level {
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .02em;
+  font-size: .7rem;
+  line-height: 1.6;
+}
+.mdb-log-msg {
+  white-space: pre-wrap;
+  word-break: break-word;
+  min-width: 0;
+}
+.mdb-log-info .mdb-log-level { color: #7fbcc8; }
+.mdb-log-info { border-left-color: #3d6b75; }
+.mdb-log-warn .mdb-log-level { color: #e6b350; }
+.mdb-log-warn { border-left-color: #e6b350; background: rgba(230, 179, 80, .06); }
+.mdb-log-error .mdb-log-level { color: #f0705a; }
+.mdb-log-error { border-left-color: #f0705a; background: rgba(240, 112, 90, .08); }
+.mdb-log-debug .mdb-log-level { color: #8e877a; }
+.mdb-log-debug { border-left-color: #4a4640; color: #aaa395; }
+.mdb-log-other .mdb-log-level { color: #8b949e; }
+.mdb-log-mark {
+  background: rgba(230, 179, 80, .35);
+  color: inherit;
+  padding: 0 .1rem;
+  border-radius: 2px;
+}
+.mdb-logs-card [data-logs-level].btn.active {
+  background: var(--tblr-primary-lt);
+  color: var(--tblr-primary);
+  border-color: transparent;
+}
+.mdb-logs-pill {
+  position: absolute;
+  left: 50%;
+  bottom: 1rem;
+  transform: translateX(-50%);
+  z-index: 2;
+  box-shadow: var(--tblr-box-shadow);
+}
+.mdb-job-drawer { --tblr-offcanvas-width: min(56rem, 100vw); }
+.mdb-job-drawer .offcanvas-body { min-height: 0; }
+.mdb-job-drawer[data-mdb-locked="1"] [data-job-close]:disabled {
+  opacity: .35;
+  pointer-events: none;
+}
+.mdb-job-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: .5rem .75rem;
+  padding: .65rem 1rem;
+  border-bottom: 1px solid var(--tblr-border-color);
+  background: var(--tblr-bg-surface);
+}
+.mdb-job-locked-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: .35rem;
+  font-size: .75rem;
+  color: var(--tblr-secondary);
+  background: var(--tblr-bg-surface-secondary);
+  border-radius: 999px;
+  padding: .15rem .55rem;
+}
+.mdb-job-locked-dot {
+  width: .45rem;
+  height: .45rem;
+  border-radius: 50%;
+  background: var(--tblr-yellow);
+  box-shadow: 0 0 0 0 rgba(247, 183, 49, .5);
+  animation: mdb-job-pulse 1.4s ease-out infinite;
+}
+@keyframes mdb-job-pulse {
+  70% { box-shadow: 0 0 0 .45rem rgba(247, 183, 49, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(247, 183, 49, 0); }
+}
+.mdb-profile-picker {
+  border: 1px solid var(--tblr-border-color);
+  border-radius: var(--tblr-border-radius);
+  background: var(--tblr-bg-surface-secondary);
+  overflow: hidden;
+}
+.mdb-profile-current {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: .35rem;
+  padding: .65rem .85rem;
+  border-bottom: 1px solid var(--tblr-border-color);
+  background: var(--tblr-bg-surface);
+}
+.mdb-profile-current-label {
+  font-size: .75rem;
+  font-weight: 600;
+  letter-spacing: .03em;
+  text-transform: uppercase;
+  color: var(--tblr-secondary);
+  margin-right: .25rem;
+}
+.mdb-profile-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .35rem;
+  padding: .5rem .85rem;
+  border-bottom: 1px solid var(--tblr-border-color);
+}
+.mdb-profile-groups {
+  max-height: 18rem;
+  overflow: auto;
+  padding: .35rem 0 .5rem;
+}
+.mdb-profile-group + .mdb-profile-group {
+  border-top: 1px solid var(--tblr-border-color);
+  margin-top: .35rem;
+  padding-top: .35rem;
+}
+.mdb-profile-group-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: .35rem .75rem;
+  padding: .35rem .85rem .15rem;
+}
+.mdb-profile-group-title {
+  font-size: .72rem;
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--tblr-secondary);
+}
+.mdb-profile-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
+  gap: .45rem;
+  padding: .35rem .85rem .55rem;
+  box-sizing: border-box;
+}
+.mdb-profile-pick {
+  display: flex;
+  align-items: flex-start;
+  gap: .55rem;
+  margin: 0;
+  padding: .55rem .65rem;
+  border: 1px solid var(--tblr-border-color);
+  border-radius: var(--tblr-border-radius);
+  background: var(--tblr-bg-surface);
+  cursor: pointer;
+  min-width: 0;
+  transition: border-color .15s ease, box-shadow .15s ease, background .15s ease;
+}
+.mdb-profile-pick:hover {
+  border-color: var(--tblr-primary);
+  background: var(--tblr-primary-lt);
+}
+.mdb-profile-pick.is-checked,
+.mdb-profile-pick:has(input:checked) {
+  border-color: var(--tblr-primary);
+  box-shadow: 0 0 0 1px var(--tblr-primary);
+  background: var(--tblr-primary-lt);
+}
+.mdb-profile-pick.is-current {
+  border-style: solid;
+}
+.mdb-profile-pick .form-check-input {
+  flex: 0 0 auto;
+  margin: .15rem 0 0;
+  float: none;
+}
+.mdb-profile-pick-body {
+  display: flex;
+  flex-direction: column;
+  gap: .1rem;
+  min-width: 0;
+}
+.mdb-profile-pick-title {
+  font-weight: 600;
+  line-height: 1.25;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mdb-profile-pick-meta {
+  font-size: .75rem;
+  color: var(--tblr-secondary);
+  line-height: 1.3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* Legacy class kept so older markup still lays out safely. */
+.mdb-profile-picks {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(10.5rem, 1fr));
+  gap: .45rem;
+  max-height: 14rem;
+  overflow: auto;
+  padding: .75rem .85rem;
+  border: 1px solid var(--tblr-border-color);
+  border-radius: var(--tblr-border-radius);
+  background: var(--tblr-bg-surface-secondary);
+  box-sizing: border-box;
+}
+#mdb-action-modal[data-mdb-busy="1"] [data-action-dismiss]:disabled {
+  opacity: .35;
+  pointer-events: none;
+}
+/* Header chips: Live + Status share one control size (Tabler navbar). */
+.mdb-header-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: .35rem;
+  height: var(--mdb-control-h);
+  padding: 0 .65rem;
+  margin: 0;
+  border: 1px solid transparent;
+  border-radius: var(--tblr-border-radius);
+  font-size: .75rem;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  vertical-align: middle;
+  cursor: pointer;
+  background: var(--tblr-bg-surface-secondary);
+  color: var(--tblr-secondary);
+}
+.mdb-header-chip .icon {
+  width: .85rem;
+  height: .85rem;
+  flex: 0 0 auto;
+}
+.mdb-header-chip .status-dot {
+  width: .45rem;
+  height: .45rem;
+}
+.mdb-header-chip.dropdown-toggle::after {
+  margin-left: .2rem;
+  vertical-align: .1em;
+}
+.mdb-refresh {
+  background: var(--tblr-green-lt);
+  color: var(--tblr-green);
+}
+.mdb-refresh:disabled { cursor: default; opacity: .85; }
+.mdb-refresh[data-state="live"] {
+  background: var(--tblr-green-lt);
+  color: var(--tblr-green);
+}
+.mdb-refresh[data-state="paused"],
+.mdb-refresh[data-state="stale"] {
+  background: var(--tblr-yellow-lt);
+  color: var(--tblr-yellow);
+}
+.mdb-refresh[data-state="error"] {
+  background: var(--tblr-red-lt);
+  color: var(--tblr-red);
+}
+.mdb-stats-toggle {
+  background: var(--tblr-bg-surface-secondary);
+  color: var(--tblr-body-color);
+  max-width: min(18rem, 42vw);
+}
+.mdb-stats-summary {
+  display: inline-flex;
+  align-items: center;
+  gap: .35rem;
+  min-width: 0;
+}
+.mdb-stats-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: .2rem;
+}
+.mdb-stats-pill.is-ok { color: var(--tblr-green); }
+.mdb-stats-pill.is-warn { color: var(--tblr-yellow); }
+.mdb-stats-pill.is-bad { color: var(--tblr-red); }
+.mdb-stats-pill.is-muted { color: var(--tblr-secondary); }
+.mdb-stats-menu {
+  min-width: min(20rem, calc(100vw - 1rem));
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.mdb-stats-menu .card {
+  margin: 0;
+  box-shadow: var(--tblr-box-shadow-dropdown, var(--tblr-box-shadow));
+}
+/* Engine cards: dim leftover/off engines visually, but NEVER use Tabler's
+   .card-inactive (pointer-events:none) — that made every link and ⋮ dead. */
+.mdb-engine-card { position: relative; }
+.mdb-engine-card.mdb-engine-dim .card-body { opacity: .72; }
+.mdb-engine-card .mdb-engine-card-actions {
+  position: relative;
+  z-index: 2; /* above Bootstrap stretched-link on the title */
+}
+.mdb-engine-card .card-footer a,
+.mdb-engine-card .card-footer .btn { position: relative; z-index: 2; }
+/* Engine menus: short root + dropend submenus (no scroll). Fixed Popper
+   (dashboard.js) escapes .table-responsive / card overflow. */
+.mdb-engine-menu,
+.mdb-engine-submenu {
+  min-width: 14rem;
+  max-width: min(22rem, calc(100vw - 1rem));
+  overflow: visible;
+  z-index: 1080;
+}
+.mdb-engine-submenu { z-index: 1085; }
+.mdb-engine-menu .dropdown-item,
+.mdb-engine-submenu .dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: .25rem;
+}
+.mdb-engine-menu .dropdown-item .icon,
+.mdb-engine-submenu .dropdown-item .icon { width: 1rem; height: 1rem; flex: 0 0 auto; }
+.mdb-engine-menu .dropend > .dropdown-toggle::after {
+  margin-left: auto;
+  vertical-align: .15em;
+}
+/* Tip nodes live on <body>; keep them above cards and below modals/toasts. */
+.tooltip { z-index: 1070; }
+.popover { z-index: 1070; }
+/* Header notifications (Tabler dropdown-menu-card). */
+.mdb-notify-menu {
+  min-width: min(22rem, calc(100vw - 1rem));
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.mdb-notify-menu .card {
+  margin: 0;
+  box-shadow: var(--tblr-box-shadow-dropdown, var(--tblr-box-shadow));
+}
+.mdb-notify-menu .list-group {
+  max-height: 18rem;
+  overflow-y: auto;
+}
+.mdb-lang-menu {
+  min-width: 10rem;
+  max-height: min(70vh, 24rem);
+  overflow-y: auto;
+}
+/* Instance menu: short links only; profiles/network live on Configuration. */
+.mdb-instance-menu {
+  min-width: 14rem;
+  max-width: min(20rem, calc(100vw - 1rem));
+  padding-top: .5rem;
+  padding-bottom: .5rem;
+}
+.mdb-ov-connect .list-group-item {
+  padding-top: .85rem;
+  padding-bottom: .85rem;
+}
+.mdb-instance-menu .dropdown-item-text {
+  white-space: normal;
+  padding-top: .35rem;
+  padding-bottom: .35rem;
+}
+.mdb-instance-menu .dropdown-header {
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: 600;
+  color: var(--tblr-secondary);
+}
+/* Connect: publish modes as equal cards; current mode gets a primary ring. */
+.mdb-publish-mode {
+  border: 1px solid var(--tblr-border-color);
+  box-shadow: none;
+  background: var(--tblr-bg-surface);
+}
+.mdb-publish-mode-current {
+  border-color: var(--tblr-primary);
+  box-shadow: 0 0 0 1px var(--tblr-primary);
+  background: var(--tblr-bg-surface);
+}
+.mdb-publish-mode .fs-3 {
+  line-height: 1.1;
+}
+.mdb-engine-addresses .btn-list .btn-icon {
+  --tblr-btn-icon-size: 1rem;
+}
+/* Configuration › This instance: three equal tiles; buttons sit on one
+   footer line so the rows align across tiles. */
+.mdb-inst {
+  display: flex;
+  flex-direction: column;
+  gap: .75rem;
+  height: 100%;
+  padding: 1rem;
+  background: var(--tblr-bg-surface);
+  border: var(--tblr-border-width) solid var(--tblr-border-color);
+  border-radius: var(--tblr-border-radius-lg, var(--tblr-border-radius));
+}
+.mdb-inst-head { display: flex; align-items: center; gap: .75rem; min-width: 0; }
+.mdb-inst-head .subheader { margin-bottom: .125rem; }
+.mdb-inst-value { font-size: 1rem; font-weight: var(--tblr-font-weight-bold); line-height: 1.3; }
+.mdb-inst-chips { display: flex; flex-wrap: wrap; gap: .5rem; }
+.mdb-inst-chips .badge { padding: .3125rem .625rem; font-size: .8125rem; }
+.mdb-inst-facts {
+  display: grid;
+  grid-template-columns: 4.5rem minmax(0, 1fr);
+  gap: .375rem .75rem;
+  margin: 0;
+  font-size: .8125rem;
+}
+.mdb-inst-facts dt { font-weight: var(--tblr-font-weight-medium); color: var(--tblr-secondary); }
+.mdb-inst-facts dd { margin: 0; min-width: 0; }
+.mdb-inst-note { margin: 0; font-size: .8125rem; color: var(--tblr-secondary); }
+.mdb-inst-actions { margin-top: auto; padding-top: .75rem; border-top: var(--tblr-border-width) solid var(--tblr-border-color); }
+/* Grouped nav: one caret beside the label; menus use section headers. */
+.mdb-nav .nav-link.dropdown-toggle::after {
+  margin-left: .35rem;
+  vertical-align: .15em;
+}
+.mdb-nav-menu {
+  min-width: 16rem;
+  max-width: min(22rem, calc(100vw - 1rem));
+}
+.mdb-nav-menu .dropdown-header {
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: 600;
+  color: var(--tblr-secondary);
+  padding-top: .5rem;
+}
+.mdb-nav-menu .dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: .25rem;
+}
+.mdb-nav-menu .dropdown-item .badge {
+  margin-left: auto;
+}
+/* Stack (and nested) rows: icon+label left, badge right — never a
+   badge jammed against the caret on dropend toggles. */
+.mdb-nav-row {
+  display: flex !important;
+  align-items: center;
+  gap: .5rem;
+  width: 100%;
+}
+.mdb-nav-row-main {
+  display: inline-flex;
+  align-items: center;
+  gap: .5rem;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+.mdb-nav-row-main .icon {
+  width: 1rem;
+  height: 1rem;
+  flex: 0 0 auto;
+}
+.mdb-nav-row-main .status-dot {
+  flex: 0 0 auto;
+}
+.mdb-nav-row-meta {
+  margin-left: 0 !important;
+  flex: 0 0 auto;
+}
+.mdb-nav-submenu {
+  min-width: 14rem;
+  max-width: min(22rem, calc(100vw - 1rem));
+  z-index: 1085;
+}
+.mdb-nav-menu .dropend > .dropdown-toggle.mdb-nav-row::after {
+  margin-left: .15rem;
+  flex: 0 0 auto;
+}
+.mdb-nav-menu .dropend > .dropdown-toggle::after,
+.mdb-nav-submenu .dropend > .dropdown-toggle::after {
+  margin-left: auto;
+}
+.mdb-engine-addresses.is-offline .mdb-engine-addr-value {
+  opacity: .85;
+}
+.mdb-engine-hero {
+  border-left: .25rem solid var(--tblr-secondary);
+  background: var(--tblr-bg-surface-secondary);
+}
+.mdb-engine-hero-ok { border-left-color: var(--tblr-green); }
+.mdb-engine-hero-stopped { border-left-color: var(--tblr-yellow); }
+.mdb-engine-hero-orphan { border-left-color: var(--tblr-azure); }
+.mdb-engine-hero-off { border-left-color: var(--tblr-secondary); }
+/* Compact connect rows (engine page): one label / value / action per line so
+   the card matches Projects height instead of a tall 2×2 tile grid. */
+.mdb-engine-addr-list .mdb-engine-addr-row {
+  display: grid;
+  grid-template-columns: minmax(7.5rem, 11rem) minmax(0, 1fr) 2rem;
+  gap: .75rem 1rem;
+  align-items: center;
+  padding-top: .7rem;
+  padding-bottom: .7rem;
+}
+.mdb-engine-addr-label {
+  font-size: .72rem;
+  font-weight: 600;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--tblr-secondary);
+  margin-bottom: 0;
+  line-height: 1.3;
+}
+.mdb-engine-addr-value {
+  font-size: .92rem;
+  word-break: break-word;
+  min-width: 0;
+}
+.mdb-engine-addr-spacer {
+  width: 2rem;
+  height: 1px;
+}
+.mdb-engine-addr-ext .mdb-engine-addr-value {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .25rem;
+  align-items: center;
+}
+.mdb-engine-side {
+  display: flex;
+  flex-direction: column;
+}
+.mdb-engine-side .empty {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+.mdb-engine-addons-drawer {
+  --tblr-offcanvas-width: min(28rem, 100vw);
+}
+.mdb-engine-addons-drawer .mdb-engine-addons-body {
+  max-height: none;
+  overflow: auto;
+}
+.mdb-engine-addons-body {
+  max-height: 22rem;
+  overflow: auto;
+}
+.mdb-addon-manage-compact .mdb-addon-engine-meta {
+  display: none; /* On/Total lives in the slide-in header / trigger badge */
+}
+@media (max-width: 575.98px) {
+  .mdb-engine-addr-list .mdb-engine-addr-row {
+    grid-template-columns: 1fr auto;
+    grid-template-rows: auto auto;
+  }
+  .mdb-engine-addr-list .mdb-engine-addr-label {
+    grid-column: 1 / -1;
+  }
+  .mdb-engine-addr-list .mdb-engine-addr-value {
+    grid-column: 1;
+  }
+}
+/* Application splash / page loader (data-dbpantry-*). */
+html[data-dbpantry-loading="1"] .page,
+html[data-dbpantry-loading="1"] .skip-link {
+  visibility: hidden;
+}
+[data-dbpantry-splash] {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 1rem;
+  background: var(--tblr-body-bg, #f8fafc);
+  color: var(--tblr-body-color, #1e293b);
+  transition: opacity .35s ease, visibility .35s ease;
+}
+html[data-bs-theme="dark"] [data-dbpantry-splash] {
+  background: var(--tblr-body-bg, #0b1220);
+  color: var(--tblr-body-color, #e2e8f0);
+}
+[data-dbpantry-splash][data-dbpantry-splash-state="hidden"] {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+[data-dbpantry-splash-mark] {
+  width: 3rem;
+  height: 3rem;
+}
+[data-dbpantry-splash-label] {
+  font-size: .95rem;
+  letter-spacing: .02em;
+  color: var(--tblr-secondary);
+}
+[data-dbpantry-splash-pct] {
+  font-size: .8rem;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: .04em;
+  color: var(--tblr-secondary);
+  min-height: 1.1em;
+}
+[data-dbpantry-splash-progress] {
+  width: min(14rem, 48vw);
+  height: .3rem;
+  border-radius: 999px;
+  background: var(--tblr-border-color);
+  overflow: hidden;
+}
+[data-dbpantry-splash-progress] > span,
+[data-dbpantry-splash-bar] {
+  display: block;
+  height: 100%;
+  width: 0%;
+  border-radius: inherit;
+  background: var(--tblr-primary);
+  transition: width .18s ease-out;
+}
+[data-dbpantry-splash-progress][data-indeterminate] > span,
+[data-dbpantry-splash-progress][data-indeterminate] [data-dbpantry-splash-bar] {
+  width: 35%;
+  transition: none;
+  animation: mdb-splash-indeterminate 1.1s ease-in-out infinite;
+}
+@keyframes mdb-splash-indeterminate {
+  0% { transform: translateX(-120%); }
+  100% { transform: translateX(320%); }
+}
+.mdb-nav .nav-item.active > .nav-link,
+.mdb-nav .nav-item.dropdown.active > .nav-link {
+  color: var(--tblr-primary);
+  font-weight: 600;
+}
+/* Config (and any) section rows: theme-aware — never Bootstrap table-light,
+   which stays white under data-bs-theme=dark. */
+.mdb-table-section > td {
+  background: var(--tblr-bg-surface-secondary) !important;
+  color: var(--tblr-secondary);
+  font-weight: 600;
+  font-size: .75rem;
+  letter-spacing: .02em;
+  text-transform: none;
+  border-bottom-color: var(--tblr-border-color) !important;
+  padding-top: .65rem !important;
+  padding-bottom: .65rem !important;
+}
+.mdb-status-drawer { --tblr-offcanvas-width: min(40rem, 100vw); }
+.mdb-status-drawer .mdb-log { flex: 1 1 auto; min-height: 16rem; }
+.mdb-toasts { z-index: 1090; }
+.mdb-toasts .toast { min-width: 16rem; max-width: 24rem; }
+.mdb-job-drawer .mdb-job-empty {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  background: transparent;
+  z-index: 1;
+}
+.mdb-job-drawer .mdb-job-empty.d-none { display: none !important; }
+
+/* Add-ons wizard: engine picker cards (single / multi). */
+.mdb-addon-mode {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: .5rem;
+}
+.mdb-addon-mode-label {
+  white-space: nowrap;
+}
+.mdb-addon-picker-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: .75rem;
+  padding-bottom: .75rem;
+  margin-bottom: .25rem;
+  border-bottom: 1px solid var(--tblr-border-color);
+}
+.mdb-addon-engine-card {
+  border: 1px solid var(--tblr-border-color);
+  box-shadow: none;
+  transition: border-color .15s ease, box-shadow .15s ease, background .15s ease;
+  background: var(--tblr-bg-surface);
+  overflow: hidden;
+}
+.mdb-addon-engine-card .mdb-addon-engine-hit {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+.mdb-addon-engine-card:hover {
+  border-color: var(--tblr-primary);
+}
+.mdb-addon-engine-card .mdb-addon-engine-hit:hover {
+  background: var(--tblr-primary-lt);
+}
+.mdb-addon-engine-card .mdb-addon-engine-hit:focus-visible {
+  outline: 2px solid var(--tblr-primary);
+  outline-offset: -2px;
+}
+.mdb-addon-engine-card-selected {
+  border-color: var(--tblr-primary);
+  box-shadow: 0 0 0 1px var(--tblr-primary);
+  background: var(--tblr-primary-lt);
+}
+.mdb-addon-engine-card-off {
+  background: var(--tblr-bg-surface-secondary);
+}
+.mdb-addon-engine-card .card-footer {
+  background: transparent;
+  border-top: 1px solid var(--tblr-border-color);
+}
+.mdb-addon-engine-check {
+  flex: 0 0 auto;
+  width: 1.25rem;
+  height: 1.25rem;
+  margin-top: .1rem;
+  border: 2px solid var(--tblr-secondary);
+  border-radius: .25rem;
+  background: var(--tblr-bg-surface);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: transparent;
+}
+.mdb-addon-engine-check.is-multi { border-radius: .25rem; }
+.mdb-addon-engine-check:not(.is-multi) { border-radius: 50%; }
+.mdb-addon-engine-check.is-on {
+  border-color: var(--tblr-primary);
+  background: var(--tblr-primary);
+  color: #fff;
+}
+.mdb-addon-engine-check-icon {
+  display: block;
+  opacity: 0;
+}
+.mdb-addon-engine-check.is-on .mdb-addon-engine-check-icon {
+  opacity: 1;
+}
+#mdb-addon-wizard .card-header {
+  align-items: flex-start;
+  gap: .75rem;
+  flex-wrap: wrap;
+}
+#mdb-addon-wizard .card-header .card-actions {
+  margin-left: auto;
+}
+#mdb-addon-wizard .mdb-addon-engine-card .badge {
+  flex: 0 0 auto;
+  font-weight: 600;
+  letter-spacing: .02em;
+  text-transform: uppercase;
+  font-size: .65rem;
+}
+#mdb-addon-wizard a.disabled,
+#mdb-addon-wizard button:disabled,
+#mdb-addon-wizard [aria-disabled="true"] {
+  cursor: not-allowed;
+  pointer-events: auto;
+  opacity: .65;
+}
+#mdb-addon-steps a.disabled {
+  text-decoration: none;
+}
+
+/* Add-ons manage card: grouped by engine, then kind. */
+.mdb-addon-catalog-header {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch !important;
+  gap: .75rem;
+}
+.mdb-addon-catalog-heading { min-width: 0; }
+.mdb-addon-kinds {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .35rem;
+}
+.mdb-addon-manage {
+  display: flex;
+  flex-direction: column;
+  overflow-x: hidden;
+}
+.mdb-addon-engine + .mdb-addon-engine {
+  border-top: 1px solid var(--tblr-border-color);
+}
+.mdb-addon-engine-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: .5rem .75rem;
+  padding: .85rem 1rem;
+  background: var(--tblr-bg-surface-secondary);
+}
+.mdb-addon-engine-head-main,
+.mdb-addon-engine-head-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: .5rem;
+}
+.mdb-addon-kind-label {
+  padding: .55rem 1rem .25rem;
+  font-size: .72rem;
+  font-weight: 600;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--tblr-secondary);
+}
+.mdb-addon-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: .65rem .75rem;
+  padding: .75rem 1rem;
+  width: 100%;
+  box-sizing: border-box;
+}
+.mdb-addon-row-main {
+  flex: 1 1 12rem;
+  min-width: 0;
+}
+.mdb-addon-row-meta {
+  font-size: .8rem;
+  line-height: 1.35;
+  margin-top: .15rem;
+}
+.mdb-addon-row-actions {
+  flex: 0 0 auto;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: .4rem;
+  max-width: 100%;
+}
+.mdb-addon-row.is-muted {
+  color: var(--tblr-secondary);
+}
+.mdb-addon-row .form-check-input {
+  width: 2.2rem;
+  height: 1.2rem;
+  cursor: pointer;
+}
+.mdb-addon-row .form-check-input:disabled {
+  cursor: not-allowed;
+  opacity: .45;
+}
+#mdb-addon-wizard .list-group-item {
+  overflow: visible;
+}
+
+/* Command palette (⌘K) */
+.mdb-cmd-trigger {
+  height: var(--mdb-control-h);
+  padding: 0 .4rem 0 .65rem;
+  font-size: .8125rem;
+  color: var(--tblr-secondary);
+  cursor: pointer;
+  background: var(--tblr-bg-surface-secondary);
+  border: 1px solid var(--tblr-border-color);
+  border-radius: var(--mdb-control-radius);
+  transition: border-color .15s, color .15s, box-shadow .15s;
+}
+.mdb-cmd-trigger:hover {
+  border-color: var(--tblr-primary);
+  color: var(--tblr-body-color);
+}
+.mdb-cmd-trigger:focus-visible {
+  outline: 0;
+  border-color: var(--tblr-primary);
+  box-shadow: 0 0 0 .2rem color-mix(in srgb, var(--tblr-primary) 25%, transparent);
+}
+.mdb-cmd-trigger-icon { display: inline-flex; flex: 0 0 auto; }
+.mdb-cmd-trigger-icon .icon { width: 1rem; height: 1rem; }
+.mdb-cmd-trigger .mdb-cmd-kbd { background: var(--tblr-bg-surface); }
+.mdb-cmd-kbd {
+  font-size: .7rem;
+  font-weight: 600;
+  padding: .1rem .35rem;
+  border: 1px solid var(--tblr-border-color);
+  border-radius: .25rem;
+  background: var(--tblr-bg-surface);
+  color: var(--tblr-secondary);
+  font-family: var(--tblr-font-sans-serif);
+}
+.mdb-cmd-panel { overflow: hidden; }
+.mdb-cmd-panel .modal-header { padding-bottom: 0; }
+.mdb-cmd-section {
+  font-size: .7rem;
+  font-weight: 600;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--tblr-secondary);
+  padding: .5rem .75rem .25rem;
+}
+.mdb-cmd-row {
+  display: flex;
+  align-items: center;
+  gap: .75rem;
+  width: 100%;
+  text-align: left;
+  border: 0;
+  background: transparent;
+  padding: .65rem .85rem;
+  border-left: 3px solid transparent;
+  color: inherit;
+}
+.mdb-cmd-row:hover,
+.mdb-cmd-row.is-active {
+  background: var(--tblr-primary-lt);
+  border-left-color: var(--tblr-primary);
+}
+.mdb-cmd-row.is-disabled { opacity: .55; }
+.mdb-cmd-row-main { flex: 1 1 auto; min-width: 0; }
+.mdb-cmd-title { font-weight: 600; }
+.mdb-cmd-hint {
+  font-size: .8125rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mdb-cmd-keys { flex: 0 0 auto; white-space: nowrap; }
+.mdb-cmd-footer {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  flex-wrap: wrap;
+  background: var(--tblr-bg-surface-secondary);
+}
+
+/* Action busy: click → prepare → start. Keeps slow jobs from feeling dead. */
+.mdb-busy-bar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 2000;
+  pointer-events: none;
+}
+.mdb-busy-bar[hidden] { display: none !important; }
+.mdb-busy-bar-track {
+  height: 3px;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--tblr-primary) 18%, transparent);
+}
+.mdb-busy-bar-indeterminate {
+  height: 100%;
+  width: 35%;
+  background: var(--tblr-primary);
+  border-radius: 0 2px 2px 0;
+  animation: mdb-busy-slide 1.1s ease-in-out infinite;
+}
+.mdb-busy-bar-label {
+  position: absolute;
+  top: .45rem;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: .2rem .65rem;
+  border-radius: 999px;
+  font-size: .75rem;
+  font-weight: 600;
+  letter-spacing: .01em;
+  color: var(--tblr-primary);
+  background: var(--tblr-bg-surface);
+  border: 1px solid var(--tblr-border-color);
+  box-shadow: var(--tblr-shadow-sm, 0 1px 3px rgba(0, 0, 0, .08));
+  white-space: nowrap;
+  max-width: min(90vw, 28rem);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+@keyframes mdb-busy-slide {
+  0% { transform: translateX(-120%); }
+  100% { transform: translateX(320%); }
+}
+body.mdb-page-busy {
+  cursor: progress;
+}
+body.mdb-page-busy .page-wrapper,
+body.mdb-page-busy #navbar-menu {
+  pointer-events: none;
+  user-select: none;
+}
+body.mdb-page-busy .page-wrapper::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 1035;
+  background: color-mix(in srgb, var(--tblr-bg-surface) 45%, transparent);
+  pointer-events: none;
+}
+/* Modal + drawer + toasts stay interactive above the dim. */
+body.mdb-page-busy #mdb-action-modal,
+body.mdb-page-busy #mdb-job,
+body.mdb-page-busy #mdb-toasts,
+body.mdb-page-busy .mdb-busy-bar {
+  pointer-events: auto;
+  user-select: auto;
+}
+body.mdb-page-busy #mdb-action-modal { z-index: 1060; }
+body.mdb-page-busy #mdb-job { z-index: 1055; }
+.mdb-btn-busy {
+  position: relative;
+  pointer-events: none !important;
+}
+.mdb-btn-busy .mdb-btn-spin {
+  display: inline-block;
+  width: .9rem;
+  height: .9rem;
+  margin-right: .35rem;
+  vertical-align: -0.1em;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: mdb-btn-spin .7s linear infinite;
+}
+@keyframes mdb-btn-spin {
+  to { transform: rotate(360deg); }
+}
+#mdb-action-modal[data-mdb-busy="1"] [data-action-submit] {
+  position: relative;
+}
+#mdb-action-modal[data-mdb-busy="1"] [data-action-submit]::before {
+  content: "";
+  display: inline-block;
+  width: .9rem;
+  height: .9rem;
+  margin-right: .4rem;
+  vertical-align: -0.12em;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: mdb-btn-spin .7s linear infinite;
+}
+
+/* Slide-in panels (job, status, add-ons): flat modernist header — kicker,
+   heavy title, mono command or note. Square corners, one accent. */
+.mdb-tabular { font-variant-numeric: tabular-nums; }
+.mdb-panel {
+  --mdb-ok: var(--tblr-green);
+  --mdb-err: var(--tblr-red);
+  --mdb-warn: var(--tblr-yellow);
+  --mdb-info: var(--tblr-azure);
+  --mdb-dim: var(--tblr-secondary);
+  --mdb-rule: var(--tblr-border-color);
+  --mdb-mono: var(--tblr-font-monospace, ui-monospace, "SF Mono", Menlo, monospace);
+}
+.mdb-panel .offcanvas-body { min-height: 0; }
+/* Panel header: Tabler offcanvas-header + subheader + offcanvas-title,
+   shared by the job, status and add-on panels (kicker: Tabler .subheader). */
+.mdb-panel-head { align-items: flex-start; gap: .75rem; padding: 1rem 1.25rem; background: var(--tblr-bg-surface); }
+.mdb-panel-head-text { flex: 1 1 auto; min-width: 0; }
+.mdb-panel-head .subheader { margin-bottom: .25rem; }
+.mdb-panel-head .btn-close { margin: .125rem 0 0; }
+.mdb-panel-title { font-size: 1.125rem; font-weight: var(--tblr-font-weight-bold); line-height: 1.4; }
+.mdb-panel-note { margin-top: .25rem; font-size: .8125rem; color: var(--tblr-secondary); line-height: 1.4; }
+.mdb-job-cmd { display: flex; align-items: center; gap: .25rem; margin-top: .5rem; min-width: 0; }
+.mdb-job-cmd code {
+  display: block;
+  min-width: 0;
+  padding: .25rem .5rem;
+  font-size: .8125rem;
+  line-height: 1.4;
+  color: var(--tblr-body-color);
+  background: var(--tblr-bg-surface-tertiary);
+  border: var(--tblr-border-width) solid var(--tblr-border-color);
+  border-radius: var(--mdb-control-radius);
+}
+.mdb-job-cmd code::before { content: "$ "; color: var(--tblr-secondary); }
+.mdb-job-cmd code:empty { display: none; }
+.mdb-job-cmd code:empty + .btn { display: none; }
+.mdb-job-locked-pill { margin-top: .15rem; white-space: nowrap; }
+
+/* Facts: Tabler datagrid, packed tighter for a side panel. */
+.mdb-job-facts {
+  --tblr-datagrid-item-width: 7.5rem;
+  --tblr-datagrid-padding: 1rem;
+  --tblr-datagrid-title-margin-bottom: .5rem;
+  padding: 1.25rem;
+  border-bottom: var(--tblr-border-width) solid var(--tblr-border-color);
+}
+.mdb-job-facts .datagrid-content { font-weight: var(--tblr-font-weight-medium); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Segments: one bar per top-level step, coloured by state. */
+.mdb-job-segments {
+  display: grid;
+  grid-auto-columns: minmax(0, 1fr);
+  grid-auto-flow: column;
+  gap: .25rem .75rem;
+  padding: .75rem 1.25rem .8rem;
+  border-bottom: 1px solid var(--mdb-rule);
+}
+.mdb-job-seg { min-width: 0; }
+.mdb-job-seg-bar {
+  position: relative;
+  height: .25rem;
+  overflow: hidden;
+  background: var(--tblr-bg-surface-secondary);
+}
+.mdb-job-seg.is-done .mdb-job-seg-bar { background: var(--mdb-ok); }
+.mdb-job-seg.is-failed .mdb-job-seg-bar { background: var(--mdb-err); }
+.mdb-job-seg.is-warning .mdb-job-seg-bar { background: var(--mdb-warn); }
+.mdb-job-seg.is-skipped .mdb-job-seg-bar {
+  background: repeating-linear-gradient(90deg, var(--mdb-rule) 0 .35rem, transparent .35rem .55rem);
+}
+.mdb-job-seg-bar > span {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: var(--mdb-info);
+  transition: width .3s ease;
+}
+.mdb-job-seg-bar.is-indeterminate > span {
+  width: 35% !important;
+  animation: mdb-run-sweep 1.2s ease-in-out infinite;
+}
+@keyframes mdb-run-sweep {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(300%); }
+}
+.mdb-job-seg-meta {
+  display: flex;
+  align-items: baseline;
+  gap: .35rem;
+  margin-top: .35rem;
+  font-size: .75rem;
+  line-height: 1.3;
+  min-width: 0;
+}
+.mdb-job-seg-n { font-family: var(--mdb-mono); color: var(--mdb-dim); }
+.mdb-job-seg-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+.mdb-job-seg.is-pending .mdb-job-seg-name,
+.mdb-job-seg.is-skipped .mdb-job-seg-name { color: var(--mdb-dim); font-weight: 500; }
+.mdb-job-seg-dur { font-family: var(--mdb-mono); font-variant-numeric: tabular-nums; color: var(--mdb-dim); }
+
+/* Banner: a Tabler alert (danger / warning / success) under the facts. */
+.mdb-job-banner.alert { margin: .875rem 1.25rem 0; }
+.mdb-job-banner-text { min-width: 0; }
+.mdb-job-banner-title { overflow-wrap: anywhere; }
+.mdb-job-banner .subheader { margin-bottom: .125rem; }
+.mdb-job-banner.is-fail .mdb-job-banner-code {
+  display: block;
+  margin-top: .5rem;
+  padding: .375rem .5rem;
+  font-family: var(--mdb-mono);
+  font-size: .75rem;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: var(--tblr-danger);
+  background: var(--tblr-bg-surface);
+  border: var(--tblr-border-width) solid var(--tblr-border-color);
+  border-radius: var(--mdb-control-radius);
+}
+
+/* Toolbar: Tabler segmented nav for the view, buttons at control height. */
+.mdb-panel .mdb-job-toolbar { padding: .75rem 1.25rem; gap: .5rem; border-bottom: 0; }
+.mdb-job-views { --tblr-nav-height: var(--mdb-control-h); --tblr-nav-font-size: .8125rem; --tblr-nav-radius: var(--mdb-control-radius); }
+.mdb-job-views .nav-link .icon { width: 1rem; height: 1rem; }
+.mdb-job-views .badge { font-variant-numeric: tabular-nums; }
+/* The output console is dark in both themes, like a terminal and like the
+   Logs view. data-bs-theme="dark" on it re-scopes Tabler's colours; the
+   --mdb-* aliases are redeclared here because .mdb-panel resolved them
+   against the page's theme. */
+.mdb-job-console {
+  --mdb-ok: var(--tblr-green);
+  --mdb-err: var(--tblr-red);
+  --mdb-warn: var(--tblr-yellow);
+  --mdb-info: var(--tblr-azure);
+  --mdb-dim: var(--tblr-secondary);
+  --mdb-rule: var(--tblr-border-color);
+  color-scheme: dark;
+  color: var(--tblr-body-color);
+  background: var(--tblr-bg-surface);
+  min-height: 0;
+}
+.mdb-job-console-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: .5rem;
+  padding: .5rem 1.25rem;
+  border-bottom: 1px solid var(--mdb-rule);
+  background: var(--tblr-bg-surface-secondary);
+  font-size: .75rem;
+}
+.mdb-job-console-title {
+  font-size: .6875rem;
+  font-weight: 700;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--mdb-dim);
+}
+.mdb-job-search {
+  display: flex;
+  align-items: center;
+  gap: .35rem;
+  flex: 1 1 12rem;
+  min-width: 9rem;
+  max-width: 20rem;
+  height: 1.75rem;
+  padding: 0 .5rem;
+  margin: 0;
+  color: var(--mdb-dim);
+  background: var(--tblr-bg-surface);
+  border: 1px solid var(--mdb-rule);
+}
+.mdb-job-search:focus-within { border-color: var(--tblr-primary); }
+.mdb-job-search svg { width: .9rem; height: .9rem; flex: 0 0 auto; }
+.mdb-job-search input {
+  flex: 1 1 auto;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--tblr-body-color);
+  font-size: .8125rem;
+}
+.mdb-job-levels { display: inline-flex; border: 1px solid var(--mdb-rule); }
+.mdb-job-levels button,
+.mdb-job-tsbtn {
+  height: 1.625rem;
+  padding: 0 .55rem;
+  font-size: .75rem;
+  font-weight: 600;
+  color: var(--mdb-dim);
+  background: var(--tblr-bg-surface);
+  border: 0;
+}
+.mdb-job-levels button + button { border-left: 1px solid var(--mdb-rule); }
+.mdb-job-tsbtn { border: 1px solid var(--mdb-rule); }
+.mdb-job-levels button.active,
+.mdb-job-tsbtn.active { color: var(--tblr-body-color); background: var(--tblr-bg-surface-secondary); box-shadow: inset 0 -2px 0 var(--tblr-body-color); }
+.mdb-job-levels [data-job-issues] { font-family: var(--mdb-mono); color: var(--mdb-dim); }
+.mdb-job-levels [data-job-issues].is-some { color: var(--mdb-err); }
+.mdb-job-count { margin-left: auto; font-family: var(--mdb-mono); font-variant-numeric: tabular-nums; color: var(--mdb-dim); white-space: nowrap; }
+.mdb-job-count.is-hit { color: var(--tblr-primary); font-weight: 600; }
+.mdb-job-body {
+  position: relative;
+  overflow: auto;
+  min-height: 12rem;
+  padding: .5rem 0 1.25rem;
+  outline: 0;
+}
+.mdb-job-noresults { padding: 2rem 1.25rem; text-align: center; color: var(--mdb-dim); font-size: .8125rem; }
+.mdb-job-linkbtn {
+  padding: 0 .35rem;
+  font-size: .6875rem;
+  font-weight: 600;
+  letter-spacing: .02em;
+  color: var(--tblr-primary);
+  background: transparent;
+  border: 0;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+.mdb-run-hit { padding: 0; color: inherit; background: color-mix(in srgb, var(--mdb-warn) 45%, transparent); }
+
+/* Steps tree. Every row is the same 7-column grid, so meta, bars and
+   durations line up across rows; the tree column stretches so connector
+   lines run edge to edge. */
+.mdb-job-steps { font-size: .8125rem; line-height: 1.4; }
+.mdb-run-context {
+  padding: .35rem 1.25rem .6rem;
+  font-family: var(--mdb-mono);
+  font-size: .75rem;
+  color: var(--mdb-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mdb-run-context b { color: var(--tblr-body-color); }
+.mdb-run-context .is-info { color: var(--mdb-info); }
+.mdb-run-context .is-warn { color: var(--mdb-warn); }
+.mdb-run-emoji { display: inline-block; width: 1.4em; text-align: center; margin-right: .15rem; font-style: normal; }
+.mdb-run-row {
+  display: grid;
+  grid-template-columns: .9rem auto 1rem minmax(0, 1fr) minmax(0, 9rem) 11.5rem 3.75rem;
+  column-gap: .5rem;
+  align-items: stretch;
+  min-height: 1.875rem;
+  padding: 0 1.25rem;
+}
+.mdb-run-row > * { align-self: center; }
+.mdb-run-row > .mdb-run-tree { align-self: stretch; }
+.mdb-run-row:hover { background: var(--tblr-bg-surface-secondary); }
+.mdb-run-row.is-toggle { cursor: pointer; }
+.mdb-run-row.is-toggle:focus-visible { outline: 2px solid var(--tblr-primary); outline-offset: -2px; }
+.mdb-run-row.is-step { min-height: 2.25rem; font-weight: 600; border-top: 1px solid var(--mdb-rule); }
+.mdb-run-context + .mdb-run-row { border-top: 0; }
+.mdb-run-row.is-step.st-failed { background: color-mix(in srgb, var(--mdb-err) 6%, transparent); }
+.mdb-run-row.is-group { font-weight: 600; }
+.mdb-run-row.is-dim { opacity: .5; }
+.mdb-run-chev { display: inline-flex; color: var(--mdb-dim); transition: transform .15s ease; }
+.mdb-run-chev.is-open { transform: rotate(90deg); }
+.mdb-run-chev.is-none { visibility: hidden; }
+.mdb-run-tree { display: flex; }
+.mdb-run-g { position: relative; width: 1.1rem; flex: 0 0 auto; }
+.mdb-run-g::before,
+.mdb-run-g::after { content: ""; position: absolute; background: var(--mdb-rule); }
+.mdb-run-g.g-pipe::before,
+.mdb-run-g.g-tee::before { left: .45rem; top: 0; bottom: 0; width: 1px; }
+.mdb-run-g.g-elbow::before { left: .45rem; top: 0; height: 50%; width: 1px; }
+.mdb-run-g.g-tee::after,
+.mdb-run-g.g-elbow::after { left: .45rem; right: .1rem; top: 50%; height: 1px; }
+.mdb-run-g.g-blank::before,
+.mdb-run-g.g-blank::after,
+.mdb-run-g.g-pipe::after { display: none; }
+.mdb-run-icon { display: inline-flex; align-items: center; justify-content: center; color: var(--mdb-dim); }
+.st-done > .mdb-run-icon { color: var(--mdb-ok); }
+.st-failed > .mdb-run-icon { color: var(--mdb-err); }
+.st-warning > .mdb-run-icon,
+.st-skipped > .mdb-run-icon { color: var(--mdb-warn); }
+.st-running > .mdb-run-icon { color: var(--mdb-info); }
+.mdb-run-spin {
+  width: .75rem;
+  height: .75rem;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: mdb-run-rotate .7s linear infinite;
+}
+@keyframes mdb-run-rotate { to { transform: rotate(360deg); } }
+.mdb-run-name { display: flex; align-items: baseline; gap: .1rem; min-width: 0; overflow: hidden; white-space: nowrap; }
+.mdb-run-label { overflow: hidden; text-overflow: ellipsis; }
+.mdb-run-pre { color: var(--mdb-dim); font-weight: 400; flex: 0 1 auto; overflow: hidden; text-overflow: ellipsis; }
+.mdb-run-sum { margin-left: .6rem; font-weight: 400; color: var(--mdb-dim); overflow: hidden; text-overflow: ellipsis; }
+.st-pending > .mdb-run-name,
+.st-skipped > .mdb-run-name { color: var(--mdb-dim); }
+/* An output line in the fallback Steps view wraps: it is the content. */
+.mdb-run-row.is-line > .mdb-run-meta,
+.mdb-run-row.is-line > .mdb-run-bar { display: none; }
+.mdb-run-row.is-line > .mdb-run-name { grid-column: 4 / 7; white-space: pre-wrap; overflow: visible; padding-block: .3rem; }
+.mdb-run-row.is-line .mdb-run-label { overflow: visible; text-overflow: clip; overflow-wrap: anywhere; }
+.st-failed.is-line > .mdb-run-name { color: var(--mdb-err); }
+.st-warning.is-line > .mdb-run-name { color: var(--mdb-warn); }
+.mdb-run-meta {
+  display: flex;
+  align-items: center;
+  gap: .35rem;
+  min-width: 0;
+  font-size: .75rem;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.mdb-run-meta > span { overflow: hidden; text-overflow: ellipsis; }
+.mdb-run-meta > i { width: .4rem; height: .4rem; flex: 0 0 auto; background: currentColor; }
+.mdb-run-meta.is-ok { color: var(--mdb-ok); }
+.mdb-run-meta.is-err { color: var(--mdb-err); }
+.mdb-run-meta.is-warn { color: var(--mdb-warn); }
+.mdb-run-meta.is-info { color: var(--mdb-info); }
+.mdb-run-meta.is-dim { color: var(--mdb-dim); }
+.mdb-run-bar { display: flex; align-items: center; gap: .4rem; min-width: 0; font-family: var(--mdb-mono); font-size: .75rem; white-space: nowrap; overflow: hidden; }
+.mdb-run-pbar { display: inline-flex; align-items: center; gap: .4rem; min-width: 0; }
+.mdb-run-textbar { letter-spacing: -.12em; line-height: 1; }
+.mdb-run-textbar .is-fill { color: var(--mdb-info); }
+.mdb-run-textbar .is-rest { color: var(--mdb-rule); }
+.mdb-run-pct { font-variant-numeric: tabular-nums; font-weight: 600; color: var(--mdb-info); }
+.mdb-run-barinfo { color: var(--mdb-dim); overflow: hidden; text-overflow: ellipsis; }
+.mdb-run-cells { letter-spacing: .05em; font-size: .625rem; line-height: 1; }
+.mdb-run-cells .is-rest { color: var(--mdb-rule); }
+.mdb-run-cells.is-ok .is-fill { color: var(--mdb-ok); }
+.mdb-run-cells.is-err .is-fill { color: var(--mdb-err); }
+.mdb-run-cells.is-info .is-fill { color: var(--mdb-info); }
+.mdb-run-cells-label { color: var(--mdb-dim); font-variant-numeric: tabular-nums; }
+.mdb-run-indet {
+  position: relative;
+  display: block;
+  width: 7rem;
+  height: 3px;
+  overflow: hidden;
+  background: var(--mdb-rule);
+}
+.mdb-run-indet::after {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 35%;
+  background: var(--mdb-info);
+  animation: mdb-run-sweep 1.2s ease-in-out infinite;
+}
+.mdb-run-dur {
+  text-align: right;
+  font-family: var(--mdb-mono);
+  font-size: .75rem;
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+  color: var(--mdb-dim);
+  white-space: nowrap;
+}
+.st-running > .mdb-run-dur { color: var(--mdb-info); }
+
+/* Tails: what the failing command said, or Connect / Next on success. */
+.mdb-run-tail { margin: 1rem 1.25rem 0; font-family: var(--mdb-mono); font-size: .75rem; line-height: 1.55; }
+.mdb-run-rule { color: var(--mdb-err); white-space: nowrap; overflow: hidden; margin-bottom: .35rem; }
+.mdb-run-tail-title {
+  font-family: var(--tblr-font-sans-serif);
+  font-size: .6875rem;
+  font-weight: 700;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--mdb-dim);
+  padding-bottom: .35rem;
+  margin-bottom: .35rem;
+  border-bottom: 1px solid var(--mdb-rule);
+}
+.mdb-run-tail-line { display: flex; gap: .4rem; align-items: baseline; padding-left: 1rem; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--tblr-body-color); }
+.mdb-run-tail-line.is-err { padding-left: 0; color: var(--mdb-err); }
+.mdb-run-tail-line svg { flex: 0 0 auto; transform: translateY(2px); }
+.mdb-run-exit { margin-top: .35rem; color: var(--mdb-err); font-weight: 600; }
+.mdb-run-table { width: 100%; border-collapse: collapse; }
+.mdb-run-table th {
+  font-family: var(--tblr-font-sans-serif);
+  font-size: .6875rem;
+  font-weight: 600;
+  text-align: left;
+  color: var(--mdb-dim);
+  padding: .25rem .75rem .25rem 0;
+  white-space: nowrap;
+}
+.mdb-run-table td { padding: .3rem .75rem .3rem 0; border-top: 1px solid var(--mdb-rule); white-space: nowrap; vertical-align: baseline; }
+.mdb-run-table .is-strong { font-weight: 700; }
+.mdb-run-table .is-ok,
+.mdb-run-tail .is-ok { color: var(--mdb-ok); }
+.mdb-run-table .is-dim,
+.mdb-run-tail .is-dim { color: var(--mdb-dim); }
+.mdb-run-next { display: flex; align-items: baseline; gap: .5rem; padding: .2rem 0; min-width: 0; }
+.mdb-run-next-label { flex: 0 0 9rem; font-family: var(--tblr-font-sans-serif); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mdb-run-next-cmd { flex: 1 1 auto; min-width: 0; color: var(--mdb-info); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mdb-run-tail .mdb-job-linkbtn { visibility: hidden; }
+.mdb-run-table tr:hover .mdb-job-linkbtn,
+.mdb-run-next:hover .mdb-job-linkbtn,
+.mdb-run-tail .mdb-job-linkbtn:focus-visible { visibility: visible; }
+
+/* Raw log: line number, time, level, message, duration. */
+.mdb-job-raw { font-family: var(--mdb-mono); font-size: .75rem; line-height: 1.55; }
+.mdb-raw-row {
+  display: grid;
+  grid-template-columns: 3ch 0 3.25rem minmax(0, 1fr) auto;
+  column-gap: .75rem;
+  padding: .05rem 1.25rem;
+  align-items: baseline;
+}
+.mdb-job-raw.has-times .mdb-raw-row { grid-template-columns: 3ch 6.5rem 3.25rem minmax(0, 1fr) auto; }
+.mdb-raw-row:hover { background: var(--tblr-bg-surface-secondary); }
+.mdb-raw-n { text-align: right; color: var(--mdb-dim); opacity: .7; user-select: none; }
+.mdb-raw-t { color: var(--mdb-dim); overflow: hidden; white-space: nowrap; }
+.mdb-raw-lv { font-size: .625rem; font-weight: 700; letter-spacing: .06em; color: var(--mdb-dim); }
+.mdb-raw-msg { white-space: pre-wrap; overflow-wrap: anywhere; }
+.mdb-raw-dur { color: var(--mdb-dim); font-variant-numeric: tabular-nums; }
+.mdb-raw-row.is-ok .mdb-raw-lv { color: var(--mdb-ok); }
+.mdb-raw-row.is-warn .mdb-raw-lv { color: var(--mdb-warn); }
+.mdb-raw-row.is-err { background: color-mix(in srgb, var(--mdb-err) 6%, transparent); }
+.mdb-raw-row.is-err .mdb-raw-lv,
+.mdb-raw-row.is-err .mdb-raw-msg { color: var(--mdb-err); }
+
+@media (max-width: 767.98px) {
+  .mdb-run-row { grid-template-columns: .9rem auto 1rem minmax(0, 1fr) minmax(0, 6rem) 3.5rem; padding: 0 .75rem; }
+  .mdb-run-row > .mdb-run-bar { display: none; }
+  .mdb-job-banner.alert { margin-left: .75rem; margin-right: .75rem; }
+  .mdb-panel-head,
+  .mdb-job-facts,
+  .mdb-job-segments,
+  .mdb-panel .mdb-job-toolbar,
+  .mdb-job-console-bar { padding-left: .75rem; padding-right: .75rem; }
+  .mdb-raw-row { padding: .05rem .75rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mdb-run-spin,
+  .mdb-run-indet::after,
+  .mdb-job-seg-bar.is-indeterminate > span,
+  .mdb-run-tag .status-dot-animated::before { animation: none; }
+}
+
+/* One control size and one corner radius for every button. .btn-sm draws the
+   same as .btn; only .btn-lg is bigger, for the rare call to action that needs it. */
+:root {
+  --mdb-control-h: 2rem;
+  --mdb-control-radius: var(--tblr-border-radius);
+}
+.btn,
+.btn-sm,
+.btn-group-sm > .btn {
+  --tblr-btn-padding-y: .25rem;
+  --tblr-btn-padding-x: .75rem;
+  --tblr-btn-font-size: .8125rem;
+  --tblr-btn-line-height: 1.25;
+  --tblr-btn-border-radius: var(--mdb-control-radius);
+  min-height: var(--mdb-control-h);
+  border-radius: var(--mdb-control-radius);
+}
+.btn .icon { width: 1rem; height: 1rem; }
+.btn-lg {
+  --tblr-btn-padding-x: 1.25rem;
+  --tblr-btn-font-size: .9375rem;
+  min-height: 2.5rem;
+}
+.btn-icon,
+.btn-sm.btn-icon {
+  min-width: var(--mdb-control-h);
+  --tblr-btn-padding-x: 0;
+}
+.btn-group > .btn:not(:last-child):not(.dropdown-toggle) { border-top-right-radius: 0; border-bottom-right-radius: 0; }
+.btn-group > .btn:not(:first-child) { border-top-left-radius: 0; border-bottom-left-radius: 0; }
+
+/* Icon avatars are circles with room around the glyph. */
+.avatar:has(> .icon),
+.mdb-avatar-round {
+  border-radius: 50%;
+}
+.avatar > .icon {
+  width: 55%;
+  height: 55%;
+}
+
+/* Help › What the statuses mean. */
+.mdb-state-table { table-layout: fixed; }
+.mdb-state-table td { vertical-align: top; }
+.mdb-state-table th:first-child { width: 8rem; }
+.mdb-state-table th:nth-child(2) { width: 55%; }
+.mdb-state-group:target { background: var(--tblr-primary-lt); transition: background .6s; }

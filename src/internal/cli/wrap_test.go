@@ -30,7 +30,7 @@ exit "${STUB_EXIT:-0}"
 `
 	for _, s := range []string{
 		"init", "self-update", "check-env", "render-config", "gen-compose", "prod-overlay",
-		"runtime", "exposure-notice", "destroy", "new-project", "backup", "verify-backups",
+		"runtime", "exposure-notice", "destroy", "new-project", "project", "backup", "verify-backups",
 		"restore", "pitr", "transfer", "upgrade", "ha", "certs", "certs-renew", "rotate-secrets",
 		"build", "scan", "lint.sh", "release-notes", "verify/run.sh",
 	} {
@@ -117,6 +117,7 @@ func TestCommandsRunTheirScripts(t *testing.T) {
 		{[]string{"up", "--profile", "test"}, []string{"scripts/render-config " + p, "scripts/gen-compose " + p, "scripts/runtime up -f docker-compose.yml -f compose.engines.yml -f compose.test.yml" + p}},
 		{[]string{"down"}, []string{"scripts/runtime down" + p}},
 		{[]string{"status"}, []string{"scripts/runtime status" + p}},
+		{[]string{"restart", "pg", "pg-pooler"}, []string{"scripts/runtime restart pg pg-pooler" + p}},
 		{[]string{"logs"}, []string{"scripts/runtime logs -f --tail=100" + p}},
 		{[]string{"forward"}, []string{"scripts/runtime forward" + p}},
 		{[]string{"destroy", "--all"}, []string{"scripts/destroy --all" + p}},
@@ -126,6 +127,10 @@ func TestCommandsRunTheirScripts(t *testing.T) {
 		{[]string{"tools", "--image", "localhost/dbpantry-cli:dev"}, []string{"scripts/runtime ctr run --rm -it --network mdbstub_net -v " + root + "/certs:/certs:ro -v " + root + "/backups:/work/backups localhost/dbpantry-cli:dev" + p}},
 		{[]string{"project", "new", "--name", "shop", "--engine", "pg"}, []string{"scripts/new-project --name shop --engine pg" + p}},
 		{[]string{"project", "new", "--name", "shop", "--engine", "mysql"}, []string{"scripts/new-project --name shop --engine mysql" + p, "scripts/runtime compose restart mysql-pooler" + p}},
+		{[]string{"project", "rotate", "--name", "shop", "--engine", "pg", "--confirm", "shop"}, []string{"scripts/new-project --rotate --name shop --engine pg|stdin=shop|profiles=pg,ui|tags=|checks="}},
+		{[]string{"project", "rotate", "--name", "shop", "--engine", "mysql", "--confirm", "shop"}, []string{"scripts/new-project --rotate --name shop --engine mysql|stdin=shop|profiles=pg,ui|tags=|checks=", "scripts/runtime compose restart mysql-pooler" + p}},
+		{[]string{"project", "drop", "--name", "shop", "--engine", "pg", "--confirm", "shop"}, []string{"scripts/project drop --name shop --engine pg|stdin=shop|profiles=pg,ui|tags=|checks="}},
+		{[]string{"project", "drop", "--name", "shop", "--engine", "mysql", "--confirm", "shop", "--no-pooler-sync"}, []string{"scripts/project drop --name shop --engine mysql|stdin=shop|profiles=pg,ui|tags=|checks="}},
 		{[]string{"backup", "run", "--engine", "pg", "--db", "shop"}, []string{"scripts/backup --engine pg --db shop" + p}},
 		{[]string{"backup", "run", "--all"}, []string{"scripts/backup --all" + p}},
 		{[]string{"backup", "verify"}, []string{"scripts/verify-backups " + p}},
@@ -144,7 +149,10 @@ func TestCommandsRunTheirScripts(t *testing.T) {
 		{[]string{"certs", "init"}, []string{"scripts/certs " + p}},
 		{[]string{"certs", "renew"}, []string{"scripts/certs-renew " + p}},
 		{[]string{"secrets", "rotate", "--yes"}, []string{"scripts/rotate-secrets --yes" + p, "scripts/runtime compose restart mysql-pooler" + p}},
+		{[]string{"secrets", "rotate", "--yes", "--engine", "pg"}, []string{"scripts/rotate-secrets --yes --engine pg" + p}},
+		{[]string{"secrets", "rotate", "--yes", "--engine", "mysql"}, []string{"scripts/rotate-secrets --yes --engine mysql" + p, "scripts/runtime compose restart mysql-pooler" + p}},
 		{[]string{"images", "build"}, []string{"scripts/build " + p}},
+		{[]string{"images", "build", "pg", "mysql"}, []string{"scripts/build pg mysql" + p}},
 		{[]string{"images", "scan", "pg"}, []string{"scripts/scan pg" + p}},
 		{[]string{"verify", "--checks", "21,28"}, []string{"scripts/verify/run.sh |stdin=|profiles=pg,ui|tags=|checks=21,28"}},
 		{[]string{"verify", "--fast"}, []string{"scripts/verify/run.sh |stdin=|profiles=pg,ui|tags=fast|checks="}},
@@ -197,6 +205,8 @@ func TestConfirmation(t *testing.T) {
 	for _, args := range [][]string{
 		{"--no-input", "destroy", "--all"},
 		{"--no-input", "restore", "--engine", "pg", "--db", "shop", "--file", "x"},
+		{"--no-input", "project", "drop", "--name", "shop"},
+		{"--no-input", "project", "rotate", "--name", "shop"},
 		{"--no-input", "ha", "failover"},
 		{"--no-input", "secrets", "rotate"},
 		{"--no-input", "pitr", "restore", "--to", "x"},

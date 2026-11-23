@@ -24,8 +24,8 @@ services:
     # Without it the named data volume and this tmpfs both target the same path
     # and compose refuses to start.
     volumes: !override
-      - ./certs:/certs:ro
-      - ./secrets:/run/secrets:ro
+      - ${MDB_HOME:-.}/certs:/certs:ro
+      - ${MDB_HOME:-.}/secrets:/run/secrets:ro
 
   mysql:
     environment:
@@ -36,8 +36,8 @@ services:
     # Without it the named data volume and this tmpfs both target the same path
     # and compose refuses to start.
     volumes: !override
-      - ./certs:/certs:ro
-      - ./secrets:/run/secrets:ro
+      - ${MDB_HOME:-.}/certs:/certs:ro
+      - ${MDB_HOME:-.}/secrets:/run/secrets:ro
 
   mariadb:
     environment:
@@ -48,8 +48,8 @@ services:
     # Without it the named data volume and this tmpfs both target the same path
     # and compose refuses to start.
     volumes: !override
-      - ./certs:/certs:ro
-      - ./secrets:/run/secrets:ro
+      - ${MDB_HOME:-.}/certs:/certs:ro
+      - ${MDB_HOME:-.}/secrets:/run/secrets:ro
 
   # MongoDB and Cassandra have no durability switch worth turning off here
   # (MongoDB journals unconditionally since 6.1), so the overlay moves their
@@ -68,14 +68,14 @@ services:
     # !override, as above: the named volume and the tmpfs would otherwise
     # both target /data/db.
     volumes: !override
-      - ./certs:/certs:ro
-      - ./secrets:/run/secrets:ro
+      - ${MDB_HOME:-.}/certs:/certs:ro
+      - ${MDB_HOME:-.}/secrets:/run/secrets:ro
       - ./overrides/mongodb:/mdb/overrides:ro
 
   cassandra:
     tmpfs:
       - /var/lib/cassandra:rw,mode=0700,uid=999,gid=999,size=2g
     volumes: !override
-      - ./certs:/certs:ro
-      - ./secrets:/run/secrets:ro
+      - ${MDB_HOME:-.}/certs:/certs:ro
+      - ${MDB_HOME:-.}/secrets:/run/secrets:ro
       - ./overrides/cassandra:/mdb/overrides:ro

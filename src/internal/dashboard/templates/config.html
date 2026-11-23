@@ -1,0 +1,142 @@
+{{define "content"}}
+{{$s := .S}}
+{{$page := .}}
+<div class="page-header d-print-none">
+  <div class="container-xl">
+    <div class="row g-2 align-items-center">
+      <div class="col">
+        <div class="d-flex align-items-center flex-wrap gap-2">
+          <span class="mdb-page-icon bg-azure-lt text-azure" aria-hidden="true">{{icon "settings"}}</span>
+          <h2 class="page-title mb-0">{{t . "ops.configuration"}}</h2>
+          {{with $s.ConfigFile}}
+          <a href="#env-file" class="badge bg-azure-lt text-azure mdb-mono text-decoration-none mdb-env-crumb" title="Env file">{{.}}</a>
+          {{else}}
+          <span class="badge bg-secondary-lt">settings</span>
+          {{end}}
+        </div>
+        <nav class="mdb-page-crumbs" aria-label="breadcrumb">
+          <ol class="breadcrumb breadcrumb-arrows breadcrumb-muted">
+            <li class="breadcrumb-item"><a href="/">{{t . "nav.overview"}}</a></li>
+            <li class="breadcrumb-item"><a href="/operations">{{t . "ops.operations"}}</a></li>
+            <li class="breadcrumb-item active" aria-current="page">{{t . "ops.configuration"}}</li>
+          </ol>
+        </nav>
+      </div>
+      <div class="col-auto ms-auto"><div class="btn-list">
+        {{actionButton . "config.validate" "Validate" "icon=check"}}
+        {{actionButton . "config.render" "Render" "icon=refresh"}}
+        {{actionButton . "config.set" "Set a key" "class=btn-primary" "icon=settings"}}
+      </div></div>
+    </div>
+  </div>
+</div>
+<div class="page-body"><div class="container-xl">
+  <div class="row row-cards mb-3">
+    <div class="col-12">
+      <div class="card mdb-instance-summary">
+        <div class="card-header">
+          <div>
+            <h3 class="card-title">This instance</h3>
+            <p class="card-subtitle mb-0">What this stack runs and where. Edits save to the env file; Start applies them. Publish modes are on <a href="/connect">How to connect</a>.</p>
+          </div>
+        </div>
+        <div class="card-body">
+          <div class="row g-3 mdb-inst-row">
+            <div class="col-md-6 col-xl-4" id="env-file">
+              <section class="mdb-inst">
+                <header class="mdb-inst-head">
+                  <span class="avatar avatar-sm bg-azure-lt text-azure" aria-hidden="true">{{icon "file"}}</span>
+                  <div class="min-w-0">
+                    <div class="subheader">Env file</div>
+                    <div class="mdb-inst-value text-truncate" title="{{$s.Endpoints.EnvFile}}">{{base $s.Endpoints.EnvFile}}</div>
+                  </div>
+                </header>
+                <dl class="mdb-inst-facts">
+                  <dt>Path</dt><dd class="mdb-mono text-truncate" title="{{$s.Endpoints.EnvFile}}">{{$s.Endpoints.EnvFile}}</dd>
+                  <dt>Set here</dt><dd>{{$s.ConfigFromFile}} of {{len $s.Config}} keys</dd>
+                  <dt>Secrets</dt><dd><span class="mdb-mono">secrets/</span> <span class="text-secondary">· never in this file</span></dd>
+                </dl>
+                <p class="mdb-inst-note">Every edit on this page writes this file.</p>
+                <footer class="mdb-inst-actions btn-list">
+                  <a href="#settings" class="btn btn-sm" title="Every key, its value and where it comes from">{{icon "list"}} All settings</a>
+                  {{actionButton $page "config.validate" "Validate" "class=btn-sm" "icon=check"}}
+                </footer>
+              </section>
+            </div>
+            <div class="col-md-6 col-xl-4" id="profiles">
+              <section class="mdb-inst">
+                <header class="mdb-inst-head">
+                  <span class="avatar avatar-sm bg-primary-lt text-primary" aria-hidden="true">{{icon "layers"}}</span>
+                  <div class="min-w-0">
+                    <div class="subheader">Profiles</div>
+                    <div class="mdb-inst-value">{{$s.Enabled}} of {{len $s.Endpoints.Endpoints}} engines</div>
+                  </div>
+                </header>
+                <div class="mdb-inst-chips" data-sync-target="active-profiles">{{$tones := toneMap $s.Endpoints.Profiles}}{{range $s.Endpoints.Profiles}}{{$tone := index $tones .}}<span class="badge bg-{{$tone}}-lt text-{{$tone}}" title="{{if $s.IsEngine .}}Engine{{else}}Stack extra{{end}}">{{.}}</span>{{else}}<span class="text-secondary small">No profile selected: Start runs nothing.</span>{{end}}</div>
+                <dl class="mdb-inst-facts">
+                  <dt>Extras</dt><dd>{{with $s.ProfileExtras}}{{join . ", "}}{{else}}<span class="text-secondary">none (ui, ha, poolers)</span>{{end}}</dd>
+                  <dt>Key</dt><dd class="mdb-mono">MDB_PROFILES</dd>
+                </dl>
+                <p class="mdb-inst-note">Saving a new set changes nothing until Start reapplies it.</p>
+                <footer class="mdb-inst-actions btn-list">
+                  {{actionButton $page "config.set" "Manage profiles…" "key=MDB_PROFILES" (print "value=" (join $s.Endpoints.Profiles ",")) "class=btn-sm" "icon=settings"}}
+                  {{actionButton $page "stack.up" "Start to apply" "class=btn-sm btn-primary" "icon=play"}}
+                </footer>
+              </section>
+            </div>
+            <div class="col-md-12 col-xl-4" id="network">
+              <section class="mdb-inst">
+                <header class="mdb-inst-head">
+                  <span class="avatar avatar-sm bg-green-lt text-green" aria-hidden="true">{{icon "network"}}</span>
+                  <div class="min-w-0">
+                    <div class="subheader">Network</div>
+                    <div class="mdb-inst-value mdb-mono text-truncate" title="{{$s.Network}}">{{$s.Network}}</div>
+                  </div>
+                </header>
+                <dl class="mdb-inst-facts">
+                  {{$sub := $s.Setting "MDB_NETWORK_SUBNET"}}{{$proj := $s.Setting "COMPOSE_PROJECT_NAME"}}
+                  <dt>Subnet</dt><dd>{{if $sub.Value}}<span class="mdb-mono">{{$sub.Value}}</span>{{else}}<span class="text-secondary">toolkit default</span>{{end}} <span class="text-secondary small mdb-mono">MDB_NETWORK_SUBNET</span></dd>
+                  <dt>Project</dt><dd>{{if $proj.Value}}<span class="mdb-mono">{{$proj.Value}}</span>{{else}}<span class="text-secondary">default</span>{{end}} <span class="text-secondary small mdb-mono">COMPOSE_PROJECT_NAME</span></dd>
+                  <dt>Backend</dt><dd>{{$s.Backend}} · publish <span class="mdb-mono">{{$s.Endpoints.Publish}}</span></dd>
+                </dl>
+                <p class="mdb-inst-note">Apps join this network to reach the engines by name.</p>
+                <footer class="mdb-inst-actions btn-list">
+                  <a href="/connect" class="btn btn-sm" title="Publish mode, addresses and compose join snippet">{{icon "plug"}} Join guide</a>
+                  {{actionButton $page "config.set" "Configure subnet…" "key=MDB_NETWORK_SUBNET" "class=btn-sm" "icon=settings"}}
+                  {{actionButton $page "config.set" "Rename project…" "key=COMPOSE_PROJECT_NAME" "class=btn-sm" "icon=settings"}}
+                </footer>
+              </section>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="card" id="settings">
+    {{if not $s.Config}}
+    <div class="empty"><div class="empty-icon">{{icon "settings"}}</div><p class="empty-title">No settings to show</p><p class="empty-subtitle text-secondary">Run <code>dbpantry init</code>, then open this page again.</p></div>
+    {{else}}
+    <div class="table-responsive">
+      <table class="table table-vcenter card-table table-sm">
+        <thead><tr><th>Key</th><th>Value</th><th>Origin</th><th class="w-1"></th></tr></thead>
+        <tbody>
+          {{$group := ""}}
+          {{range $s.Config}}
+          {{if and .Group (ne .Group $group)}}{{$group = .Group}}
+          <tr class="mdb-table-section"><td colspan="4">{{.Group}}</td></tr>
+          {{end}}
+          <tr{{if .Comment}} title="{{.Comment}}"{{end}}>
+            <td class="mdb-mono">{{.Key}}</td>
+            <td class="mdb-mono{{if or .Secret (not .Value)}} text-secondary{{end}}">{{if .Value}}{{.Value}}{{else}}—{{end}}</td>
+            <td>{{if eq .Origin "env"}}<span class="badge bg-azure-lt" title="From the process environment">env</span>{{else if eq .Origin "file"}}<span class="badge bg-green-lt" title="From the instance .env file">file</span>{{else}}<span class="badge bg-secondary-lt" title="Not set; the toolkit default applies">unset</span>{{end}}</td>
+            <td class="text-end">{{if not .Secret}}{{actionButton $ "config.set" "Edit" (print "key=" .Key) "class=btn-sm" "icon=settings"}}{{end}}</td>
+          </tr>
+          {{end}}
+        </tbody>
+      </table>
+    </div>
+    {{end}}
+    <div class="card-footer text-secondary small">The same as <code>dbpantry config show --origin</code> and <code>dbpantry config set KEY VALUE</code>. A value from the process environment wins over the file; editing writes the instance's <code>.env</code> only.</div>
+  </div>
+</div></div>
+{{end}}

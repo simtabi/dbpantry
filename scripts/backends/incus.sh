@@ -34,7 +34,9 @@ _mdb_incus_compose() {
     done
     if (( ! has_f )); then
         for f in $(_mdb_rt_compose_var COMPOSE_FILE | tr ':' ' '); do
-            [[ -f "$MDB_RT_ROOT/$f" ]] && pre+=(-f "$MDB_RT_ROOT/$f")
+            # The instance's copy first (generated files live in MDB_HOME).
+            f="$(_mdb_compose_file "$f")"
+            [[ -f "$f" ]] && pre+=(-f "$f")
         done
         # Incus-only overrides, last so they win. incus-compose loads its own
         # override only beside a file named compose.yaml, which the stack has not.

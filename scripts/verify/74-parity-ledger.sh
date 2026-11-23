@@ -29,7 +29,9 @@ need_file "$ledger"
 # they cannot run it. Each must still exist (a stale entry fails).
 #   help: prints the Makefile's own targets.
 #   dbpantry, go-*: build, format-check, vet, test and lint the binary.
-LEDGER_EXEMPT="help dbpantry go-ci go-fmt-check go-vet go-test go-lint"
+#   kit: copies the kit the binary embeds (design.md D-85), before it exists.
+# demo-dashboard*: detached wrapper around `dashboard` (scripts/demo-dashboard), not a tree command.
+LEDGER_EXEMPT="help dbpantry kit go-ci go-fmt-check go-vet go-test go-lint demo-dashboard demo-dashboard-stop"
 
 # ledger_scan FILE MAKEFILE: one line per violation.
 ledger_scan() {

@@ -346,21 +346,30 @@ func TestCheckHelmMatchesTheChartAndCatchesDrift(t *testing.T) {
 // rather than leaving `dbpantry endpoints --project` pointing at a user that
 // does not exist.
 func TestProjectPrincipalsMatchNewProject(t *testing.T) {
+	lib, err := os.ReadFile(filepath.Join("..", "..", "..", "scripts", "project-lib.sh"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	libScript := string(lib)
+	for _, line := range []string{
+		`USER_NAME="${1}_user"`,
+		// Under the instance home (design.md D-84), and reported relative
+		// to it, so PasswordFile stays secrets/<file> whichever home is used.
+		`local dir="$MDB_HOME/secrets"`,
+		`dir="$MDB_HOME/secrets/fixture"`,
+		`SECRET_FILE="${dir}/${ENGINE}_${USER_NAME}_password.txt"`,
+		`RO_SECRET_FILE="${dir}/${ENGINE}_${USER_NAME}_readonly_password.txt"`,
+	} {
+		if !strings.Contains(libScript, line) {
+			t.Fatalf("scripts/project-lib.sh no longer says %s; update ProjectPrincipals to match", line)
+		}
+	}
 	b, err := os.ReadFile(filepath.Join("..", "..", "..", "scripts", "new-project"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	script := string(b)
-	for _, line := range []string{
-		`USER_NAME="${NAME}_user"`,
-		`SECRET_DIR="secrets"`,
-		`SECRET_DIR="secrets/fixture"`,
-		`SECRET_FILE="${SECRET_DIR}/${ENGINE}_${USER_NAME}_password.txt"`,
-		`RO_SECRET_FILE="${SECRET_DIR}/${ENGINE}_${USER_NAME}_readonly_password.txt"`,
-	} {
-		if !strings.Contains(script, line) {
-			t.Fatalf("scripts/new-project no longer says %s; update ProjectPrincipals to match", line)
-		}
+	if !strings.Contains(string(b), `"$(json_str "${SECRET_FILE#"$MDB_HOME"/}")"`) {
+		t.Fatal(`scripts/new-project no longer reports SECRET_FILE relative to MDB_HOME; update ProjectPrincipals to match`)
 	}
 	ps := Engine{Name: "pg"}.ProjectPrincipals("settings")
 	want := []Principal{

@@ -126,3 +126,17 @@ hook_provision_project() {
         mk('${user}_readonly', '${ro_pw}', 'read');
     " >/dev/null 2>&1 || return 1
 }
+
+# Drop a project: both users, then the database. A user that is already gone
+# is not an error, so a half-dropped project can be dropped again.
+hook_drop_project() {
+    local db="$1" user="$2"
+    _mongosh --eval "
+        const db2 = db.getSiblingDB('${db}');
+        for (const u of ['${user}', '${user}_readonly']) {
+            try { db2.dropUser(u); }
+            catch (e) { if (e.codeName !== 'UserNotFound' && !/not found/.test(e.message)) throw e; }
+        }
+        db2.dropDatabase();
+    " >/dev/null 2>&1 || return 1
+}

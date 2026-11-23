@@ -162,21 +162,27 @@ func (a *app) secretsCmd() *cobra.Command {
 		Short: "Database passwords and secret files",
 	}
 	var yes bool
-	var confirm string
+	var confirm, engine string
 	rotate := &cobra.Command{
 		Use:   "rotate",
-		Short: "Rotate every database password and secret file, applied live (typed confirmation: ROTATE)",
+		Short: "Rotate database passwords and secret files, applied live (typed confirmation: ROTATE)",
 		Long: `Rotate every database password and secret file and apply them to the running
-servers (scripts/rotate-secrets). The script asks for ROTATE; --confirm=ROTATE
-answers it. --yes is make rotate-secrets YES=1, kept for compatibility. Poolers
-that mirror credentials at start are then restarted (pooler sync).`,
+servers (scripts/rotate-secrets). --engine limits it to one engine: its
+superuser and every project role on it. The script asks for ROTATE;
+--confirm=ROTATE answers it. --yes is make rotate-secrets YES=1, kept for
+compatibility. Poolers that mirror credentials at start are then restarted
+(pooler sync).`,
 		Args: cobra.NoArgs,
 		RunE: func(c *cobra.Command, _ []string) error {
 			in, err := a.confirmed("ROTATE", confirm, yes)
 			if err != nil {
 				return err
 			}
-			if err := a.runSteps(c, step{Args: append([]string{"scripts/rotate-secrets"}, boolArg(yes, "--yes")...), Input: in}); err != nil {
+			args := append([]string{"scripts/rotate-secrets"}, boolArg(yes, "--yes")...)
+			if engine != "" {
+				args = append(args, "--engine", engine)
+			}
+			if err := a.runSteps(c, step{Args: args, Input: in}); err != nil {
 				return err
 			}
 			m, _, err := a.manifest()
@@ -184,6 +190,9 @@ that mirror credentials at start are then restarted (pooler sync).`,
 				return err
 			}
 			for _, e := range m.Implemented() {
+				if engine != "" && e.Name != engine {
+					continue
+				}
 				if err := a.syncPooler(c, e.Name, true); err != nil {
 					return err
 				}
@@ -193,6 +202,7 @@ that mirror credentials at start are then restarted (pooler sync).`,
 	}
 	rotate.Flags().BoolVar(&yes, "yes", false, "skip the prompt (make rotate-secrets YES=1)")
 	rotate.Flags().StringVar(&confirm, "confirm", "", "the typed confirmation: ROTATE")
+	rotate.Flags().StringVar(&engine, "engine", "", "rotate only this engine's passwords (pg, mysql or mariadb)")
 	cmd.AddCommand(rotate)
 	return cmd
 }
@@ -203,10 +213,11 @@ func (a *app) imagesCmd() *cobra.Command {
 		Short: "Build and scan the engine images",
 	}
 	build := &cobra.Command{
-		Use:   "build",
-		Short: "Build every engine image for this architecture",
-		Args:  cobra.NoArgs,
-		RunE:  func(c *cobra.Command, _ []string) error { return a.runSteps(c, script("scripts/build")) },
+		Use:   "build [ENGINE...]",
+		Short: "Build the engine images for this architecture (default: every engine)",
+		RunE: func(c *cobra.Command, args []string) error {
+			return a.runSteps(c, script(append([]string{"scripts/build"}, args...)...))
+		},
 	}
 	scan := &cobra.Command{
 		Use:   "scan [ENGINE]",

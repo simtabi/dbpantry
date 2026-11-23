@@ -41,6 +41,10 @@ var kindTitle = map[string]string{
 	"Network": "Networks", "Volume": "Volumes", "Image": "Images", "Container": "Containers", "": "Other",
 }
 
+var kindIcon = map[string]string{
+	"Network": "🌐", "Volume": "💾", "Image": "📦", "Container": "🐳", "": "🔧",
+}
+
 type resource struct {
 	id, parent, kind, name string
 	state                  ui.State
@@ -176,7 +180,7 @@ func (v *View) Nodes() []*ui.Node {
 			continue
 		}
 		sortByOrder(rs)
-		group := &ui.Node{Label: kindTitle[k], State: groupState(rs)}
+		group := &ui.Node{Label: kindTitle[k], Icon: kindIcon[k], State: groupState(rs)}
 		width := 0
 		for _, r := range rs {
 			width = max(width, ui.Width(r.name))
@@ -194,7 +198,7 @@ func (v *View) Nodes() []*ui.Node {
 }
 
 func (v *View) node(r *resource, kids []*resource) *ui.Node {
-	n := &ui.Node{Label: r.name, State: r.state, Detail: detail(r), Started: r.started, Ended: r.ended}
+	n := &ui.Node{Label: r.name, State: r.state, Detail: detail(r), Status: r.text, Started: r.started, Ended: r.ended}
 	switch {
 	case r.state != ui.Running:
 	case r.total > 0:
@@ -226,6 +230,11 @@ func (v *View) node(r *resource, kids []*resource) *ui.Node {
 
 func detail(r *resource) string {
 	d := r.text
+	// A ✔ already means success — repeating Compose's "Healthy"/"Built"/…
+	// on every leaf is noise (design.md D-105 follow-up).
+	if r.state == ui.Done && successText(d) {
+		d = ""
+	}
 	if r.details != "" && r.state != ui.Done {
 		if d != "" {
 			d += ": "
@@ -233,6 +242,16 @@ func detail(r *resource) string {
 		d += r.details
 	}
 	return d
+}
+
+// successText is a Compose Done status that adds nothing past the checkmark.
+func successText(t string) bool {
+	switch strings.ToLower(strings.TrimSpace(t)) {
+	case "healthy", "built", "created", "started", "done", "exited", "removed", "stopped":
+		return true
+	default:
+		return false
+	}
 }
 
 func groupState(rs []*resource) ui.State {

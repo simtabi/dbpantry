@@ -1,52 +1,147 @@
 {{define "content"}}
-{{$e := .Engine}}{{$s := .S}}
-<div class="page-header d-print-none"><div class="container-xl"><div class="row g-2 align-items-center">
-  <div class="col">
-    <div class="page-pretitle"><a href="/engines" class="text-reset">Engines</a> · {{$e.Family}}</div>
-    <h2 class="page-title">{{$e.Title}} <span class="ms-2">{{template "engine-status" (status $s $e.Engine $e.Enabled)}}</span></h2>
+{{$e := .Engine}}{{$s := .S}}{{$page := .}}{{$st := status $s $e.Engine $e.Enabled}}{{$running := $s.Running $e.Engine}}
+{{$groups := addonsForGrouped $s.Addons $e.Engine $e.Title}}
+{{$addonOn := 0}}{{$addonTotal := 0}}{{with index $groups 0}}{{$addonOn = .On}}{{$addonTotal = .Total}}{{end}}
+<div class="page-header d-print-none">
+  <div class="container-xl">
+    <div class="row g-2 align-items-center">
+      <div class="col">
+        <div class="d-flex align-items-center flex-wrap gap-2">
+          <span class="mdb-page-icon {{if eq $st "running"}}bg-green-lt text-green{{else if eq $st "orphan"}}bg-azure-lt text-azure{{else if eq $st "stopped"}}bg-yellow-lt text-yellow{{else}}bg-secondary-lt text-secondary{{end}}" aria-hidden="true">{{icon "database"}}</span>
+          <h2 class="page-title mb-0">{{$e.Title}}</h2>
+          {{template "engine-status" $st}}
+          <span class="badge bg-secondary-lt mdb-mono">{{$e.Engine}}</span>
+          <span class="badge bg-azure-lt text-uppercase">{{$e.Family}}</span>
+        </div>
+        <nav class="mdb-page-crumbs" aria-label="breadcrumb">
+          <ol class="breadcrumb breadcrumb-arrows breadcrumb-muted">
+            <li class="breadcrumb-item"><a href="/">{{t . "nav.overview"}}</a></li>
+            <li class="breadcrumb-item"><a href="/engines">Engines</a></li>
+            <li class="breadcrumb-item active" aria-current="page">{{$e.Title}}</li>
+          </ol>
+        </nav>
+      </div>
+      <div class="col-12 col-md-auto ms-auto">
+        <div class="btn-list">
+          {{if $running}}
+          {{actionButton . "project.new" "New project" (print "engine=" $e.Engine) "class=btn-primary" "icon=plus"}}
+          {{actionButton . "backup.run" "Back up" (print "engine=" $e.Engine) "icon=download"}}
+          {{actionButton . "service.restart" "Restart" (print "service=" $e.Engine) "icon=refresh"}}
+          <a href="/services/{{$e.Engine}}/logs" class="btn" title="Service logs">{{icon "file"}} Logs</a>
+          {{else if $e.Enabled}}
+          {{actionButton . "stack.up" "Start the stack" (print "profiles=" (join $s.Endpoints.Profiles ",")) "class=btn-primary" "icon=play"}}
+          {{else}}
+          {{actionButton . "stack.up" (print "Start with " $e.Engine) (print "profiles=" (profilesWith $s.Endpoints.Profiles $e.Engine)) "class=btn-primary" "icon=play"}}
+          {{end}}
+          {{template "engine-menu" (engineMenu $page $e)}}
+        </div>
+      </div>
+    </div>
   </div>
-</div></div></div>
+</div>
 <div class="page-body"><div class="container-xl">
-  {{if and $e.Enabled (not ($s.Running $e.Engine))}}
-  <div class="alert alert-warning" role="alert"><div class="d-flex"><div>{{icon "alert"}}</div><div class="ms-2">{{$e.Title}} is in the profiles but not running, so nothing answers on these addresses. Start the stack with <code>make up</code>.</div></div></div>
-  {{end}}
-  {{if not $e.Enabled}}
-  <div class="alert alert-info" role="alert"><div class="d-flex"><div>{{icon "info"}}</div><div class="ms-2">{{$e.Title}} is not in the profiles, so nothing listens on these addresses. Start it with <code>make up PROFILES={{join $s.Endpoints.Profiles ","}},{{$e.Engine}}</code>.</div></div></div>
-  {{end}}
-  <div class="row row-cards">
+  {{/* The page header already carries the title, status and the primary Start; the hero only explains the state. */}}
+  <div class="card mdb-engine-hero mb-3 {{if eq $st "running"}}mdb-engine-hero-ok{{else if eq $st "stopped"}}mdb-engine-hero-stopped{{else if eq $st "orphan"}}mdb-engine-hero-orphan{{else}}mdb-engine-hero-off{{end}}">
+    <div class="card-body d-flex flex-wrap align-items-center gap-3">
+      <div class="flex-fill min-w-0">
+        {{if $running}}
+        <p class="mb-0">Running on <code class="mdb-mono">{{$e.Direct.Network.Host}}:{{$e.Direct.Network.Port}}</code>. Projects and add-ons can talk to it now.</p>
+        {{else if $e.Enabled}}
+        <p class="mb-0">In <code class="mdb-mono">MDB_PROFILES</code>, but the container is not up, so nothing answers until you start the stack.</p>
+        {{else}}
+        <p class="mb-0">Not in <code class="mdb-mono">MDB_PROFILES</code>. Start with this engine to enable it and bring the stack up.</p>
+        {{end}}
+      </div>
+      <div class="btn-list flex-nowrap">
+        <button type="button" class="btn" data-bs-toggle="offcanvas" data-bs-target="#mdb-engine-addons" aria-controls="mdb-engine-addons" title="Poolers, extensions and UIs for {{$e.Title}}">{{icon "layers"}} Add-ons <span class="badge {{if $addonOn}}bg-primary-lt{{else}}bg-secondary-lt{{end}} ms-1">{{$addonOn}}/{{$addonTotal}}</span></button>
+        {{if not $e.Enabled}}<a href="/config" class="btn" title="Choose which engines MDB_PROFILES starts">Profiles</a>{{end}}
+      </div>
+    </div>
+  </div>
+
+  {{/* Balanced two-up: compact connect rows + projects. Add-ons live in the slide-in. */}}
+  <div class="row row-cards row-deck mdb-engine-main">
     <div class="col-lg-7">
-      <div class="card">
-        <div class="card-header"><h3 class="card-title">Addresses</h3></div>
-        <div class="card-body">
-          <div class="datagrid">
-            <div class="datagrid-item"><div class="datagrid-title">From containers on {{$s.Network}}</div><div class="datagrid-content mdb-mono">{{$e.Direct.Network.Host}}:{{$e.Direct.Network.Port}}</div></div>
-            <div class="datagrid-item"><div class="datagrid-title">From this machine</div><div class="datagrid-content mdb-mono">{{with $e.Direct.Published}}{{.Address}}:{{.Port}} <span class="text-secondary">({{.Via}})</span>{{else}}not published <span class="text-secondary">(MDB_PUBLISH={{$s.Endpoints.Publish}})</span>{{end}}</div></div>
-            <div class="datagrid-item"><div class="datagrid-title">Pooler</div><div class="datagrid-content mdb-mono">{{with $e.Pooled}}{{.Network.Host}}:{{.Network.Port}}{{with .Published}} · {{.Address}}:{{.Port}}{{end}}{{if not .Enabled}} <span class="text-secondary">(off: add the pooler profile)</span>{{end}}{{else}}none{{end}}</div></div>
-            <div class="datagrid-item"><div class="datagrid-title">TLS</div><div class="datagrid-content">{{if $e.TLSAlways}}<span class="badge bg-green-lt">always on</span>{{else}}<span class="badge bg-secondary-lt">required in the prod profile</span>{{end}}</div></div>
-            <div class="datagrid-item"><div class="datagrid-title">Boot budget</div><div class="datagrid-content">{{$e.BootBudget}}s</div></div>
-            <div class="datagrid-item"><div class="datagrid-title">Extensions created per project</div><div class="datagrid-content">{{with index $s.Extensions $e.Engine}}{{range .}}<span class="badge bg-azure-lt me-1">{{.}}</span>{{end}}{{else}}<span class="text-secondary">none (MDB_{{upper $e.Engine}}_INIT_EXTENSIONS)</span>{{end}}</div></div>
+      <div class="card mdb-engine-addresses h-100{{if not $running}} is-offline{{end}}">
+        <div class="card-header">
+          <h3 class="card-title">Where to connect</h3>
+          <div class="card-actions d-flex align-items-center gap-2">
+            {{if not $running}}<span class="badge bg-yellow-lt">not answering</span>{{else}}<span class="badge bg-green-lt">live</span>{{end}}
+            <a href="/connect" class="btn btn-sm" title="Publish modes and every engine address">How to connect</a>
           </div>
         </div>
-        {{if $e.Pooled}}<div class="card-footer text-secondary small">Superusers cannot authenticate through the pooler, so admin work uses the direct address. In production, applications connect through the pooler.</div>{{end}}
+        <div class="list-group list-group-flush list-group-hoverable mdb-engine-addr-list">
+          <div class="list-group-item mdb-engine-addr-row">
+            <div class="mdb-engine-addr-label">From containers on {{$s.Network}}</div>
+            <div class="mdb-engine-addr-value mdb-mono" id="eng-net-{{$e.Engine}}">{{$e.Direct.Network.Host}}:{{$e.Direct.Network.Port}}</div>
+            <button type="button" class="btn btn-sm btn-icon" data-copy="#eng-net-{{$e.Engine}}" title="Copy {{$e.Direct.Network.Host}}:{{$e.Direct.Network.Port}}" aria-label="Copy container address">{{icon "copy"}}</button>
+          </div>
+          <div class="list-group-item mdb-engine-addr-row">
+            <div class="mdb-engine-addr-label">From this machine</div>
+            <div class="mdb-engine-addr-value mdb-mono" id="eng-host-{{$e.Engine}}">{{with $e.Direct.Published}}{{.Address}}:{{.Port}} <span class="text-secondary small">({{.Via}})</span>{{else}}<a href="/connect#publish" class="text-secondary" title="MDB_PUBLISH={{$s.Endpoints.Publish}}">not published</a>{{end}}</div>
+            {{with $e.Direct.Published}}<button type="button" class="btn btn-sm btn-icon" data-copy="#eng-host-{{$e.Engine}}" title="Copy host address" aria-label="Copy host address">{{icon "copy"}}</button>{{else}}<span class="mdb-engine-addr-spacer" aria-hidden="true"></span>{{end}}
+          </div>
+          <div class="list-group-item mdb-engine-addr-row">
+            <div class="mdb-engine-addr-label">Pooler</div>
+            <div class="mdb-engine-addr-value mdb-mono">{{with $e.Pooled}}{{.Network.Host}}:{{.Network.Port}}{{with .Published}} · {{.Address}}:{{.Port}}{{end}}{{if not .Enabled}} <span class="badge bg-secondary-lt">off</span>{{else if not ($s.Up .Network.Host)}} <span class="badge bg-secondary-lt">stopped</span>{{else}} <span class="badge bg-green-lt">running</span>{{end}}{{else}}<span class="text-secondary">none</span>{{end}}</div>
+            <span class="mdb-engine-addr-spacer" aria-hidden="true"></span>
+          </div>
+          <div class="list-group-item mdb-engine-addr-row">
+            <div class="mdb-engine-addr-label">TLS · boot</div>
+            <div class="mdb-engine-addr-value">{{if $e.TLSAlways}}<span class="badge bg-green-lt">TLS always on</span>{{else}}<span class="badge bg-secondary-lt">TLS in prod</span>{{end}} <span class="text-secondary">{{$e.BootBudget}}s budget</span></div>
+            <span class="mdb-engine-addr-spacer" aria-hidden="true"></span>
+          </div>
+          <div class="list-group-item mdb-engine-addr-row mdb-engine-addr-ext">
+            <div class="mdb-engine-addr-label">Extensions</div>
+            <div class="mdb-engine-addr-value">{{with index $s.Extensions $e.Engine}}{{range .}}<span class="badge bg-azure-lt me-1">{{.}}</span>{{end}}{{else}}<span class="text-secondary">none <span class="mdb-mono small">(MDB_{{upper $e.Engine}}_INIT_EXTENSIONS)</span></span>{{end}}</div>
+            <span class="mdb-engine-addr-spacer" aria-hidden="true"></span>
+          </div>
+        </div>
+        {{if $e.Pooled}}<div class="card-footer text-secondary small">Superusers cannot authenticate through the pooler — admin work uses the direct address. Apps in production use the pooler.</div>{{end}}
       </div>
     </div>
     <div class="col-lg-5">
-      <div class="card">
-        <div class="card-header"><h3 class="card-title">Projects on {{$e.Title}}</h3></div>
+      <div class="card h-100 mdb-engine-side">
+        <div class="card-header">
+          <h3 class="card-title">Projects on {{$e.Title}}</h3>
+          <div class="card-actions btn-list">
+            {{if $running}}{{actionButton $page "project.new" "New" (print "engine=" $e.Engine) "class=btn-sm btn-primary" "icon=plus"}}{{end}}
+          </div>
+        </div>
         {{with $s.ProjectsOn $e.Engine}}
-        <div class="list-group list-group-flush">
-          {{range .}}<a href="/projects/{{.Engine}}/{{.Name}}" class="list-group-item list-group-item-action d-flex align-items-center"><span class="avatar avatar-sm me-3">{{icon "folders"}}</span><div><div class="fw-medium">{{.Name}}</div><div class="text-secondary small mdb-mono">{{.Owner}}</div></div><span class="ms-auto text-secondary small">Connection details →</span></a>{{end}}
+        <div class="list-group list-group-flush list-group-hoverable flex-fill">
+          {{range .}}{{if eq .State "orphaned"}}
+          <a href="/projects" class="list-group-item list-group-item-action d-flex align-items-center" title="Only password files remain"><span class="avatar mdb-avatar-round bg-azure-lt text-azure me-3" aria-hidden="true">{{icon "folders"}}</span><div class="min-w-0"><div class="fw-medium text-truncate">{{.Name}}</div><div class="text-secondary small mdb-mono text-truncate">{{.Owner}}</div></div><span class="ms-auto me-2">{{template "project-state" .}}</span></a>
+          {{else}}
+          <a href="/projects/{{.Engine}}/{{.Name}}" class="list-group-item list-group-item-action d-flex align-items-center"><span class="avatar mdb-avatar-round bg-azure-lt text-azure me-3" aria-hidden="true">{{icon "folders"}}</span><div class="min-w-0"><div class="fw-medium text-truncate">{{.Name}}</div><div class="text-secondary small mdb-mono text-truncate">{{.Owner}}</div></div><span class="ms-auto me-2">{{template "project-state" .}}</span><span class="text-secondary small d-none d-xl-inline">Details →</span></a>
+          {{end}}{{end}}
         </div>
         {{else}}
-        <div class="empty"><p class="empty-title">No projects on {{$e.Title}}</p><p class="empty-subtitle text-secondary"><code>make new-project NAME=myapp ENGINE={{$e.Engine}}</code></p></div>
+        <div class="empty flex-fill"><p class="empty-title">No projects yet</p><p class="empty-subtitle text-secondary">Provision a database and roles for {{$e.Title}}.</p>{{if $running}}<div class="empty-action">{{actionButton $ "project.new" "Provision a project" (print "engine=" $e.Engine) "class=btn-primary" "icon=plus"}}</div>{{end}}</div>
         {{end}}
       </div>
     </div>
+
     <div class="col-12">
       <div class="card">
-        <div class="card-header"><h3 class="card-title">Principals</h3><div class="card-actions text-secondary small">passwords live in the files named here</div></div>
+        <div class="card-header">
+          <div>
+            <h3 class="card-title">Principals</h3>
+            <div class="card-subtitle text-secondary small mb-0">Passwords live in the files named here, never in the page.</div>
+          </div>
+          {{if $e.RotateSecrets}}
+          <div class="card-actions btn-list">
+            {{if $running}}
+            {{actionButton $page "secrets.rotate" (print "Rotate " $e.Title " passwords") (print "engine=" $e.Engine) "class=btn-sm" "icon=key"}}
+            {{else}}
+            <span class="d-inline-block" tabindex="0" data-bs-toggle="tooltip" title="Start {{$e.Title}} first: rotation changes the password inside the running database, then the file."><button type="button" class="btn btn-sm" disabled>{{icon "key"}} Rotate {{$e.Title}} passwords</button></span>
+            {{end}}
+            {{actionButton $page "secrets.rotate" "Rotate all engines" "engine=" "class=btn-sm" "icon=refresh"}}
+          </div>
+          {{end}}
+        </div>
         <div class="table-responsive">
-          <table class="table table-vcenter card-table">
+          <table class="table table-vcenter card-table mb-0">
             <thead><tr><th>Role</th><th>User</th><th>Password file (in the container)</th></tr></thead>
             <tbody>{{range $e.Principals}}<tr><td>{{.Role}}</td><td class="mdb-mono">{{if .User}}{{.User}}{{else}}–{{end}}</td><td class="mdb-mono text-secondary">{{.PasswordFile}}</td></tr>{{end}}</tbody>
           </table>
@@ -57,11 +152,32 @@
     <div class="col-12">
       <div class="card">
         <div class="card-header"><h3 class="card-title">Backups of {{$e.Title}}</h3><div class="card-actions"><a href="/backups">All backups</a></div></div>
-        <div class="table-responsive"><table class="table table-vcenter card-table"><thead><tr><th>File</th><th class="text-end">Size</th><th class="text-end">Taken</th></tr></thead>
-        <tbody>{{range .}}<tr><td class="mdb-mono">{{.File}}</td><td class="text-end">{{bytes .Size}}</td><td class="text-end text-secondary">{{ago .Modified}}</td></tr>{{end}}</tbody></table></div>
+        <div class="table-responsive"><table class="table table-vcenter card-table mb-0"><thead><tr><th>File</th><th class="text-end">Size</th><th class="text-end">Taken</th><th class="w-1"></th></tr></thead>
+        <tbody>{{range .}}<tr><td class="mdb-mono">{{.File}}</td><td class="text-end">{{bytes .Size}}</td><td class="text-end text-secondary">{{ago .Modified}}</td><td>{{actionButton $ "backup.restore" "Restore" (print "engine=" .Engine) (print "file=" .File) "class=btn-sm" "icon=restore"}}</td></tr>{{end}}</tbody></table></div>
       </div>
     </div>
     {{end}}
   </div>
 </div></div>
+
+{{/* Add-ons slide-in: toggles stay off the main card grid so connect + projects can balance. */}}
+<div class="offcanvas offcanvas-end mdb-engine-addons-drawer mdb-panel" tabindex="-1" id="mdb-engine-addons" aria-labelledby="mdb-engine-addons-title" data-bs-scroll="true">
+  <div class="offcanvas-header mdb-panel-head">
+    <div class="mdb-panel-head-text">
+      <div class="subheader mdb-panel-kicker">Add-ons · {{$addonOn}}/{{$addonTotal}} on</div>
+      <h2 class="offcanvas-title mdb-panel-title text-truncate" id="mdb-engine-addons-title">{{$e.Title}}</h2>
+      <div class="mdb-panel-note">Poolers, extensions and UIs for this engine.</div>
+    </div>
+    <button type="button" class="btn-close text-reset" data-bs-dismiss="offcanvas" aria-label="Close" title="Close"></button>
+  </div>
+  <div class="offcanvas-body p-0 d-flex flex-column">
+    <div class="flex-fill overflow-auto mdb-engine-addons-body">
+      {{template "addon-manage" (dict "Groups" $groups "Compact" true "Page" $page)}}
+    </div>
+    <div class="border-top p-3 d-flex flex-wrap gap-2 align-items-center">
+      {{if not $running}}<span class="text-secondary small flex-fill">Toggles update profiles and env now; extensions that need a live database apply after Start.</span>{{else}}<span class="text-secondary small flex-fill">Changes apply on the next Start / restart for services that need it.</span>{{end}}
+      <a href="/addons?engine={{$e.Engine}}" class="btn btn-sm btn-primary" title="Full Add-ons wizard for {{$e.Title}}">Open wizard</a>
+    </div>
+  </div>
+</div>
 {{end}}

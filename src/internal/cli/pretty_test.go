@@ -2,8 +2,10 @@ package cli
 
 import (
 	"bytes"
+	"encoding/json"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/simtabi/dbpantry/src/internal/endpoint"
 	"github.com/simtabi/dbpantry/src/internal/ui"
@@ -13,6 +15,9 @@ func TestFormattedOnlyOnATerminalUnlessForced(t *testing.T) {
 	a := &app{stdout: &bytes.Buffer{}, environ: func() []string { return nil }}
 	if a.formatted() {
 		t.Error("a buffer is not a terminal: the scripts' own output must pass through unchanged")
+	}
+	if a.isTTY() {
+		t.Error("a buffer is not a TTY")
 	}
 	a.pretty = true
 	if !a.formatted() {
@@ -25,6 +30,244 @@ func TestFormattedOnlyOnATerminalUnlessForced(t *testing.T) {
 	a.dryRun, a.pretty, a.plain = false, false, true
 	if a.formatted() {
 		t.Error("--plain is never formatted")
+	}
+}
+
+func TestJobArgvForcesPretty(t *testing.T) {
+	got := strings.Join(jobArgv("/kit", "/home", []string{"up"}), " ")
+	if !strings.Contains(got, "--pretty") || strings.Contains(got, "--plain") {
+		t.Fatalf("dashboard jobs must use --pretty, not --plain: %s", got)
+	}
+	if !strings.Contains(got, "--no-input") || !strings.Contains(got, "--no-color") {
+		t.Fatalf("jobs stay non-interactive and colourless: %s", got)
+	}
+}
+
+func TestScreenSummaryNamesTheRunningStep(t *testing.T) {
+	var buf bytes.Buffer
+	a := &app{stdout: &buf, environ: func() []string { return nil }, pretty: true, noColor: true}
+	sc := a.newScreen("up")
+	n := sc.add("Start the stack")
+	n.Start(time.Now().Add(-5 * time.Second))
+	n.Progress = &ui.Progress{Done: 3, Total: 6, Started: time.Now().Add(-5 * time.Second)}
+	sum := sc.summary(1, time.Now())
+	if !strings.Contains(sum, "Start the stack") || !strings.Contains(sum, "%") {
+		t.Fatalf("summary = %q", sum)
+	}
+}
+
+func TestScreenDrawIsFlushLeft(t *testing.T) {
+	var buf bytes.Buffer
+	a := &app{stdout: &buf, environ: func() []string { return nil }, pretty: true, noColor: true}
+	sc := a.newScreen("up", "profiles pg")
+	n := sc.add("Check configuration")
+	n.Finish(ui.Done, "", time.Now())
+	child := n.Add("config/caddy/Caddyfile", ui.Done)
+	_ = child
+	lines := sc.draw(0, time.Now())
+	if len(lines) < 2 {
+		t.Fatalf("draw returned %d lines", len(lines))
+	}
+	if strings.HasPrefix(lines[0], " ") || lines[0] == "" {
+		t.Errorf("title must be flush-left with no blank under it, got %q", lines[0])
+	}
+	if strings.HasPrefix(lines[1], " ") || lines[1] == "" {
+		t.Errorf("first step must sit flush under the title (no gutter/blank), got %q", lines[1])
+	}
+	joined := strings.Join(lines, "\n")
+	if strings.Contains(joined, "│") {
+		t.Errorf("continuing tree bar must not appear:\n%s", joined)
+	}
+	if !strings.Contains(joined, "dbpantry") || !strings.Contains(joined, "└─") {
+		t.Errorf("draw missing title/tree:\n%s", joined)
+	}
+}
+
+// Off a terminal (--pretty for dashboard jobs) the title appears only in
+// Stop's final tree. Finished steps may also print mid-flight (drawer flips
+// spinners to ✔); the drawer coalesces by label so that is not a duplicate row.
+func TestScreenOffTTYPrintsTitleOnce(t *testing.T) {
+	var buf bytes.Buffer
+	a := &app{stdout: &buf, environ: func() []string { return nil }, pretty: true, noColor: true}
+	sc := a.newScreen("down", "data volumes are kept")
+	n := sc.add("Stop the stack")
+	n.Finish(ui.Done, "", time.Now())
+	sc.start()
+	time.Sleep(50 * time.Millisecond)
+	sc.stop()
+	out := buf.String()
+	if c := strings.Count(out, "dbpantry"); c != 1 {
+		t.Fatalf("title must print once on Stop, got %d in %q", c, out)
+	}
+	if !strings.Contains(out, "Stop the stack") {
+		t.Fatalf("final tree missing the step: %q", out)
+	}
+}
+
+func TestJobArgvAsksForRunSnapshots(t *testing.T) {
+	if got := strings.Join(jobArgv("/kit", "/home", []string{"up"}), " "); !strings.Contains(got, "--events") {
+		t.Fatalf("the job drawer renders run snapshots, so jobs pass --events: %s", got)
+	}
+}
+
+// snapshots returns every run snapshot in out, decoded.
+func snapshots(t *testing.T, out string) []runSnapshot {
+	t.Helper()
+	var got []runSnapshot
+	for _, l := range strings.Split(out, "\n") {
+		if rest, ok := strings.CutPrefix(l, runEventPrefix); ok {
+			var s runSnapshot
+			if err := json.Unmarshal([]byte(rest), &s); err != nil {
+				t.Fatalf("bad snapshot %q: %v", l, err)
+			}
+			got = append(got, s)
+		}
+	}
+	return got
+}
+
+func TestScreenEventsEndWithTheFailure(t *testing.T) {
+	var buf bytes.Buffer
+	a := &app{stdout: &buf, environ: func() []string { return nil }, pretty: true, noColor: true, events: true}
+	sc := a.newScreen("up", "profiles pg,mysql", "publish none", "backend compose")
+	sc.project = "mdb"
+	check := sc.add("Check configuration", "🔍")
+	stack := sc.add("Start the stack", "🚀")
+	sc.start()
+	now := time.Now()
+	sc.update(func() {
+		check.Start(now.Add(-time.Second))
+		check.Finish(ui.Done, "", now)
+		stack.Start(now)
+		g := stack.Add("Containers", ui.Running)
+		g.Add("mdb-mysql-1", ui.Failed).Detail = "Unhealthy"
+		g.Add("mdb-phpmyadmin-1", ui.Running).Detail = "Waiting"
+		stack.Finish(ui.Failed, "", now)
+		stack.AbandonRunning(now)
+	})
+	_ = sc.fail("scripts/runtime up", `{"error":true,"message":"container mdb-mysql-1 is unhealthy"}`, exitStatus(1))
+	out := buf.String()
+	snaps := snapshots(t, out)
+	if len(snaps) == 0 {
+		t.Fatalf("no run snapshot in:\n%s", out)
+	}
+	last := snaps[len(snaps)-1]
+	if last.State != "failed" || last.Failure == nil {
+		t.Fatalf("the last snapshot says how the run ended: %+v", last)
+	}
+	f := last.Failure
+	if f.Headline != "container mdb-mysql-1 is unhealthy" || f.Step != "Start the stack" || f.Index != 2 || f.Exit != 1 || f.Service != "mysql" {
+		t.Errorf("failure, cause first: %+v", f)
+	}
+	if len(last.Facts) != 3 || last.Facts[0] != [2]string{"profiles", "pg,mysql"} {
+		t.Errorf("facts: %v", last.Facts)
+	}
+	kids := last.Steps[1].Children[0].Children
+	if kids[0].State != "failed" || kids[1].State != "skipped" || kids[1].Detail != "not started" {
+		t.Errorf("honest container states: %+v", kids)
+	}
+	if !strings.Contains(out, "✖ container mdb-mysql-1 is unhealthy") || !strings.Contains(out, "exit 1") || !strings.Contains(out, "dbpantry logs mysql") {
+		t.Errorf("the tail leads with the cause and points at the log:\n%s", out)
+	}
+}
+
+// up's watch refresh rebuilds the container rows from Compose's last word
+// before every frame and once more when the watch stops, so a container
+// Compose still called "Waiting" came back as running after the step failed
+// and the final tree and drawer kept spinning (design.md D-106).
+func TestFailedStepStaysSettledAfterAWatchRefresh(t *testing.T) {
+	var buf bytes.Buffer
+	a := &app{stdout: &buf, environ: func() []string { return nil }, pretty: true, noColor: true, events: true}
+	sc := a.newScreen("up")
+	sc.project = "mdb"
+	stack := sc.add("Start the stack")
+	now := time.Now()
+	sc.update(func() { stack.Start(now) })
+	stop := sc.watch(func() {
+		g := &ui.Node{Label: "Containers", State: ui.Running}
+		// stackview pads names so the status column lines up.
+		g.Add(ui.Pad("mdb-pg-1", 16), ui.Done).Status = "Healthy"
+		mysql := g.Add(ui.Pad("mdb-mysql-1", 16), ui.Running)
+		mysql.Detail, mysql.Status = "Waiting", "Waiting"
+		mysql.Started = now
+		stack.Children = []*ui.Node{g}
+	})
+	sc.start()
+	sc.update(func() {
+		stack.Finish(ui.Failed, "", now)
+		stack.AbandonRunning(now)
+	})
+	stop()
+	_ = sc.fail("scripts/runtime up", `{"error":true,"message":"container mdb-mysql-1 is unhealthy"}`, exitStatus(1))
+
+	snaps := snapshots(t, buf.String())
+	if len(snaps) == 0 {
+		t.Fatalf("no run snapshot in:\n%s", buf.String())
+	}
+	last := snaps[len(snaps)-1]
+	var walk func([]ui.SnapNode)
+	walk = func(nodes []ui.SnapNode) {
+		for _, n := range nodes {
+			if n.State == "running" || n.State == "pending" {
+				t.Errorf("%s is still %s after its step failed", n.Label, n.State)
+			}
+			walk(n.Children)
+		}
+	}
+	walk(last.Steps)
+	kids := last.Steps[0].Children
+	if len(kids) != 1 || len(kids[0].Children) != 2 {
+		t.Fatalf("containers: %+v", kids)
+	}
+	if g := kids[0]; g.State != "failed" {
+		t.Errorf("the group holding the unhealthy container is failed, got %s", g.State)
+	}
+	if m := kids[0].Children[1]; m.State != "failed" || m.Detail != "Unhealthy" {
+		t.Errorf("the container the error names is the one that failed: %+v", m)
+	}
+	if last.Failure == nil || last.Failure.Service != "mysql" {
+		t.Errorf("the failure points at the unhealthy service's log: %+v", last.Failure)
+	}
+}
+
+func TestNamesTokenMatchesWholeContainerNames(t *testing.T) {
+	for _, c := range []struct {
+		s, name string
+		want    bool
+	}{
+		{"container mdb-mysql-1 is unhealthy", "mdb-mysql-1", true},
+		{"container mdb-pg-10 is unhealthy", "mdb-pg-1", false},
+		{"dependency failed to start: mdb-pg-1.", "mdb-pg-1", true},
+		{"xmdb-pg-1 exited", "mdb-pg-1", false},
+		{"anything", "", false},
+	} {
+		if got := namesToken(c.s, c.name); got != c.want {
+			t.Errorf("namesToken(%q, %q) = %v", c.s, c.name, got)
+		}
+	}
+}
+
+func TestScreenWithoutEventsPrintsNoSnapshot(t *testing.T) {
+	var buf bytes.Buffer
+	a := &app{stdout: &buf, environ: func() []string { return nil }, pretty: true, noColor: true}
+	sc := a.newScreen("down")
+	sc.add("Stop the stack").Finish(ui.Done, "", time.Now())
+	sc.start()
+	sc.stop()
+	if strings.Contains(buf.String(), runEventPrefix) {
+		t.Fatalf("snapshots are for the dashboard only:\n%s", buf.String())
+	}
+}
+
+func TestErrorHeadlineReadsTheScriptMessage(t *testing.T) {
+	if got := errorHeadline([]string{"noise", `{"error":true,"message":"port 5432 is taken"}`}, nil); got != "port 5432 is taken" {
+		t.Errorf("headline = %q", got)
+	}
+	if got := errorHeadline([]string{"first", "last line", ""}, nil); got != "last line" {
+		t.Errorf("headline = %q", got)
+	}
+	if got := errorHeadline(nil, exitStatus(3)); got != "exit status 3" {
+		t.Errorf("headline = %q", got)
 	}
 }
 

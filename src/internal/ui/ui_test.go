@@ -86,11 +86,106 @@ func TestTreeDrawsBranchesStatesAndTimes(t *testing.T) {
 	want := strings.Join([]string{
 		"✔ Start the stack  2.0s",
 		"├─ ✔ Images",
-		"│  └─ ✔ localhost/dbpantry-pg:17  Built",
+		"   └─ ✔ localhost/dbpantry-pg:17  Built",
 		"└─ ⠋ Containers  5.0s",
 	}, "\n")
 	if got != want {
 		t.Errorf("tree:\n%s\nwant:\n%s", got, want)
+	}
+}
+
+func TestAbandonRunningStopsSpinnersUnderAFailedStep(t *testing.T) {
+	now := time.Now()
+	root := &Node{Label: "Start the stack", State: Failed, Started: now.Add(-2 * time.Second), Ended: now}
+	group := root.Add("Containers", Running)
+	leaf := group.Add("mdb-mysql-1", Running)
+	leaf.Detail = "Waiting"
+	leaf.Progress = &Progress{Done: 0, Total: 1, Started: now}
+	failed := group.Add("mdb-pg-1", Failed)
+	started := group.Add("mdb-caddy-1", Running)
+	started.Started = now.Add(-time.Second)
+	started.Detail = "Starting"
+	root.AbandonRunning(now)
+	if leaf.State != Skipped || leaf.Detail != "not started" {
+		t.Fatalf("a waiting container never started: got %v %q", leaf.State, leaf.Detail)
+	}
+	if started.State != Skipped || started.Detail != "stopped" {
+		t.Fatalf("a container cut off mid-start was stopped: got %v %q", started.State, started.Detail)
+	}
+	if failed.State != Failed || group.State != Failed {
+		t.Fatalf("only the resource that failed is failed, and its group with it: leaf=%v group=%v", failed.State, group.State)
+	}
+	if leaf.Progress != nil {
+		t.Fatal("abandoned leaves must drop progress so Stop cannot draw a 0% bar")
+	}
+	got := strings.Join((Style{}).Tree([]*Node{root}, 0, 0, now), "\n")
+	if strings.ContainsAny(got, "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏") || strings.Contains(got, "…") {
+		t.Fatalf("failed tree must not keep spinners:\n%s", got)
+	}
+	if !strings.Contains(got, "– mdb-mysql-1  not started") || !strings.Contains(got, "✖ mdb-pg-1") {
+		t.Fatalf("abandoned leaves are not failures; the failed one is:\n%s", got)
+	}
+}
+
+func TestFoldDoneHidesWhatPassed(t *testing.T) {
+	now := time.Now()
+	done := &Node{Label: "Render config files", State: Done, Detail: "2 files"}
+	done.Add("config/caddy/Caddyfile", Done)
+	failed := &Node{Label: "Start the stack", State: Failed}
+	failed.Add("Containers", Failed)
+	got := strings.Join((Style{FoldDone: true}).Tree([]*Node{done, failed}, 0, 0, now), "\n")
+	if strings.Contains(got, "Caddyfile") {
+		t.Errorf("a finished step with a summary folds:\n%s", got)
+	}
+	if !strings.Contains(got, "Containers") {
+		t.Errorf("the failed step stays open:\n%s", got)
+	}
+}
+
+func TestAlignTimesPutsDurationsInOneColumn(t *testing.T) {
+	now := time.Now()
+	a := &Node{Label: "Check configuration", State: Done, Started: now.Add(-1500 * time.Millisecond), Ended: now}
+	b := &Node{Label: "Start", State: Done, Started: now.Add(-12 * time.Second), Ended: now}
+	lines := (Style{AlignTimes: true}).Tree([]*Node{a, b}, 60, 0, now)
+	if Width(lines[0]) != 60 || Width(lines[1]) != 60 {
+		t.Fatalf("aligned rows end at the column: %q %q", lines[0], lines[1])
+	}
+	if !strings.HasSuffix(lines[0], "1.5s") || !strings.HasSuffix(lines[1], "12s") {
+		t.Fatalf("durations end the row: %q %q", lines[0], lines[1])
+	}
+}
+
+func TestEmojiIconsCountAsTwoCells(t *testing.T) {
+	if Width("🚀 Start") != 8 {
+		t.Errorf("Width(🚀 Start) = %d, want 8", Width("🚀 Start"))
+	}
+	if got := Truncate("🚀🚀🚀", 4); Width(got) > 4 {
+		t.Errorf("Truncate overflows: %q is %d cells", got, Width(got))
+	}
+	n := &Node{Label: "Start the stack", Icon: "🚀", State: Done}
+	if got := (Style{Emoji: true}).Tree([]*Node{n}, 0, 0, time.Now())[0]; !strings.Contains(got, "🚀 Start the stack") {
+		t.Errorf("icon drawn before the label: %q", got)
+	}
+	if got := (Style{}).Tree([]*Node{n}, 0, 0, time.Now())[0]; strings.Contains(got, "🚀") {
+		t.Errorf("no emoji without Emoji: %q", got)
+	}
+}
+
+func TestSnapshotIsTheTreeAsData(t *testing.T) {
+	now := time.Now()
+	root := &Node{Label: "Start the stack", Icon: "🚀", State: Running, Started: now.Add(-4 * time.Second)}
+	root.Progress = &Progress{Done: 2, Total: 4, Started: now.Add(-4 * time.Second)}
+	c := root.Add("mdb-pg-1   ", Done)
+	c.Status = "Healthy"
+	got := Snapshot([]*Node{root}, now)
+	if len(got) != 1 || got[0].State != "running" || got[0].Icon != "🚀" || got[0].Pct == nil || *got[0].Pct != 50 || got[0].Done != 2 {
+		t.Fatalf("snapshot: %+v", got)
+	}
+	if got[0].ETA <= 0 {
+		t.Errorf("a half-done bar four seconds in has an ETA: %+v", got[0])
+	}
+	if kid := got[0].Children[0]; kid.Label != "mdb-pg-1" || kid.Status != "Healthy" || kid.State != "done" {
+		t.Errorf("child: %+v", kid)
 	}
 }
 

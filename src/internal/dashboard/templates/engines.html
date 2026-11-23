@@ -1,28 +1,60 @@
 {{define "content"}}
 <div class="page-header d-print-none"><div class="container-xl"><div class="row g-2 align-items-center">
-  <div class="col"><div class="page-pretitle">{{.S.Enabled}} of {{len .S.Endpoints.Endpoints}} enabled</div><h2 class="page-title">Engines</h2></div>
+  <div class="col">
+    <div class="d-flex align-items-center flex-wrap gap-2">
+      <span class="mdb-page-icon bg-azure-lt text-azure" aria-hidden="true">{{icon "database"}}</span>
+      <h2 class="page-title mb-0">Engines</h2>
+    </div>
+    <nav class="mdb-page-crumbs" aria-label="breadcrumb">
+      <ol class="breadcrumb breadcrumb-arrows breadcrumb-muted">
+        <li class="breadcrumb-item"><a href="/">{{t . "nav.overview"}}</a></li>
+        <li class="breadcrumb-item active" aria-current="page">Engines</li>
+      </ol>
+    </nav>
+    <div class="text-secondary mt-1">Run several engines in one stack at the same time (PostgreSQL, MySQL, MariaDB, Cassandra, …) via <code>MDB_PROFILES</code>. Open a card for principals; ⋮ starts, stops or rebuilds — leftover containers stay clickable. <a href="/help#statuses-engine">What the statuses mean</a></div>
+  </div>
+  <div class="col-auto btn-list">
+    <span class="badge bg-primary-lt align-self-center">{{.S.Enabled}} of {{len .S.Endpoints.Endpoints}} enabled</span>
+    {{actionButton . "stack.up" "Start several engines…" "class=btn-primary" "icon=play"}}
+    <a class="btn" href="/ha" title="PostgreSQL primary and replicas (Patroni)">Primary &amp; replicas</a>
+    <a class="btn" href="/config" title="Edit MDB_PROFILES">Profiles</a>
+  </div>
 </div></div></div>
 <div class="page-body"><div class="container-xl">
   <div class="row row-cards">
-    {{$s := .S}}
+    {{$s := .S}}{{$page := .}}
     {{range .S.Endpoints.Endpoints}}
     <div class="col-md-6 col-xl-4">
-      <div class="card{{if not .Enabled}} card-inactive{{end}}">
-        <div class="card-status-top {{if .Enabled}}bg-green{{else}}bg-secondary{{end}}"></div>
+      {{$st := status $s .Engine .Enabled}}
+      {{/* Never use Tabler card-inactive here: it sets pointer-events:none and
+           kills every link and the ⋮ menu on off/leftover engines. */}}
+      <div class="card mdb-engine-card h-100{{if or (eq $st "off") (eq $st "orphan")}} mdb-engine-dim{{end}}">
+        <div class="card-status-top {{if eq $st "running"}}bg-green{{else if eq $st "orphan"}}bg-azure{{else if eq $st "stopped"}}bg-yellow{{else}}bg-secondary{{end}}"></div>
         <div class="card-body">
-          <div class="d-flex align-items-center mb-3">
-            <span class="avatar me-3 {{if .Enabled}}bg-green-lt{{end}}">{{icon "database"}}</span>
-            <div><h3 class="card-title mb-0"><a href="/engines/{{.Engine}}" class="text-reset">{{.Title}}</a></h3><div class="text-secondary small">{{.Engine}} · {{.Family}}</div></div>
-            <span class="ms-auto">{{template "engine-status" (status $s .Engine .Enabled)}}</span>
+          <div class="d-flex align-items-start mb-3">
+            <a href="/engines/{{.Engine}}" class="avatar me-3 {{if eq $st "running"}}bg-green-lt{{else if eq $st "orphan"}}bg-azure-lt{{else if eq $st "stopped"}}bg-yellow-lt{{else}}bg-secondary-lt{{end}} text-decoration-none" title="Open {{.Title}}">{{icon "database"}}</a>
+            <div class="flex-fill min-w-0">
+              {{/* No stretched-link: it stole clicks from the ⋮ menu and footer
+                   actions on some browsers even with z-index workarounds. */}}
+              <h3 class="card-title mb-0"><a href="/engines/{{.Engine}}" class="text-reset" title="Open {{.Title}} details and principals">{{.Title}}</a></h3>
+              <div class="text-secondary small">{{.Engine}} · {{.Family}}</div>
+            </div>
+            <div class="d-flex align-items-center gap-1 ms-2 mdb-engine-card-actions">
+              {{template "engine-status" $st}}
+              {{template "engine-menu" (engineMenu $page .)}}
+            </div>
           </div>
           <div class="datagrid">
             <div class="datagrid-item"><div class="datagrid-title">From containers</div><div class="datagrid-content mdb-mono">{{.Direct.Network.Host}}:{{.Direct.Network.Port}}</div></div>
             <div class="datagrid-item"><div class="datagrid-title">From this machine</div><div class="datagrid-content mdb-mono">{{if not .Enabled}}–{{else}}{{with .Direct.Published}}{{.Address}}:{{.Port}}{{else}}not published{{end}}{{end}}</div></div>
             <div class="datagrid-item"><div class="datagrid-title">Pooler</div><div class="datagrid-content mdb-mono">{{with .Pooled}}{{.Network.Host}}:{{.Network.Port}}{{if not .Enabled}} <span class="text-secondary">(off)</span>{{end}}{{else}}–{{end}}</div></div>
-            <div class="datagrid-item"><div class="datagrid-title">Projects</div><div class="datagrid-content">{{len ($s.ProjectsOn .Engine)}}</div></div>
+            <div class="datagrid-item"><div class="datagrid-title">Projects</div><div class="datagrid-content"><a href="/projects" class="text-reset mdb-engine-card-actions" title="Projects on {{.Title}}">{{len ($s.ProjectsOn .Engine)}}</a></div></div>
           </div>
         </div>
-        <div class="card-footer"><a href="/engines/{{.Engine}}">Details and principals</a></div>
+        <div class="card-footer d-flex justify-content-between align-items-center">
+          <a href="/engines/{{.Engine}}" class="link-primary mdb-engine-card-actions" title="Principals, addresses and projects for {{.Title}}">Details and principals →</a>
+          <a href="/addons?engine={{.Engine}}" class="btn btn-sm mdb-engine-card-actions" title="Poolers, extensions and UIs for {{.Title}}">Add-ons</a>
+        </div>
       </div>
     </div>
     {{end}}

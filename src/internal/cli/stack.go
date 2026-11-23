@@ -87,8 +87,11 @@ func (a *app) statusCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "status",
 		Short: "Show service status",
-		Args:  cobra.NoArgs,
-		RunE:  func(c *cobra.Command, _ []string) error { return a.runSteps(c, script("scripts/runtime", "status")) },
+		Long: `Show every container of the stack, its state and its health check
+(scripts/runtime status). The dashboard draws the same facts as badges; what
+each one means, and what to do about it, is in docs/guides/statuses.md.`,
+		Args: cobra.NoArgs,
+		RunE: func(c *cobra.Command, _ []string) error { return a.runSteps(c, script("scripts/runtime", "status")) },
 	}
 }
 
@@ -107,6 +110,52 @@ func (a *app) logsCmd() *cobra.Command {
 	}
 	cmd.Flags().BoolVarP(&follow, "follow", "f", true, "keep following new lines")
 	cmd.Flags().StringVar(&tail, "tail", "100", "lines to show from the end of each log (all for every line)")
+	return cmd
+}
+
+func (a *app) restartCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "restart SERVICE...",
+		Short: "Restart services in place, keeping their data (a changed compose file needs up)",
+		Args:  cobra.MinimumNArgs(1),
+		RunE: func(c *cobra.Command, args []string) error {
+			return a.runSteps(c, script(append([]string{"scripts/runtime", "restart"}, args...)...))
+		},
+	}
+}
+
+// serviceCmd is start/stop/restart for one Compose service (dashboard Services ⋮).
+func (a *app) serviceCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "service",
+		Short: "Start, stop or restart one stack service (Compose)",
+	}
+	cmd.AddCommand(
+		&cobra.Command{
+			Use:   "start SERVICE...",
+			Short: "Start existing stopped services (does not recreate; use up for that)",
+			Args:  cobra.MinimumNArgs(1),
+			RunE: func(c *cobra.Command, args []string) error {
+				return a.runSteps(c, script(append([]string{"scripts/runtime", "start"}, args...)...))
+			},
+		},
+		&cobra.Command{
+			Use:   "stop SERVICE...",
+			Short: "Stop services without removing containers or volumes",
+			Args:  cobra.MinimumNArgs(1),
+			RunE: func(c *cobra.Command, args []string) error {
+				return a.runSteps(c, script(append([]string{"scripts/runtime", "stop"}, args...)...))
+			},
+		},
+		&cobra.Command{
+			Use:   "restart SERVICE...",
+			Short: "Restart services in place (same as dbpantry restart)",
+			Args:  cobra.MinimumNArgs(1),
+			RunE: func(c *cobra.Command, args []string) error {
+				return a.runSteps(c, script(append([]string{"scripts/runtime", "restart"}, args...)...))
+			},
+		},
+	)
 	return cmd
 }
 
@@ -226,8 +275,8 @@ func (a *app) toolsCmd() *cobra.Command {
 			}
 			return a.runSteps(c, script("scripts/runtime", "ctr", "run", "--rm", "-it",
 				"--network", project+"_net",
-				"-v", filepath.Join(root, "certs")+":/certs:ro",
-				"-v", filepath.Join(root, "backups")+":/work/backups",
+				"-v", filepath.Join(a.home(root), "certs")+":/certs:ro",
+				"-v", filepath.Join(a.home(root), "backups")+":/work/backups",
 				image))
 		},
 	}

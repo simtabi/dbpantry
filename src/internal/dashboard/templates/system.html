@@ -1,0 +1,62 @@
+{{define "content"}}
+{{$s := .S}}
+<div class="page-header d-print-none">
+  <div class="container-xl">
+    <div class="row g-2 align-items-center">
+      <div class="col">
+        <div class="d-flex align-items-center flex-wrap gap-2">
+          <span class="mdb-page-icon bg-azure-lt text-azure" aria-hidden="true">{{icon "server"}}</span>
+          <h2 class="page-title mb-0">System</h2>
+        </div>
+        <nav class="mdb-page-crumbs" aria-label="breadcrumb">
+          <ol class="breadcrumb breadcrumb-arrows breadcrumb-muted">
+            <li class="breadcrumb-item"><a href="/">{{t . "nav.overview"}}</a></li>
+            <li class="breadcrumb-item"><a href="/operations">{{t . "ops.operations"}}</a></li>
+            <li class="breadcrumb-item active" aria-current="page">System</li>
+          </ol>
+        </nav>
+        <div class="text-secondary mt-1">Host, binary and container-runtime facts. Same report as <code class="mdb-mono">dbpantry doctor</code>.</div>
+      </div>
+      <div class="col-auto btn-list">
+        <a class="btn" href="/status">Status</a>
+        <a class="btn" href="/help">Runtimes help</a>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="page-body">
+  <div class="container-xl">
+    <div class="row row-deck row-cards">
+      <div class="col-lg-6">
+        <div class="card">
+          <div class="card-header"><h3 class="card-title">This machine</h3></div>
+          <div class="list-group list-group-flush">
+            {{with $s.Doctor}}
+            <div class="list-group-item d-flex justify-content-between"><span class="text-secondary">Hostname</span><span class="mdb-mono">{{.Hostname}}</span></div>
+            <div class="list-group-item d-flex justify-content-between"><span class="text-secondary">OS / arch</span><span class="mdb-mono">{{.GOOS}}/{{.GOARCH}} · {{.NumCPU}} CPUs</span></div>
+            <div class="list-group-item d-flex justify-content-between"><span class="text-secondary">Go</span><span class="mdb-mono">{{.GoVersion}}</span></div>
+            <div class="list-group-item d-flex justify-content-between"><span class="text-secondary">dbpantry</span><span class="mdb-mono text-truncate ms-2" title="{{.Version}} {{.Commit}}">{{.Version}} · {{.Commit}}</span></div>
+            <div class="list-group-item d-flex justify-content-between"><span class="text-secondary">Checkout</span><span class="mdb-mono text-truncate ms-2" title="{{.Root}}">{{.Root}}</span></div>
+            <div class="list-group-item d-flex justify-content-between"><span class="text-secondary">Instance home</span><span class="mdb-mono text-truncate ms-2" title="{{.Home}}">{{.Home}}</span></div>
+            <div class="list-group-item d-flex justify-content-between"><span class="text-secondary">Backend</span><span class="mdb-mono">{{.Backend}}</span></div>
+            {{else}}
+            <div class="list-group-item text-secondary">Run <code class="mdb-mono">dbpantry doctor</code> for a live reading.</div>
+            {{end}}
+          </div>
+        </div>
+      </div>
+      <div class="col-lg-6">
+        <div class="card">
+          <div class="card-header"><h3 class="card-title">Container runtime</h3>
+            <div class="card-actions"><a class="btn btn-sm" href="/help">Docs</a></div>
+          </div>
+          <div class="card-body">
+            <p class="text-secondary small">dbpantry uses the D-60 adapters: Docker Engine and Docker-API products (Desktop, OrbStack, Colima, Rancher Desktop, Apple container via socktainer), Podman, and nerdctl/containerd. Detected at runtime — see <code class="mdb-mono">docs/guides/runtimes.md</code>.</p>
+            <p class="mb-0">Refresh details with <code class="mdb-mono">dbpantry doctor</code> or <code class="mdb-mono">dbpantry runtime info</code>. This binary is the launcher for the stack and the dashboard (<code class="mdb-mono">dbpantry dashboard</code> / <code class="mdb-mono">make dashboard</code>).</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{{end}}

@@ -68,6 +68,9 @@ func TestFinishedRunIsAllDone(t *testing.T) {
 			if c.Progress != nil {
 				t.Errorf("%s finished but still shows a bar", c.Label)
 			}
+			if c.Detail != "" {
+				t.Errorf("%s Done leaf still shows redundant status %q", c.Label, c.Detail)
+			}
 		}
 	}
 	if v.Failed() {

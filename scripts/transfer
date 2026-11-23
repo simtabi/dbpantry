@@ -47,7 +47,7 @@ if [[ "$DIRECTION" == "export" ]]; then
     log "exporting $ENGINE database '$DB'"
     scripts/backup --engine "$ENGINE" --db "$DB"
 
-    latest="$(find backups -maxdepth 1 -type f -name "${ENGINE}_${DB}_*" ! -name '*.sha256' | sort | tail -1)"
+    latest="$(find "$(mdb_backup_dir "$MDB_HOME" "${MDB_ENV_FILE:-$MDB_HOME/.env}")" -maxdepth 1 -type f -name "${ENGINE}_${DB}_*" ! -name '*.sha256' | sort | tail -1)"
     [[ -n "$latest" ]] || die "the export produced no file"
 
     if [[ -n "$FILE" ]]; then
@@ -79,14 +79,14 @@ if [[ -n "$FROM_HOST" ]]; then
             # Runs from the cli image so no client needs to be installed on the
             # host doing the migration.
             mdb_ctr run --rm -i --network host \
-                -v "$ROOT/backups:/backups" \
+                -v "$MDB_HOME/backups:/backups" \
                 "$(mdb_image cli dev)" \
                 pg_dump -h "$FROM_HOST" -U "$FROM_USER" -Fc "$DB" > "$FILE" \
                 || die "could not dump from $FROM_HOST"
             ;;
         mysql|mariadb)
             mdb_ctr run --rm -i --network host \
-                -v "$ROOT/backups:/backups" \
+                -v "$MDB_HOME/backups:/backups" \
                 "$(mdb_image cli dev)" \
                 mariadb-dump -h "$FROM_HOST" -u "$FROM_USER" -p \
                     --single-transaction --routines --triggers --events --quick "$DB" > "$FILE" \

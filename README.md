@@ -40,7 +40,8 @@ make up PROFILES=pg,mysql,mongodb,ui
 2. Start only the engines a project needs (profiles are opt-in, one per engine):
    `make up PROFILES=pg,ui`.
 3. Check what is running: `make status`, or in a browser with `make dashboard`
-   (`http://127.0.0.1:8484/`).
+   and open **http://127.0.0.1:8484/** (use that host — other names are refused).
+   Local demo without a sign-in link: `make dashboard AUTH=none`.
 
 Or do all of it in one command: boot the engines, provision a project on each, and
 open the dashboard:
@@ -109,9 +110,11 @@ tag (see [Release](docs/guides/release.md)).
 Read once, to learn how the toolkit works and how to set it up.
 
 - [Installation](docs/guides/installation.md) — prerequisites and first run
-- [Container runtimes](docs/guides/runtimes.md) — Docker, OrbStack, Colima, Rancher Desktop, Podman, nerdctl ([Docker](docs/guides/runtime-docker.md) · [Podman](docs/guides/runtime-podman.md) · [nerdctl](docs/guides/runtime-nerdctl.md))
+- [Container runtimes](docs/guides/runtimes.md) — Docker Desktop, OrbStack, Colima, Rancher Desktop, Podman, nerdctl/containerd, Apple container (`dbpantry doctor`; [Docker](docs/guides/runtime-docker.md) · [Podman](docs/guides/runtime-podman.md) · [nerdctl](docs/guides/runtime-nerdctl.md) · [Apple](docs/guides/runtime-apple-container.md))
 - [Kubernetes](docs/guides/kubernetes.md) — the Helm chart, `MDB_BACKEND=kubernetes`, OrbStack, kind and real clusters
 - [Getting started](docs/guides/getting-started.md) — a new project connected in under a minute (after the first image build)
+- [Dashboard](docs/guides/dashboard.md) — manage the stack from the browser (same commands as the CLI); Databases & users, Add-ons, System
+- [What the statuses mean](docs/guides/statuses.md) — running, stopped, leftover, disabled and every other badge, with what to do next
 - [Configuration](docs/guides/configuration.md) — every `MDB_` variable
 - [Supported versions](docs/guides/versions.md) — which versions are maintained, and running any other
 - [Architecture](docs/guides/architecture.md) — how engines are declared rather than hardcoded
@@ -137,7 +140,9 @@ Looked up to check the contract, the evidence, or a fact.
 - [Specification](docs/reference/spec.md) — the build contract
 - [Acceptance](docs/reference/acceptance.md) — every criterion mapped to the check that proves it
 - [Command line](docs/reference/cli.md) — every `dbpantry` command, the make target it serves, flags and exit codes
+- [Management API](docs/reference/api.md) — the dashboard's HTTP API (jobs, actions, tokens)
 - [Engine manifest](docs/reference/manifest.md) — the `dbpantry` binary: manifest, endpoints, fixtures
+- [Embedded kit](docs/reference/kit.md) — running the binary with no checkout
 - [Image provenance](docs/reference/image-provenance.md) — every image, its publisher, and why
 - [Design](design.md) — pinned versions, capacity table, decision log
 - [Row-level security kit](rls/README.md) — database-enforced multi-tenancy
