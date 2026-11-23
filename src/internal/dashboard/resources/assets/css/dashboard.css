@@ -1369,7 +1369,22 @@ body.mdb-page-busy #mdb-job { z-index: 1055; }
 /* Toolbar + filter bar. */
 .mdb-panel .mdb-job-toolbar { padding: .6rem 1.25rem; gap: .5rem; }
 .mdb-job-views .btn.active { background: var(--tblr-body-color); color: var(--tblr-bg-surface); border-color: var(--tblr-body-color); }
-.mdb-job-console { background: var(--tblr-bg-surface); min-height: 0; }
+/* The output console is dark in both themes, like a terminal and like the
+   Logs view. data-bs-theme="dark" on it re-scopes Tabler's colours; the
+   --mdb-* aliases are redeclared here because .mdb-panel resolved them
+   against the page's theme. */
+.mdb-job-console {
+  --mdb-ok: var(--tblr-green);
+  --mdb-err: var(--tblr-red);
+  --mdb-warn: var(--tblr-yellow);
+  --mdb-info: var(--tblr-azure);
+  --mdb-dim: var(--tblr-secondary);
+  --mdb-rule: var(--tblr-border-color);
+  color-scheme: dark;
+  color: var(--tblr-body-color);
+  background: var(--tblr-bg-surface);
+  min-height: 0;
+}
 .mdb-job-console-bar {
   display: flex;
   flex-wrap: wrap;

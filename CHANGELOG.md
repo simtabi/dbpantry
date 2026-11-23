@@ -64,6 +64,8 @@ waiving them.
   DOM/`#content` reveal (optional full `window` load / fonts via attributes).
 
 ### Changed
+- **The job output console is always dark**, in the light theme too, like the Logs view: it
+  scopes Tabler's dark theme (`data-bs-theme="dark"`) to the console.
 - **Status guide (D-108).** Help has a “What the statuses mean” section, and
   [docs/guides/statuses.md](docs/guides/statuses.md) the same tables: engine (running, stopped,
   leftover, disabled), service health, project, job and Live badge, each with what to do next.
