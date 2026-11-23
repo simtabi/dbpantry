@@ -171,6 +171,64 @@ func TestScreenEventsEndWithTheFailure(t *testing.T) {
 	}
 }
 
+// up's watch refresh rebuilds the container rows from Compose's last word
+// before every frame and once more when the watch stops, so a container
+// Compose still called "Waiting" came back as running after the step failed
+// and the final tree and drawer kept spinning (design.md D-106).
+func TestFailedStepStaysSettledAfterAWatchRefresh(t *testing.T) {
+	var buf bytes.Buffer
+	a := &app{stdout: &buf, environ: func() []string { return nil }, pretty: true, noColor: true, events: true}
+	sc := a.newScreen("up")
+	sc.project = "mdb"
+	stack := sc.add("Start the stack")
+	now := time.Now()
+	sc.update(func() { stack.Start(now) })
+	stop := sc.watch(func() {
+		g := &ui.Node{Label: "Containers", State: ui.Running}
+		g.Add("mdb-pg-1", ui.Done).Status = "Healthy"
+		mysql := g.Add("mdb-mysql-1", ui.Running)
+		mysql.Detail, mysql.Status = "Waiting", "Waiting"
+		mysql.Started = now
+		stack.Children = []*ui.Node{g}
+	})
+	sc.start()
+	sc.update(func() {
+		stack.Finish(ui.Failed, "", now)
+		stack.AbandonRunning(now)
+	})
+	stop()
+	_ = sc.fail("scripts/runtime up", `{"error":true,"message":"container mdb-mysql-1 is unhealthy"}`, exitStatus(1))
+
+	snaps := snapshots(t, buf.String())
+	if len(snaps) == 0 {
+		t.Fatalf("no run snapshot in:\n%s", buf.String())
+	}
+	last := snaps[len(snaps)-1]
+	var walk func([]ui.SnapNode)
+	walk = func(nodes []ui.SnapNode) {
+		for _, n := range nodes {
+			if n.State == "running" || n.State == "pending" {
+				t.Errorf("%s is still %s after its step failed", n.Label, n.State)
+			}
+			walk(n.Children)
+		}
+	}
+	walk(last.Steps)
+	kids := last.Steps[0].Children
+	if len(kids) != 1 || len(kids[0].Children) != 2 {
+		t.Fatalf("containers: %+v", kids)
+	}
+	if g := kids[0]; g.State != "failed" {
+		t.Errorf("the group holding the unhealthy container is failed, got %s", g.State)
+	}
+	if m := kids[0].Children[1]; m.State != "failed" || m.Detail != "Unhealthy" {
+		t.Errorf("the container the error names is the one that failed: %+v", m)
+	}
+	if last.Failure == nil || last.Failure.Service != "mysql" {
+		t.Errorf("the failure points at the unhealthy service's log: %+v", last.Failure)
+	}
+}
+
 func TestScreenWithoutEventsPrintsNoSnapshot(t *testing.T) {
 	var buf bytes.Buffer
 	a := &app{stdout: &buf, environ: func() []string { return nil }, pretty: true, noColor: true}
