@@ -1,6 +1,9 @@
 package dashboard
 
-import "fmt"
+import (
+	"fmt"
+	"hash/fnv"
+)
 
 // State is one status the dashboard shows as a badge: the word on the badge,
 // its colour, what it means and what to do about it. The badges' tooltips,
@@ -99,6 +102,40 @@ var StateGuide = []StateGroup{
 				Next:    "Check the dbpantry dashboard process, then click the badge to retry."},
 		},
 	},
+}
+
+// chipTones is the Tabler palette chips draw from; neighbours in the list
+// differ, so adjacent profiles stay apart.
+var chipTones = []string{"blue", "orange", "teal", "purple", "lime", "pink", "cyan", "yellow", "indigo", "red", "green", "azure"}
+
+// toneFor gives a name a fixed colour: the same profile is the same colour
+// on every page and every refresh.
+func toneFor(name string) string {
+	h := fnv.New32a()
+	_, _ = h.Write([]byte(name))
+	return chipTones[h.Sum32()%uint32(len(chipTones))]
+}
+
+// toneMap colours a list of names: each starts from its own toneFor and
+// moves to the next free colour on a clash, so no two chips in one list match.
+func toneMap(names []string) map[string]string {
+	out := make(map[string]string, len(names))
+	used := map[string]bool{}
+	for _, n := range names {
+		h := fnv.New32a()
+		_, _ = h.Write([]byte(n))
+		start := int(h.Sum32() % uint32(len(chipTones)))
+		tone := chipTones[start]
+		for i := 0; i < len(chipTones); i++ {
+			if c := chipTones[(start+i)%len(chipTones)]; !used[c] {
+				tone = c
+				break
+			}
+		}
+		used[tone] = true
+		out[n] = tone
+	}
+	return out
 }
 
 // stateOf looks a badge up by group and key. An unknown key is drawn plainly

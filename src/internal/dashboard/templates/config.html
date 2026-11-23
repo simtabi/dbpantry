@@ -72,7 +72,7 @@
                     <div class="mdb-inst-value">{{$s.Enabled}} of {{len $s.Endpoints.Endpoints}} engines</div>
                   </div>
                 </header>
-                <div class="mdb-inst-chips" data-sync-target="active-profiles">{{range $s.Endpoints.Profiles}}{{if $s.IsEngine .}}<span class="badge bg-primary-lt" title="Engine">{{.}}</span>{{else}}<span class="badge bg-azure-lt" title="Stack extra">{{.}}</span>{{end}}{{else}}<span class="text-secondary small">No profile selected: Start runs nothing.</span>{{end}}</div>
+                <div class="mdb-inst-chips" data-sync-target="active-profiles">{{$tones := toneMap $s.Endpoints.Profiles}}{{range $s.Endpoints.Profiles}}{{$tone := index $tones .}}<span class="badge bg-{{$tone}}-lt text-{{$tone}}" title="{{if $s.IsEngine .}}Engine{{else}}Stack extra{{end}}">{{.}}</span>{{else}}<span class="text-secondary small">No profile selected: Start runs nothing.</span>{{end}}</div>
                 <dl class="mdb-inst-facts">
                   <dt>Extras</dt><dd>{{with $s.ProfileExtras}}{{join . ", "}}{{else}}<span class="text-secondary">none (ui, ha, poolers)</span>{{end}}</dd>
                   <dt>Key</dt><dd class="mdb-mono">MDB_PROFILES</dd>

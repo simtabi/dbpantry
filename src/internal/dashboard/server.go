@@ -767,6 +767,8 @@ var funcs = template.FuncMap{
 	"stateOf":    stateOf,
 	"stateGuide": func() []StateGroup { return StateGuide },
 	"stateGroup": stateGroup,
+	"toneFor":    toneFor,
+	"toneMap":    toneMap,
 	"join":       strings.Join,
 	"base":       filepath.Base,
 	"path":       filepath.Join,

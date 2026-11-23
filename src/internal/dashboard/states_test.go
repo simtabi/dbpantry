@@ -69,3 +69,21 @@ func TestEveryStateHasAMeaningAndAKnownTone(t *testing.T) {
 		t.Errorf("an orphaned engine reads %q; the badge says leftover", got)
 	}
 }
+
+func TestProfileChipsGetDistinctFixedTones(t *testing.T) {
+	if toneFor("pg") != toneFor("pg") {
+		t.Fatal("a profile's colour must not change between renders")
+	}
+	names := []string{"pg", "mysql", "mariadb", "mongodb", "cassandra", "ui", "ha"}
+	tones := toneMap(names)
+	seen := map[string]bool{}
+	for _, n := range names {
+		seen[tones[n]] = true
+	}
+	if len(seen) != len(names) {
+		t.Errorf("chips in one list share colours: %v", tones)
+	}
+	if toneMap(names)["mysql"] != tones["mysql"] {
+		t.Error("the same list must colour the same way every render")
+	}
+}
