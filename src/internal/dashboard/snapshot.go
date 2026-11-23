@@ -346,6 +346,54 @@ func (s Snapshot) Enabled() int {
 	return n
 }
 
+// Setting is one key of the instance configuration; a key the config list
+// does not carry comes back with only its Key set.
+func (s Snapshot) Setting(key string) ConfigEntry {
+	for _, c := range s.Config {
+		if c.Key == key {
+			return c
+		}
+	}
+	return ConfigEntry{Key: key}
+}
+
+// ConfigFromFile counts the keys the instance .env sets.
+func (s Snapshot) ConfigFromFile() int {
+	n := 0
+	for _, c := range s.Config {
+		if c.Origin == "file" {
+			n++
+		}
+	}
+	return n
+}
+
+// ProfileExtras is the selected profiles that are not engines: stack
+// extras such as the UIs, HA or the poolers.
+func (s Snapshot) ProfileExtras() []string {
+	engines := map[string]bool{}
+	for _, e := range s.Endpoints.Endpoints {
+		engines[e.Engine] = true
+	}
+	var out []string
+	for _, p := range s.Endpoints.Profiles {
+		if !engines[p] {
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
+// IsEngine reports whether a profile names an engine.
+func (s Snapshot) IsEngine(profile string) bool {
+	for _, e := range s.Endpoints.Endpoints {
+		if e.Engine == profile {
+			return true
+		}
+	}
+	return false
+}
+
 // BackupBytes is the size of every backup together.
 func (s Snapshot) BackupBytes() int64 {
 	var n int64

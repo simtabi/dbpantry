@@ -535,9 +535,33 @@
 .mdb-engine-addresses .btn-list .btn-icon {
   --tblr-btn-icon-size: 1rem;
 }
-.mdb-instance-summary .datagrid-title {
-  font-weight: 600;
+/* Configuration › This instance: three equal tiles; buttons sit on one
+   footer line so the rows align across tiles. */
+.mdb-inst {
+  display: flex;
+  flex-direction: column;
+  gap: .75rem;
+  height: 100%;
+  padding: 1rem;
+  background: var(--tblr-bg-surface);
+  border: var(--tblr-border-width) solid var(--tblr-border-color);
+  border-radius: var(--tblr-border-radius-lg, var(--tblr-border-radius));
 }
+.mdb-inst-head { display: flex; align-items: center; gap: .75rem; min-width: 0; }
+.mdb-inst-head .subheader { margin-bottom: .125rem; }
+.mdb-inst-value { font-size: 1rem; font-weight: var(--tblr-font-weight-bold); line-height: 1.3; }
+.mdb-inst-chips { display: flex; flex-wrap: wrap; gap: .25rem; }
+.mdb-inst-facts {
+  display: grid;
+  grid-template-columns: 4.5rem minmax(0, 1fr);
+  gap: .375rem .75rem;
+  margin: 0;
+  font-size: .8125rem;
+}
+.mdb-inst-facts dt { font-weight: var(--tblr-font-weight-medium); color: var(--tblr-secondary); }
+.mdb-inst-facts dd { margin: 0; min-width: 0; }
+.mdb-inst-note { margin: 0; font-size: .8125rem; color: var(--tblr-secondary); }
+.mdb-inst-actions { margin-top: auto; padding-top: .75rem; border-top: var(--tblr-border-width) solid var(--tblr-border-color); }
 /* Grouped nav: one caret beside the label; menus use section headers. */
 .mdb-nav .nav-link.dropdown-toggle::after {
   margin-left: .35rem;

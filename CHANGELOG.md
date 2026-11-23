@@ -64,6 +64,9 @@ waiving them.
   DOM/`#content` reveal (optional full `window` load / fonts via attributes).
 
 ### Changed
+- **Configuration › This instance is three tiles** (env file, profiles, network), each with its
+  icon, main value, the real values behind it (path and keys set in the file; engines on and
+  extras; subnet, project name, backend and publish mode) and its buttons on one aligned footer.
 - **Slide-in panel heads use Tabler components.** The job, status and add-on panels share an
   `offcanvas-header` with a `subheader` kicker and `offcanvas-title`; the job's facts are a
   `datagrid`, its status the same `badge bg-*-lt` + status dot as everywhere else, its result a

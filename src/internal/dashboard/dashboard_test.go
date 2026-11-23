@@ -1045,7 +1045,6 @@ func TestJobConsoleIsAlwaysDark(t *testing.T) {
 	}
 }
 
-
 func TestJobDrawerUsesTablerComponents(t *testing.T) {
 	b := body(t, serve(t, fixture, nil, "/", ""))
 	for _, want := range []string{
@@ -1067,5 +1066,20 @@ func TestJobDrawerUsesTablerComponents(t *testing.T) {
 		if !strings.Contains(string(js), want) {
 			t.Errorf("manage.js lacks %s", want)
 		}
+	}
+}
+
+func TestInstanceSummaryShowsValues(t *testing.T) {
+	cfg := body(t, serve(t, fixture, nil, "/config", ""))
+	for _, want := range []string{
+		`class="row g-3 mdb-inst-row"`, `id="env-file"`, `id="profiles"`, `id="network"`, `id="settings"`,
+		`<dt>Subnet</dt>`, `<dt>Project</dt>`, `<dt>Set here</dt>`, `<dt>Extras</dt>`, `class="mdb-inst-actions btn-list"`,
+	} {
+		if !strings.Contains(cfg, want) {
+			t.Errorf("Configuration › This instance lacks %s", want)
+		}
+	}
+	if strings.Count(cfg, `class="mdb-inst"`) != 3 {
+		t.Error("This instance must be three tiles: env file, profiles, network")
 	}
 }
