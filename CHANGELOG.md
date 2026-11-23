@@ -64,6 +64,10 @@ waiving them.
   DOM/`#content` reveal (optional full `window` load / fonts via attributes).
 
 ### Changed
+- **Slide-in panel heads use Tabler components.** The job, status and add-on panels share an
+  `offcanvas-header` with a `subheader` kicker and `offcanvas-title`; the job's facts are a
+  `datagrid`, its status the same `badge bg-*-lt` + status dot as everywhere else, its result a
+  Tabler `alert` (danger, warning, success) and Steps / Raw log a `nav-segmented`.
 - **The job output console is always dark**, in the light theme too, like the Logs view: it
   scopes Tabler's dark theme (`data-bs-theme="dark"`) to the console.
 - **Status guide (D-108).** Help has a “What the statuses mean” section, and

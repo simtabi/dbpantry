@@ -282,10 +282,10 @@
 
 {{define "status-drawer"}}
 <div class="offcanvas offcanvas-end mdb-status-drawer mdb-panel" tabindex="-1" id="mdb-status" aria-labelledby="mdb-status-title" data-bs-scroll="true">
-  <div class="mdb-panel-head">
+  <div class="offcanvas-header mdb-panel-head">
     <div class="mdb-panel-head-text">
-      <div class="mdb-panel-kicker">Status · live</div>
-      <h2 class="mdb-panel-title text-truncate" id="mdb-status-title">Status as JSON</h2>
+      <div class="subheader mdb-panel-kicker">Status · live</div>
+      <h2 class="offcanvas-title mdb-panel-title text-truncate" id="mdb-status-title">Status as JSON</h2>
       <div class="mdb-panel-note">Snapshot from <code class="mdb-mono">GET /api/v1/status</code> — no passwords.</div>
     </div>
     <button type="button" class="btn-close text-reset" data-bs-dismiss="offcanvas" aria-label="Close" title="Close"></button>
@@ -548,10 +548,10 @@
 
 {{define "job-drawer"}}
 <div class="offcanvas offcanvas-end mdb-job-drawer mdb-panel" tabindex="-1" id="mdb-job" aria-labelledby="mdb-job-title" data-bs-scroll="true">
-  <div class="mdb-panel-head">
+  <div class="offcanvas-header mdb-panel-head">
     <div class="mdb-panel-head-text">
-      <div class="mdb-panel-kicker" data-job-kicker>Run · local</div>
-      <h2 class="mdb-panel-title text-truncate" id="mdb-job-title" data-job-title>Job</h2>
+      <div class="subheader mdb-panel-kicker" data-job-kicker>Run · local</div>
+      <h2 class="offcanvas-title mdb-panel-title text-truncate" id="mdb-job-title" data-job-title>Job</h2>
       <div class="mdb-job-cmd">
         <code class="mdb-mono text-truncate" data-job-command></code>
         <button type="button" class="btn btn-icon btn-sm btn-ghost-secondary" data-copy="[data-job-command]" title="Copy the command" aria-label="Copy the command">{{icon "copy"}}</button>
@@ -563,17 +563,17 @@
     <button type="button" class="btn-close text-reset" data-bs-dismiss="offcanvas" data-job-close aria-label="Close" title="Close the job drawer"></button>
   </div>
   <div class="offcanvas-body d-flex flex-column p-0 min-h-0">
-    <div class="mdb-job-facts" data-job-facts>
-      <div class="mdb-job-fact"><div class="mdb-job-fact-k">Status</div><div class="mdb-job-fact-v" data-job-state></div></div>
-      <div class="mdb-job-fact"><div class="mdb-job-fact-k">Duration</div><div class="mdb-job-fact-v mdb-tabular" data-job-elapsed>—</div></div>
+    <div class="datagrid mdb-job-facts" data-job-facts>
+      <div class="datagrid-item"><div class="datagrid-title">Status</div><div class="datagrid-content" data-job-state></div></div>
+      <div class="datagrid-item"><div class="datagrid-title">Duration</div><div class="datagrid-content mdb-tabular" data-job-elapsed>—</div></div>
     </div>
     <div class="mdb-job-segments d-none" data-job-segments aria-label="Steps"></div>
     <div class="mdb-job-banner d-none" data-job-banner role="status"></div>
     <div class="mdb-job-toolbar">
-      <div class="btn-group mdb-job-views" role="group" aria-label="Output view">
-        <button type="button" class="btn btn-sm active" data-job-view="steps" aria-pressed="true" title="One row per step, updated in place">Steps</button>
-        <button type="button" class="btn btn-sm" data-job-view="raw" aria-pressed="false" title="Every line the command printed">Raw log · <span data-job-lines>0 lines</span></button>
-      </div>
+      <nav class="nav nav-segmented mdb-job-views" role="group" aria-label="Output view">
+        <button type="button" class="nav-link active" data-job-view="steps" aria-pressed="true" title="One row per step, updated in place">{{icon "list"}} Steps</button>
+        <button type="button" class="nav-link" data-job-view="raw" aria-pressed="false" title="Every line the command printed">{{icon "terminal"}} Raw log <span class="badge badge-sm bg-secondary-lt" data-job-lines>0 lines</span></button>
+      </nav>
       <div class="btn-list ms-auto" data-job-controls>
         <button type="button" class="btn btn-sm d-none" data-job-follow-btn aria-pressed="true" title="Keep the newest output in view">{{icon "arrow-down"}} <span data-job-follow-label>Following</span></button>
         <button type="button" class="btn btn-sm d-none" data-job-pause title="Pause output (stalls the command on its next write)">{{icon "stop"}} Pause</button>
