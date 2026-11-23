@@ -128,9 +128,10 @@ func (a *app) jobExec(root, home string) jobs.Exec {
 }
 
 // jobArgv is the flag prefix every dashboard job runs with: --pretty so the
-// drawer gets the tree / progress / ETA view, never a BuildKit wall.
+// drawer gets the tree / progress / ETA view, never a BuildKit wall, and
+// --events so it renders steps from run snapshots rather than parsing text.
 func jobArgv(root, home string, args []string) []string {
-	return append([]string{"--root", root, "--home", home, "--pretty", "--no-input", "--no-color"}, args...)
+	return append([]string{"--root", root, "--home", home, "--pretty", "--events", "--no-input", "--no-color"}, args...)
 }
 
 // serviceLogs streams a service's log through the backend layer, as `dbpantry

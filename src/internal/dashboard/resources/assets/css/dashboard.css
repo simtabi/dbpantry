@@ -206,20 +206,6 @@
   border-bottom: 1px solid var(--tblr-border-color);
   background: var(--tblr-bg-surface);
 }
-.mdb-job-toolbar-main {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: .5rem;
-  min-width: 0;
-}
-.mdb-job-toolbar-actions {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: .5rem;
-  margin-left: auto;
-}
 .mdb-job-locked-pill {
   display: inline-flex;
   align-items: center;
@@ -241,32 +227,6 @@
 @keyframes mdb-job-pulse {
   70% { box-shadow: 0 0 0 .45rem rgba(247, 183, 49, 0); }
   100% { box-shadow: 0 0 0 0 rgba(247, 183, 49, 0); }
-}
-.mdb-job-console {
-  background: var(--tblr-bg-surface-dark, #182433);
-  min-height: 0;
-}
-.mdb-job-console-bar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: .5rem;
-  padding: .4rem .85rem;
-  font-size: .75rem;
-  color: #8b949e;
-  border-bottom: 1px solid #30363d;
-  background: rgba(0, 0, 0, .2);
-}
-.mdb-job-console-title { font-weight: 600; color: #c9d1d9; letter-spacing: .02em; text-transform: uppercase; }
-.mdb-job-progress-wrap {
-  padding: .5rem 1rem .65rem;
-  border-bottom: 1px solid var(--tblr-border-color);
-}
-.mdb-job-progress-meta {
-  display: flex;
-  justify-content: space-between;
-  gap: .5rem;
-  margin-bottom: .35rem;
 }
 .mdb-profile-picker {
   border: 1px solid var(--tblr-border-color);
@@ -398,157 +358,6 @@
 #mdb-action-modal[data-mdb-busy="1"] [data-action-dismiss]:disabled {
   opacity: .35;
   pointer-events: none;
-}
-.mdb-job-drawer .mdb-log {
-  border-radius: var(--tblr-border-radius);
-  min-height: 8rem;
-  flex: 1 1 auto;
-}
-/* Structured job stream: step rows coalesce spinner frames; colours mark state. */
-.mdb-job-viewer {
-  white-space: normal;
-  padding: .85rem 0 1.1rem;
-  display: flex;
-  flex-direction: column;
-  gap: .15rem;
-  line-height: 1.45;
-}
-.mdb-job-line {
-  display: grid;
-  grid-template-columns: 1.35rem minmax(0, 1fr) auto;
-  gap: .45rem .65rem;
-  align-items: center;
-  padding: .4rem 1.1rem;
-  border-left: 3px solid transparent;
-  color: #c9d1d9;
-  animation: mdb-job-line-in .18s ease-out;
-}
-.mdb-job-line:hover { background: rgba(255, 255, 255, .04); }
-.mdb-job-mark {
-  font-weight: 700;
-  line-height: 1.2;
-  text-align: center;
-  width: 1.35rem;
-}
-.mdb-job-msg {
-  white-space: pre-wrap;
-  word-break: break-word;
-  min-width: 0;
-  font-family: var(--tblr-font-monospace);
-  font-size: .8rem;
-  line-height: 1.45;
-}
-.mdb-job-meta {
-  color: #8b949e;
-  font-family: var(--tblr-font-monospace);
-  font-size: .72rem;
-  white-space: nowrap;
-  line-height: 1.45;
-}
-.mdb-job-indent .mdb-job-msg {
-  padding-left: .15rem;
-  color: #a8b3bf;
-}
-.mdb-job-running { border-left-color: #3d8bfd; }
-.mdb-job-running .mdb-job-mark { color: #58a6ff; }
-.mdb-job-done { border-left-color: #3fb950; }
-.mdb-job-done .mdb-job-mark { color: #3fb950; }
-.mdb-job-fail { border-left-color: #f0705a; background: rgba(240, 112, 90, .08); }
-.mdb-job-fail .mdb-job-mark { color: #f0705a; }
-.mdb-job-warn { border-left-color: #e6b350; background: rgba(230, 179, 80, .06); }
-.mdb-job-warn .mdb-job-mark { color: #e6b350; }
-.mdb-job-title {
-  border-left-color: #7fbcc8;
-  color: #e6edf3;
-  font-weight: 600;
-  margin-top: .35rem;
-  padding-top: .55rem;
-  padding-bottom: .55rem;
-}
-.mdb-job-title .mdb-job-mark { color: #7fbcc8; }
-.mdb-job-tree,
-.mdb-job-tree-row { border-left-color: #30363d; }
-.mdb-job-plain { border-left-color: #30363d; }
-/* Group/plain rows with no status glyph: collapse the empty mark column. */
-.mdb-job-tree:not(.mdb-job-running):not(.mdb-job-done):not(.mdb-job-fail):not(.mdb-job-warn),
-.mdb-job-plain {
-  grid-template-columns: minmax(0, 1fr) auto;
-}
-.mdb-job-tree:not(.mdb-job-running):not(.mdb-job-done):not(.mdb-job-fail):not(.mdb-job-warn) .mdb-job-mark,
-.mdb-job-plain .mdb-job-mark {
-  display: none;
-}
-/* Per-row bar for steps that run past 3s or report a compose %. */
-.mdb-job-row-bar {
-  grid-column: 1 / -1;
-  height: .28rem;
-  margin: .15rem 0 .05rem;
-  overflow: hidden;
-  border-radius: var(--tblr-border-radius);
-  background: rgba(88, 166, 255, .15);
-}
-.mdb-job-row-bar > span {
-  display: block;
-  height: 100%;
-  width: 35%;
-  background: #58a6ff;
-  border-radius: inherit;
-  animation: mdb-job-row-bar-indeterminate 1.2s ease-in-out infinite;
-}
-.mdb-job-row-bar.is-known > span {
-  width: 0;
-  animation: none;
-  transition: width .25s ease;
-}
-@keyframes mdb-job-row-bar-indeterminate {
-  0% { transform: translateX(-120%); }
-  100% { transform: translateX(320%); }
-}
-.mdb-job-spin {
-  display: inline-block;
-  width: .7rem;
-  height: .7rem;
-  border: 2px solid rgba(88, 166, 255, .25);
-  border-top-color: #58a6ff;
-  border-radius: 50%;
-  animation: mdb-job-spin .7s linear infinite;
-  vertical-align: -0.05rem;
-}
-@keyframes mdb-job-spin { to { transform: rotate(360deg); } }
-@keyframes mdb-job-line-in {
-  from { opacity: 0; transform: translateY(2px); }
-  to { opacity: 1; transform: none; }
-}
-.mdb-job-progress-wrap { min-height: 2.1rem; }
-/* Indeterminate progress without Tabler's segmented bar. */
-.mdb-job-progress {
-  height: .35rem;
-  overflow: hidden;
-  border-radius: var(--tblr-border-radius);
-  background: var(--tblr-bg-surface-secondary);
-}
-.mdb-job-progress > span {
-  display: block;
-  height: 100%;
-  width: 40%;
-  border-radius: inherit;
-  background: var(--tblr-primary);
-  animation: mdb-job-indeterminate 1.2s ease-in-out infinite;
-}
-.mdb-job-progress.mdb-job-progress-known > span {
-  width: 0;
-  animation: none;
-  transition: width .25s ease;
-}
-.mdb-job-progress-wrap.is-done .mdb-job-progress > span {
-  background: var(--tblr-success, #2fb344);
-}
-.mdb-job-progress-wrap.is-fail .mdb-job-progress > span {
-  background: var(--tblr-danger, #d63939);
-}
-@keyframes mdb-job-indeterminate {
-  0% { transform: translateX(-120%); }
-  100% { transform: translateX(320%); }
 }
 /* Header chips: Live + Status share one control size (Tabler navbar). */
 .mdb-header-chip {
@@ -1341,4 +1150,502 @@ body.mdb-page-busy #mdb-job { z-index: 1055; }
   border-right-color: transparent;
   border-radius: 50%;
   animation: mdb-btn-spin .7s linear infinite;
+}
+
+/* Slide-in panels (job, status, add-ons): flat modernist header — kicker,
+   heavy title, mono command or note. Square corners, one accent. */
+.mdb-tabular { font-variant-numeric: tabular-nums; }
+.mdb-panel {
+  --mdb-ok: var(--tblr-green);
+  --mdb-err: var(--tblr-red);
+  --mdb-warn: var(--tblr-yellow);
+  --mdb-info: var(--tblr-azure);
+  --mdb-dim: var(--tblr-secondary);
+  --mdb-rule: var(--tblr-border-color);
+  --mdb-mono: var(--tblr-font-monospace, ui-monospace, "SF Mono", Menlo, monospace);
+}
+.mdb-panel .offcanvas-body { min-height: 0; }
+.mdb-panel-head {
+  display: flex;
+  align-items: flex-start;
+  gap: .75rem;
+  padding: 1.1rem 1.25rem 1rem;
+  border-bottom: 1px solid var(--mdb-rule);
+  background: var(--tblr-bg-surface);
+}
+.mdb-panel-head-text { flex: 1 1 auto; min-width: 0; }
+.mdb-panel-head .btn-close { margin-top: .15rem; }
+.mdb-panel-kicker {
+  font-size: .6875rem;
+  font-weight: 700;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--mdb-dim);
+  line-height: 1.2;
+  margin-bottom: .3rem;
+}
+.mdb-panel-title {
+  font-size: 1.25rem;
+  font-weight: 800;
+  letter-spacing: -.01em;
+  line-height: 1.25;
+  margin: 0;
+}
+.mdb-panel-note { margin-top: .3rem; font-size: .8125rem; color: var(--mdb-dim); line-height: 1.4; }
+.mdb-job-cmd {
+  display: flex;
+  align-items: center;
+  gap: .25rem;
+  margin-top: .4rem;
+  min-width: 0;
+}
+.mdb-job-cmd code {
+  display: block;
+  min-width: 0;
+  padding: .2rem .5rem;
+  font-size: .8125rem;
+  line-height: 1.4;
+  color: var(--tblr-body-color);
+  background: var(--tblr-bg-surface-secondary);
+  border-radius: 0;
+}
+.mdb-job-cmd code::before { content: "$ "; color: var(--mdb-dim); }
+.mdb-job-cmd code:empty { display: none; }
+.mdb-job-cmd code:empty + .btn { display: none; }
+.mdb-job-locked-pill { margin-top: .15rem; white-space: nowrap; border-radius: 0; }
+
+/* Facts: a row of label/value cells divided by hairlines. */
+.mdb-job-facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(8.5rem, 1fr));
+  border-bottom: 1px solid var(--mdb-rule);
+}
+.mdb-job-fact {
+  padding: .65rem 1.25rem .7rem;
+  border-right: 1px solid var(--mdb-rule);
+  min-width: 0;
+}
+.mdb-job-fact:last-child { border-right: 0; }
+.mdb-job-fact-k {
+  font-size: .6875rem;
+  font-weight: 700;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--mdb-dim);
+  margin-bottom: .2rem;
+}
+.mdb-job-fact-v {
+  font-size: .875rem;
+  font-weight: 600;
+  line-height: 1.35;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mdb-run-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: .35rem;
+  font-size: .75rem;
+  font-weight: 700;
+  line-height: 1.5;
+  padding: 0 .5rem;
+  color: var(--mdb-dim);
+  background: var(--tblr-bg-surface-secondary);
+}
+.mdb-run-tag::before { content: ""; width: .45rem; height: .45rem; background: currentColor; }
+.mdb-run-tag.is-running { color: var(--mdb-info); background: color-mix(in srgb, var(--mdb-info) 12%, transparent); }
+.mdb-run-tag.is-running::before { animation: mdb-run-blink 1s steps(2, start) infinite; }
+.mdb-run-tag.is-done { color: var(--mdb-ok); background: color-mix(in srgb, var(--mdb-ok) 12%, transparent); }
+.mdb-run-tag.is-fail { color: var(--mdb-err); background: color-mix(in srgb, var(--mdb-err) 12%, transparent); }
+.mdb-run-tag.is-warn,
+.mdb-run-tag.is-paused { color: var(--mdb-warn); background: color-mix(in srgb, var(--mdb-warn) 14%, transparent); }
+@keyframes mdb-run-blink { to { visibility: hidden; } }
+
+/* Segments: one bar per top-level step, coloured by state. */
+.mdb-job-segments {
+  display: grid;
+  grid-auto-columns: minmax(0, 1fr);
+  grid-auto-flow: column;
+  gap: .25rem;
+  padding: .75rem 1.25rem .8rem;
+  border-bottom: 1px solid var(--mdb-rule);
+}
+.mdb-job-seg { min-width: 0; }
+.mdb-job-seg-bar {
+  position: relative;
+  height: .25rem;
+  overflow: hidden;
+  background: var(--tblr-bg-surface-secondary);
+}
+.mdb-job-seg.is-done .mdb-job-seg-bar { background: var(--mdb-ok); }
+.mdb-job-seg.is-failed .mdb-job-seg-bar { background: var(--mdb-err); }
+.mdb-job-seg.is-warning .mdb-job-seg-bar { background: var(--mdb-warn); }
+.mdb-job-seg.is-skipped .mdb-job-seg-bar {
+  background: repeating-linear-gradient(90deg, var(--mdb-rule) 0 .35rem, transparent .35rem .55rem);
+}
+.mdb-job-seg-bar > span {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: var(--mdb-info);
+  transition: width .3s ease;
+}
+.mdb-job-seg-bar.is-indeterminate > span {
+  width: 35% !important;
+  animation: mdb-run-sweep 1.2s ease-in-out infinite;
+}
+@keyframes mdb-run-sweep {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(300%); }
+}
+.mdb-job-seg-meta {
+  display: flex;
+  align-items: baseline;
+  gap: .35rem;
+  margin-top: .35rem;
+  font-size: .75rem;
+  line-height: 1.3;
+  min-width: 0;
+}
+.mdb-job-seg-n { font-family: var(--mdb-mono); color: var(--mdb-dim); }
+.mdb-job-seg-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+.mdb-job-seg.is-pending .mdb-job-seg-name,
+.mdb-job-seg.is-skipped .mdb-job-seg-name { color: var(--mdb-dim); font-weight: 500; }
+.mdb-job-seg-dur { font-family: var(--mdb-mono); font-variant-numeric: tabular-nums; color: var(--mdb-dim); }
+
+/* Banner: failure first, success summarised. */
+.mdb-job-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  padding: .9rem 1.25rem 1rem;
+  border-bottom: 1px solid var(--mdb-rule);
+  border-left: .25rem solid transparent;
+}
+.mdb-job-banner.is-fail { border-left-color: var(--mdb-err); background: color-mix(in srgb, var(--mdb-err) 7%, var(--tblr-bg-surface)); }
+.mdb-job-banner.is-fail .mdb-panel-kicker { color: var(--mdb-err); }
+.mdb-job-banner.is-warn { border-left-color: var(--mdb-warn); background: color-mix(in srgb, var(--mdb-warn) 8%, var(--tblr-bg-surface)); }
+.mdb-job-banner.is-done {
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: .25rem .75rem;
+  border-left-color: var(--mdb-ok);
+  background: color-mix(in srgb, var(--mdb-ok) 7%, var(--tblr-bg-surface));
+}
+.mdb-job-banner-text { flex: 1 1 auto; min-width: 0; }
+.mdb-job-banner-title { margin: 0; font-size: 1rem; font-weight: 800; line-height: 1.35; overflow-wrap: anywhere; }
+.mdb-job-banner-body { margin: .3rem 0 0; font-size: .8125rem; line-height: 1.45; color: var(--tblr-body-color); }
+.mdb-job-banner-sub { font-size: .8125rem; color: var(--mdb-dim); }
+.mdb-job-banner-code {
+  display: block;
+  margin-top: .5rem;
+  padding: .35rem .55rem;
+  font-family: var(--mdb-mono);
+  font-size: .75rem;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: var(--mdb-err);
+  background: var(--tblr-bg-surface);
+  border: 1px solid color-mix(in srgb, var(--mdb-err) 25%, transparent);
+  border-radius: 0;
+}
+.mdb-job-banner-actions { display: flex; flex-wrap: wrap; gap: .4rem; flex: 0 0 auto; }
+.mdb-job-banner-actions .btn svg { margin-right: .3rem; }
+
+/* Toolbar + filter bar. */
+.mdb-panel .mdb-job-toolbar { padding: .6rem 1.25rem; gap: .5rem; }
+.mdb-panel .btn,
+.mdb-panel .btn-group > .btn { border-radius: 0; }
+.mdb-job-views .btn.active { background: var(--tblr-body-color); color: var(--tblr-bg-surface); border-color: var(--tblr-body-color); }
+.mdb-job-console { background: var(--tblr-bg-surface); min-height: 0; }
+.mdb-job-console-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: .5rem;
+  padding: .5rem 1.25rem;
+  border-bottom: 1px solid var(--mdb-rule);
+  background: var(--tblr-bg-surface-secondary);
+  font-size: .75rem;
+}
+.mdb-job-console-title {
+  font-size: .6875rem;
+  font-weight: 700;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--mdb-dim);
+}
+.mdb-job-search {
+  display: flex;
+  align-items: center;
+  gap: .35rem;
+  flex: 1 1 12rem;
+  min-width: 9rem;
+  max-width: 20rem;
+  height: 1.75rem;
+  padding: 0 .5rem;
+  margin: 0;
+  color: var(--mdb-dim);
+  background: var(--tblr-bg-surface);
+  border: 1px solid var(--mdb-rule);
+}
+.mdb-job-search:focus-within { border-color: var(--tblr-primary); }
+.mdb-job-search svg { width: .9rem; height: .9rem; flex: 0 0 auto; }
+.mdb-job-search input {
+  flex: 1 1 auto;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--tblr-body-color);
+  font-size: .8125rem;
+}
+.mdb-job-levels { display: inline-flex; border: 1px solid var(--mdb-rule); }
+.mdb-job-levels button,
+.mdb-job-tsbtn {
+  height: 1.625rem;
+  padding: 0 .55rem;
+  font-size: .75rem;
+  font-weight: 600;
+  color: var(--mdb-dim);
+  background: var(--tblr-bg-surface);
+  border: 0;
+}
+.mdb-job-levels button + button { border-left: 1px solid var(--mdb-rule); }
+.mdb-job-tsbtn { border: 1px solid var(--mdb-rule); }
+.mdb-job-levels button.active,
+.mdb-job-tsbtn.active { color: var(--tblr-body-color); background: var(--tblr-bg-surface-secondary); box-shadow: inset 0 -2px 0 var(--tblr-body-color); }
+.mdb-job-levels [data-job-issues] { font-family: var(--mdb-mono); color: var(--mdb-err); }
+.mdb-job-count { margin-left: auto; font-family: var(--mdb-mono); font-variant-numeric: tabular-nums; color: var(--mdb-dim); white-space: nowrap; }
+.mdb-job-count.is-hit { color: var(--tblr-primary); font-weight: 600; }
+.mdb-job-body {
+  position: relative;
+  overflow: auto;
+  min-height: 12rem;
+  padding: .5rem 0 1.25rem;
+  outline: 0;
+}
+.mdb-job-noresults { padding: 2rem 1.25rem; text-align: center; color: var(--mdb-dim); font-size: .8125rem; }
+.mdb-job-linkbtn {
+  padding: 0 .35rem;
+  font-size: .6875rem;
+  font-weight: 600;
+  letter-spacing: .02em;
+  color: var(--tblr-primary);
+  background: transparent;
+  border: 0;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+.mdb-run-hit { padding: 0; color: inherit; background: color-mix(in srgb, var(--mdb-warn) 45%, transparent); }
+
+/* Steps tree. Every row is the same 7-column grid, so meta, bars and
+   durations line up across rows; the tree column stretches so connector
+   lines run edge to edge. */
+.mdb-job-steps { font-size: .8125rem; line-height: 1.4; }
+.mdb-run-context {
+  padding: .35rem 1.25rem .6rem;
+  font-family: var(--mdb-mono);
+  font-size: .75rem;
+  color: var(--mdb-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mdb-run-context b { color: var(--tblr-body-color); }
+.mdb-run-context .is-info { color: var(--mdb-info); }
+.mdb-run-context .is-warn { color: var(--mdb-warn); }
+.mdb-run-emoji { display: inline-block; width: 1.4em; text-align: center; margin-right: .15rem; font-style: normal; }
+.mdb-run-row {
+  display: grid;
+  grid-template-columns: .9rem auto 1rem minmax(0, 1fr) minmax(0, 9rem) 11.5rem 3.75rem;
+  column-gap: .5rem;
+  align-items: stretch;
+  min-height: 1.875rem;
+  padding: 0 1.25rem;
+}
+.mdb-run-row > * { align-self: center; }
+.mdb-run-row > .mdb-run-tree { align-self: stretch; }
+.mdb-run-row:hover { background: var(--tblr-bg-surface-secondary); }
+.mdb-run-row.is-toggle { cursor: pointer; }
+.mdb-run-row.is-toggle:focus-visible { outline: 2px solid var(--tblr-primary); outline-offset: -2px; }
+.mdb-run-row.is-step { min-height: 2.25rem; font-weight: 600; border-top: 1px solid var(--mdb-rule); }
+.mdb-run-context + .mdb-run-row { border-top: 0; }
+.mdb-run-row.is-step.st-failed { background: color-mix(in srgb, var(--mdb-err) 6%, transparent); }
+.mdb-run-row.is-group { font-weight: 600; }
+.mdb-run-row.is-dim { opacity: .5; }
+.mdb-run-chev { display: inline-flex; color: var(--mdb-dim); transition: transform .15s ease; }
+.mdb-run-chev.is-open { transform: rotate(90deg); }
+.mdb-run-chev.is-none { visibility: hidden; }
+.mdb-run-tree { display: flex; }
+.mdb-run-g { position: relative; width: 1.1rem; flex: 0 0 auto; }
+.mdb-run-g::before,
+.mdb-run-g::after { content: ""; position: absolute; background: var(--mdb-rule); }
+.mdb-run-g.g-pipe::before,
+.mdb-run-g.g-tee::before { left: .45rem; top: 0; bottom: 0; width: 1px; }
+.mdb-run-g.g-elbow::before { left: .45rem; top: 0; height: 50%; width: 1px; }
+.mdb-run-g.g-tee::after,
+.mdb-run-g.g-elbow::after { left: .45rem; right: .1rem; top: 50%; height: 1px; }
+.mdb-run-g.g-blank::before,
+.mdb-run-g.g-blank::after,
+.mdb-run-g.g-pipe::after { display: none; }
+.mdb-run-icon { display: inline-flex; align-items: center; justify-content: center; color: var(--mdb-dim); }
+.st-done > .mdb-run-icon { color: var(--mdb-ok); }
+.st-failed > .mdb-run-icon { color: var(--mdb-err); }
+.st-warning > .mdb-run-icon,
+.st-skipped > .mdb-run-icon { color: var(--mdb-warn); }
+.st-running > .mdb-run-icon { color: var(--mdb-info); }
+.mdb-run-spin {
+  width: .75rem;
+  height: .75rem;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: mdb-run-rotate .7s linear infinite;
+}
+@keyframes mdb-run-rotate { to { transform: rotate(360deg); } }
+.mdb-run-name { display: flex; align-items: baseline; gap: .1rem; min-width: 0; overflow: hidden; white-space: nowrap; }
+.mdb-run-label { overflow: hidden; text-overflow: ellipsis; }
+.mdb-run-pre { color: var(--mdb-dim); font-weight: 400; flex: 0 1 auto; overflow: hidden; text-overflow: ellipsis; }
+.mdb-run-sum { margin-left: .6rem; font-weight: 400; color: var(--mdb-dim); overflow: hidden; text-overflow: ellipsis; }
+.st-pending > .mdb-run-name,
+.st-skipped > .mdb-run-name { color: var(--mdb-dim); }
+.mdb-run-meta {
+  display: flex;
+  align-items: center;
+  gap: .35rem;
+  min-width: 0;
+  font-size: .75rem;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.mdb-run-meta > span { overflow: hidden; text-overflow: ellipsis; }
+.mdb-run-meta > i { width: .4rem; height: .4rem; flex: 0 0 auto; background: currentColor; }
+.mdb-run-meta.is-ok { color: var(--mdb-ok); }
+.mdb-run-meta.is-err { color: var(--mdb-err); }
+.mdb-run-meta.is-warn { color: var(--mdb-warn); }
+.mdb-run-meta.is-info { color: var(--mdb-info); }
+.mdb-run-meta.is-dim { color: var(--mdb-dim); }
+.mdb-run-bar { display: flex; align-items: center; gap: .4rem; min-width: 0; font-family: var(--mdb-mono); font-size: .75rem; white-space: nowrap; overflow: hidden; }
+.mdb-run-pbar { display: inline-flex; align-items: center; gap: .4rem; min-width: 0; }
+.mdb-run-textbar { letter-spacing: -.12em; line-height: 1; }
+.mdb-run-textbar .is-fill { color: var(--mdb-info); }
+.mdb-run-textbar .is-rest { color: var(--mdb-rule); }
+.mdb-run-pct { font-variant-numeric: tabular-nums; font-weight: 600; color: var(--mdb-info); }
+.mdb-run-barinfo { color: var(--mdb-dim); overflow: hidden; text-overflow: ellipsis; }
+.mdb-run-cells { letter-spacing: .05em; font-size: .625rem; line-height: 1; }
+.mdb-run-cells .is-rest { color: var(--mdb-rule); }
+.mdb-run-cells.is-ok .is-fill { color: var(--mdb-ok); }
+.mdb-run-cells.is-err .is-fill { color: var(--mdb-err); }
+.mdb-run-cells.is-info .is-fill { color: var(--mdb-info); }
+.mdb-run-cells-label { color: var(--mdb-dim); font-variant-numeric: tabular-nums; }
+.mdb-run-indet {
+  position: relative;
+  display: block;
+  width: 7rem;
+  height: 3px;
+  overflow: hidden;
+  background: var(--mdb-rule);
+}
+.mdb-run-indet::after {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 35%;
+  background: var(--mdb-info);
+  animation: mdb-run-sweep 1.2s ease-in-out infinite;
+}
+.mdb-run-dur {
+  text-align: right;
+  font-family: var(--mdb-mono);
+  font-size: .75rem;
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+  color: var(--mdb-dim);
+  white-space: nowrap;
+}
+.st-running > .mdb-run-dur { color: var(--mdb-info); }
+
+/* Tails: what the failing command said, or Connect / Next on success. */
+.mdb-run-tail { margin: 1rem 1.25rem 0; font-family: var(--mdb-mono); font-size: .75rem; line-height: 1.55; }
+.mdb-run-rule { color: var(--mdb-err); white-space: nowrap; overflow: hidden; margin-bottom: .35rem; }
+.mdb-run-tail-title {
+  font-family: var(--tblr-font-sans-serif);
+  font-size: .6875rem;
+  font-weight: 700;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--mdb-dim);
+  padding-bottom: .35rem;
+  margin-bottom: .35rem;
+  border-bottom: 1px solid var(--mdb-rule);
+}
+.mdb-run-tail-line { display: flex; gap: .4rem; align-items: baseline; padding-left: 1rem; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--tblr-body-color); }
+.mdb-run-tail-line.is-err { padding-left: 0; color: var(--mdb-err); }
+.mdb-run-tail-line svg { flex: 0 0 auto; transform: translateY(2px); }
+.mdb-run-exit { margin-top: .35rem; color: var(--mdb-err); font-weight: 600; }
+.mdb-run-table { width: 100%; border-collapse: collapse; }
+.mdb-run-table th {
+  font-family: var(--tblr-font-sans-serif);
+  font-size: .6875rem;
+  font-weight: 600;
+  text-align: left;
+  color: var(--mdb-dim);
+  padding: .25rem .75rem .25rem 0;
+  white-space: nowrap;
+}
+.mdb-run-table td { padding: .3rem .75rem .3rem 0; border-top: 1px solid var(--mdb-rule); white-space: nowrap; vertical-align: baseline; }
+.mdb-run-table .is-strong { font-weight: 700; }
+.mdb-run-table .is-ok,
+.mdb-run-tail .is-ok { color: var(--mdb-ok); }
+.mdb-run-table .is-dim,
+.mdb-run-tail .is-dim { color: var(--mdb-dim); }
+.mdb-run-next { display: flex; align-items: baseline; gap: .5rem; padding: .2rem 0; min-width: 0; }
+.mdb-run-next-label { flex: 0 0 9rem; font-family: var(--tblr-font-sans-serif); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mdb-run-next-cmd { flex: 1 1 auto; min-width: 0; color: var(--mdb-info); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mdb-run-tail .mdb-job-linkbtn { visibility: hidden; }
+.mdb-run-table tr:hover .mdb-job-linkbtn,
+.mdb-run-next:hover .mdb-job-linkbtn,
+.mdb-run-tail .mdb-job-linkbtn:focus-visible { visibility: visible; }
+
+/* Raw log: line number, time, level, message, duration. */
+.mdb-job-raw { font-family: var(--mdb-mono); font-size: .75rem; line-height: 1.55; }
+.mdb-raw-row {
+  display: grid;
+  grid-template-columns: 3ch 0 3.25rem minmax(0, 1fr) auto;
+  column-gap: .75rem;
+  padding: .05rem 1.25rem;
+  align-items: baseline;
+}
+.mdb-job-raw.has-times .mdb-raw-row { grid-template-columns: 3ch 6.5rem 3.25rem minmax(0, 1fr) auto; }
+.mdb-raw-row:hover { background: var(--tblr-bg-surface-secondary); }
+.mdb-raw-n { text-align: right; color: var(--mdb-dim); opacity: .7; user-select: none; }
+.mdb-raw-t { color: var(--mdb-dim); overflow: hidden; white-space: nowrap; }
+.mdb-raw-lv { font-size: .625rem; font-weight: 700; letter-spacing: .06em; color: var(--mdb-dim); }
+.mdb-raw-msg { white-space: pre-wrap; overflow-wrap: anywhere; }
+.mdb-raw-dur { color: var(--mdb-dim); font-variant-numeric: tabular-nums; }
+.mdb-raw-row.is-ok .mdb-raw-lv { color: var(--mdb-ok); }
+.mdb-raw-row.is-warn .mdb-raw-lv { color: var(--mdb-warn); }
+.mdb-raw-row.is-err { background: color-mix(in srgb, var(--mdb-err) 6%, transparent); }
+.mdb-raw-row.is-err .mdb-raw-lv,
+.mdb-raw-row.is-err .mdb-raw-msg { color: var(--mdb-err); }
+
+@media (max-width: 767.98px) {
+  .mdb-run-row { grid-template-columns: .9rem auto 1rem minmax(0, 1fr) minmax(0, 6rem) 3.5rem; padding: 0 .75rem; }
+  .mdb-run-row > .mdb-run-bar { display: none; }
+  .mdb-job-banner { flex-direction: column; }
+  .mdb-panel-head,
+  .mdb-job-fact,
+  .mdb-job-segments,
+  .mdb-panel .mdb-job-toolbar,
+  .mdb-job-console-bar { padding-left: .75rem; padding-right: .75rem; }
+  .mdb-raw-row { padding: .05rem .75rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mdb-run-spin,
+  .mdb-run-indet::after,
+  .mdb-job-seg-bar.is-indeterminate > span,
+  .mdb-run-tag.is-running::before { animation: none; }
 }

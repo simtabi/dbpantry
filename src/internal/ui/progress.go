@@ -7,14 +7,20 @@ import (
 )
 
 // Bar draws a bar of width cells for fraction (0 to 1) followed by its
-// percentage, e.g. "██████░░░░  62%".
+// percentage, e.g. "██████░░░░  62%". In colour the bar is a thin rule,
+// green over dim ("━━━━━━━━━━"); without colour the two halves need
+// different glyphs to be told apart.
 func (s Style) Bar(fraction float64, width int) string {
 	fraction = clamp(fraction)
 	if width < 1 {
 		width = 1
 	}
 	full := int(fraction*float64(width) + 0.5)
-	bar := s.Green(strings.Repeat("█", full)) + s.Dim(strings.Repeat("░", width-full))
+	fill, rest := "█", "░"
+	if s.Color {
+		fill, rest = "━", "━"
+	}
+	bar := s.Green(strings.Repeat(fill, full)) + s.Dim(strings.Repeat(rest, width-full))
 	return fmt.Sprintf("%s %3d%%", bar, int(fraction*100))
 }
 

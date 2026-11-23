@@ -41,6 +41,10 @@ var kindTitle = map[string]string{
 	"Network": "Networks", "Volume": "Volumes", "Image": "Images", "Container": "Containers", "": "Other",
 }
 
+var kindIcon = map[string]string{
+	"Network": "🌐", "Volume": "💾", "Image": "📦", "Container": "🐳", "": "🔧",
+}
+
 type resource struct {
 	id, parent, kind, name string
 	state                  ui.State
@@ -176,7 +180,7 @@ func (v *View) Nodes() []*ui.Node {
 			continue
 		}
 		sortByOrder(rs)
-		group := &ui.Node{Label: kindTitle[k], State: groupState(rs)}
+		group := &ui.Node{Label: kindTitle[k], Icon: kindIcon[k], State: groupState(rs)}
 		width := 0
 		for _, r := range rs {
 			width = max(width, ui.Width(r.name))
@@ -194,7 +198,7 @@ func (v *View) Nodes() []*ui.Node {
 }
 
 func (v *View) node(r *resource, kids []*resource) *ui.Node {
-	n := &ui.Node{Label: r.name, State: r.state, Detail: detail(r), Started: r.started, Ended: r.ended}
+	n := &ui.Node{Label: r.name, State: r.state, Detail: detail(r), Status: r.text, Started: r.started, Ended: r.ended}
 	switch {
 	case r.state != ui.Running:
 	case r.total > 0:

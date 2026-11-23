@@ -280,11 +280,12 @@
 {{end}}
 
 {{define "status-drawer"}}
-<div class="offcanvas offcanvas-end mdb-status-drawer" tabindex="-1" id="mdb-status" aria-labelledby="mdb-status-title" data-bs-scroll="true">
-  <div class="offcanvas-header border-bottom">
-    <div class="me-2 overflow-hidden">
-      <h2 class="offcanvas-title text-truncate" id="mdb-status-title">Status as JSON</h2>
-      <div class="small text-secondary">Live snapshot from <code class="mdb-mono">GET /api/v1/status</code> — no passwords.</div>
+<div class="offcanvas offcanvas-end mdb-status-drawer mdb-panel" tabindex="-1" id="mdb-status" aria-labelledby="mdb-status-title" data-bs-scroll="true">
+  <div class="mdb-panel-head">
+    <div class="mdb-panel-head-text">
+      <div class="mdb-panel-kicker">Status · live</div>
+      <h2 class="mdb-panel-title text-truncate" id="mdb-status-title">Status as JSON</h2>
+      <div class="mdb-panel-note">Snapshot from <code class="mdb-mono">GET /api/v1/status</code> — no passwords.</div>
     </div>
     <button type="button" class="btn-close text-reset" data-bs-dismiss="offcanvas" aria-label="Close" title="Close"></button>
   </div>
@@ -546,57 +547,68 @@
 {{end}}
 
 {{define "job-drawer"}}
-<div class="offcanvas offcanvas-end mdb-job-drawer" tabindex="-1" id="mdb-job" aria-labelledby="mdb-job-title" data-bs-scroll="true">
-  <div class="offcanvas-header border-bottom py-2">
-    <div class="me-2 overflow-hidden">
-      <h2 class="offcanvas-title text-truncate" id="mdb-job-title" data-job-title>Job</h2>
-      <div class="small text-secondary mdb-mono text-truncate" data-job-command></div>
+<div class="offcanvas offcanvas-end mdb-job-drawer mdb-panel" tabindex="-1" id="mdb-job" aria-labelledby="mdb-job-title" data-bs-scroll="true">
+  <div class="mdb-panel-head">
+    <div class="mdb-panel-head-text">
+      <div class="mdb-panel-kicker" data-job-kicker>Run · local</div>
+      <h2 class="mdb-panel-title text-truncate" id="mdb-job-title" data-job-title>Job</h2>
+      <div class="mdb-job-cmd">
+        <code class="mdb-mono text-truncate" data-job-command></code>
+        <button type="button" class="btn btn-icon btn-sm btn-ghost-secondary" data-copy="[data-job-command]" title="Copy the command" aria-label="Copy the command">{{icon "copy"}}</button>
+      </div>
     </div>
+    <span class="mdb-job-locked-pill d-none" role="status" data-job-locked title="Close is disabled until the command finishes">
+      <span class="mdb-job-locked-dot" aria-hidden="true"></span><span data-job-locked-text>Running — drawer stays open</span>
+    </span>
     <button type="button" class="btn-close text-reset" data-bs-dismiss="offcanvas" data-job-close aria-label="Close" title="Close the job drawer"></button>
   </div>
-  <div class="offcanvas-body d-flex flex-column p-0">
-    <div class="mdb-job-toolbar">
-      <div class="mdb-job-toolbar-main">
-        <span data-job-state></span>
-        <span class="text-secondary small mdb-mono" data-job-elapsed></span>
-        <span class="mdb-job-locked-pill d-none" role="status" data-job-locked title="Close is disabled until the command finishes">
-          <span class="mdb-job-locked-dot" aria-hidden="true"></span><span data-job-locked-text>Running — drawer stays open</span>
-        </span>
-      </div>
-      <div class="mdb-job-toolbar-actions">
-        <div class="btn-list" data-job-controls>
-          <button type="button" class="btn btn-sm d-none" data-job-pause title="Pause output (stalls the command on its next write)">{{icon "stop"}} Pause</button>
-          <button type="button" class="btn btn-sm d-none" data-job-continue title="Resume a paused command">{{icon "play"}} Continue</button>
-          <button type="button" class="btn btn-sm btn-outline-danger d-none" data-job-abort title="Abort this command">{{icon "x"}} Abort</button>
-          <button type="button" class="btn btn-sm d-none" data-job-restart title="Run the same command again">{{icon "refresh"}} Restart</button>
-        </div>
-        <label class="form-check form-switch m-0" title="Keep the log scrolled to the latest line">
-          <input class="form-check-input" type="checkbox" checked data-job-follow>
-          <span class="form-check-label small text-secondary">Follow</span>
-        </label>
-        <button type="button" class="btn btn-sm" data-job-scroll title="Scroll to latest output">{{icon "arrow-down"}}</button>
-        <button type="button" class="btn btn-sm" data-copy="#mdb-job-plain" title="Copy plain output">{{icon "copy"}} <span data-copy-label>Copy</span></button>
-      </div>
+  <div class="offcanvas-body d-flex flex-column p-0 min-h-0">
+    <div class="mdb-job-facts" data-job-facts>
+      <div class="mdb-job-fact"><div class="mdb-job-fact-k">Status</div><div class="mdb-job-fact-v" data-job-state></div></div>
+      <div class="mdb-job-fact"><div class="mdb-job-fact-k">Duration</div><div class="mdb-job-fact-v mdb-tabular" data-job-elapsed>—</div></div>
     </div>
-    <div class="mdb-job-progress-wrap d-none" data-job-progress-wrap>
-      <div class="mdb-job-progress-meta">
-        <span class="small text-truncate" data-job-step>Working…</span>
-        <span class="small mdb-mono text-secondary text-nowrap"><span data-job-pct></span><span data-job-eta class="ms-2"></span></span>
+    <div class="mdb-job-segments d-none" data-job-segments aria-label="Steps"></div>
+    <div class="mdb-job-banner d-none" data-job-banner role="status"></div>
+    <div class="mdb-job-toolbar">
+      <div class="btn-group mdb-job-views" role="group" aria-label="Output view">
+        <button type="button" class="btn btn-sm active" data-job-view="steps" aria-pressed="true" title="One row per step, updated in place">Steps</button>
+        <button type="button" class="btn btn-sm" data-job-view="raw" aria-pressed="false" title="Every line the command printed">Raw log · <span data-job-lines>0 lines</span></button>
       </div>
-      <div class="mdb-job-progress" data-job-progress role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-hidden="true"><span></span></div>
+      <div class="btn-list ms-auto" data-job-controls>
+        <button type="button" class="btn btn-sm d-none" data-job-follow-btn aria-pressed="true" title="Keep the newest output in view">{{icon "arrow-down"}} <span data-job-follow-label>Following</span></button>
+        <button type="button" class="btn btn-sm d-none" data-job-pause title="Pause output (stalls the command on its next write)">{{icon "stop"}} Pause</button>
+        <button type="button" class="btn btn-sm d-none" data-job-continue title="Resume a paused command">{{icon "play"}} Continue</button>
+        <button type="button" class="btn btn-sm btn-outline-danger d-none" data-job-abort title="Abort this command">{{icon "x"}} Stop</button>
+        <button type="button" class="btn btn-sm d-none" data-job-restart title="Run the same command again">{{icon "refresh"}} <span data-job-restart-label>Restart</span></button>
+        <button type="button" class="btn btn-sm" data-copy="#mdb-job-plain" title="Copy the raw log as plain text">{{icon "copy"}} <span data-copy-label>Copy log</span></button>
+      </div>
     </div>
     <div class="mdb-job-console flex-fill d-flex flex-column min-h-0">
       <div class="mdb-job-console-bar">
         <span class="mdb-job-console-title">Output</span>
-        <span class="mdb-job-console-count text-secondary" data-job-lines>0 lines</span>
+        <label class="mdb-job-search" title="Search the output (press / to focus, Esc to clear)">
+          {{icon "search"}}
+          <input type="search" data-job-search placeholder="Search output   /" spellcheck="false" autocomplete="off" aria-label="Search output">
+        </label>
+        <div class="mdb-job-levels" role="group" aria-label="Filter">
+          <button type="button" class="active" data-job-level="all" aria-pressed="true">All</button>
+          <button type="button" data-job-level="issues" aria-pressed="false" title="Failures, warnings and what did not start">Issues <span data-job-issues>0</span></button>
+        </div>
+        <button type="button" class="mdb-job-tsbtn active d-none" data-job-ts aria-pressed="true" title="Show when each line was written">Timestamps</button>
+        <span class="mdb-job-count" data-job-count>0 lines</span>
       </div>
-      <div class="position-relative flex-fill d-flex flex-column min-h-0">
-        <div class="mdb-job-empty text-secondary small d-none" data-job-empty>
+      <div class="mdb-job-body flex-fill" data-job-body tabindex="0" role="log" aria-live="polite" aria-label="Job output">
+        <div class="mdb-job-empty d-none" data-job-empty>
           <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Waiting for output…
         </div>
-        <div class="mdb-log mdb-job-viewer flex-fill m-0" id="mdb-job-output" role="log" tabindex="0" aria-live="polite" aria-label="Job output"></div>
-        <pre id="mdb-job-plain" class="visually-hidden" aria-hidden="true"></pre>
+        <div class="mdb-job-steps" data-job-steps></div>
+        <div class="mdb-job-raw d-none" id="mdb-job-output"></div>
+        <div class="mdb-job-noresults d-none" data-job-noresults>
+          <span data-job-noresults-text>No lines match</span>
+          <button type="button" class="mdb-job-linkbtn" data-job-reset>Clear filters</button>
+        </div>
       </div>
+      <pre id="mdb-job-plain" class="visually-hidden" aria-hidden="true"></pre>
     </div>
   </div>
 </div>

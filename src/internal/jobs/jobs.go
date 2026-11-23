@@ -118,6 +118,14 @@ type job struct {
 	runArgs   []string // unredacted exec argv; never exposed in JSON
 	changed   chan struct{}
 	unpause   chan struct{} // closed to wake a paused writer; replaced on Pause
+	times     []time.Time   // when each line of Lines was written
+}
+
+// addLine appends one output line, stamped with when it arrived. Called
+// with r.mu held.
+func (j *job) addLine(text string, at time.Time) {
+	j.Lines = append(j.Lines, text)
+	j.times = append(j.times, at)
 }
 
 // New returns a runner. audit is the JSON-lines audit log, created with its
@@ -182,7 +190,7 @@ func (r *Runner) run(ctx context.Context, j *job, args []string, exclusive bool)
 		sc.Buffer(make([]byte, 64*1024), 1024*1024)
 		for sc.Scan() {
 			r.mu.Lock()
-			j.Lines = append(j.Lines, sc.Text())
+			j.addLine(sc.Text(), r.now())
 			j.notify()
 			r.mu.Unlock()
 		}
@@ -270,7 +278,7 @@ func (r *Runner) Abort(id string) (Job, error) {
 	}
 	j.aborted = true
 	j.cancel()
-	j.Lines = append(j.Lines, "· aborted by operator")
+	j.addLine("· aborted by operator", r.now())
 	j.notify()
 	return j.snapshot(), nil
 }
@@ -291,7 +299,7 @@ func (r *Runner) Pause(id string) (Job, error) {
 	}
 	j.State = Paused
 	j.unpause = make(chan struct{})
-	j.Lines = append(j.Lines, "· paused — output is held until you continue")
+	j.addLine("· paused — output is held until you continue", r.now())
 	j.notify()
 	return j.snapshot(), nil
 }
@@ -309,7 +317,7 @@ func (r *Runner) Continue(id string) (Job, error) {
 	}
 	j.State = Running
 	close(j.unpause)
-	j.Lines = append(j.Lines, "· continued")
+	j.addLine("· continued", r.now())
 	j.notify()
 	return j.snapshot(), nil
 }
@@ -339,7 +347,7 @@ func (r *Runner) Restart(id, actor string) (Job, error) {
 		cancel()
 		ctx, done := context.WithTimeout(context.Background(), 30*time.Second)
 		defer done()
-		_ = r.Watch(ctx, id, 0, func(int, string) error { return nil }, func(Job) error { return nil })
+		_ = r.Watch(ctx, id, 0, func(int, string, time.Time) error { return nil }, func(Job) error { return nil })
 	}
 	if actor == "" {
 		actor = prevActor
@@ -406,11 +414,12 @@ func (r *Runner) Running() (Job, bool) {
 	return r.jobs[r.running].snapshot(), true
 }
 
-// Watch calls emit with each output line from line `from` on, then with the
+// Watch calls emit with each output line from line `from` on (and when it
+// was written), then with the
 // finished job, and returns when the job ends or ctx is done. It is how the
 // event stream follows a job: lines already written are sent at once, so a
 // stream opened late misses nothing. Paused jobs stay open.
-func (r *Runner) Watch(ctx context.Context, id string, from int, line func(n int, text string) error, end func(Job) error) error {
+func (r *Runner) Watch(ctx context.Context, id string, from int, line func(n int, text string, at time.Time) error, end func(Job) error) error {
 	for {
 		r.mu.Lock()
 		j, ok := r.jobs[id]
@@ -419,12 +428,17 @@ func (r *Runner) Watch(ctx context.Context, id string, from int, line func(n int
 			return ErrNoJob
 		}
 		lines := append([]string(nil), j.Lines[min(from, len(j.Lines)):]...)
+		times := append([]time.Time(nil), j.times[min(from, len(j.times)):]...)
 		active := j.Active()
 		final := j.snapshot()
 		changed := j.changed
 		r.mu.Unlock()
 		for i, l := range lines {
-			if err := line(from+i, l); err != nil {
+			var at time.Time
+			if i < len(times) {
+				at = times[i]
+			}
+			if err := line(from+i, l, at); err != nil {
 				return err
 			}
 		}

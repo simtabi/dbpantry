@@ -32,7 +32,7 @@ func (a *app) projectFormatted(c *cobra.Command, argv, stepEnv []string) (*proje
 		}
 	}
 	sc := a.newScreen("project new", name)
-	node := sc.add("Provision " + name)
+	node := sc.add("Provision "+name, "🧱")
 	sc.start()
 
 	var stdout bytes.Buffer

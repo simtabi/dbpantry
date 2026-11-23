@@ -64,6 +64,14 @@ waiving them.
   DOM/`#content` reveal (optional full `window` load / fonts via attributes).
 
 ### Changed
+- **Job drawer and slide-in panels redesigned (D-106).** The drawer now renders structured run
+  snapshots the CLI prints with `--events` instead of parsing pretty text: status/duration/profile
+  facts, one bar per step, a failure-first banner with Retry and a link to the failing service's log,
+  Steps/Raw views, search (`/`), an Issues filter, timestamps, Follow, foldable steps with drawn
+  tree connectors, and Connect/Next tails. Status and Add-ons drawers share the same header. SSE
+  `line` events carry the time each line was written. CLI: step icons, folded finished steps,
+  durations in one right-aligned column, unfinished work shown as `not started`/`stopped` rather
+  than failed, and failures headlined by the script's own message plus `dbpantry logs <service>`.
 - **Engine page layout rebalanced (D-101).** “Where to connect” is compact label/value rows
   beside Projects (`row-deck`); Add-ons open in a slide-in panel with on/total badge, not a
   tall inline card. Live refresh skips while any offcanvas or modal is open.
