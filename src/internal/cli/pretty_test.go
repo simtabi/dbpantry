@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bytes"
+	"encoding/json"
 	"strings"
 	"testing"
 	"time"
@@ -100,6 +101,97 @@ func TestScreenOffTTYPrintsTitleOnce(t *testing.T) {
 	}
 	if !strings.Contains(out, "Stop the stack") {
 		t.Fatalf("final tree missing the step: %q", out)
+	}
+}
+
+func TestJobArgvAsksForRunSnapshots(t *testing.T) {
+	if got := strings.Join(jobArgv("/kit", "/home", []string{"up"}), " "); !strings.Contains(got, "--events") {
+		t.Fatalf("the job drawer renders run snapshots, so jobs pass --events: %s", got)
+	}
+}
+
+// snapshots returns every run snapshot in out, decoded.
+func snapshots(t *testing.T, out string) []runSnapshot {
+	t.Helper()
+	var got []runSnapshot
+	for _, l := range strings.Split(out, "\n") {
+		if rest, ok := strings.CutPrefix(l, runEventPrefix); ok {
+			var s runSnapshot
+			if err := json.Unmarshal([]byte(rest), &s); err != nil {
+				t.Fatalf("bad snapshot %q: %v", l, err)
+			}
+			got = append(got, s)
+		}
+	}
+	return got
+}
+
+func TestScreenEventsEndWithTheFailure(t *testing.T) {
+	var buf bytes.Buffer
+	a := &app{stdout: &buf, environ: func() []string { return nil }, pretty: true, noColor: true, events: true}
+	sc := a.newScreen("up", "profiles pg,mysql", "publish none", "backend compose")
+	sc.project = "mdb"
+	check := sc.add("Check configuration", "🔍")
+	stack := sc.add("Start the stack", "🚀")
+	sc.start()
+	now := time.Now()
+	sc.update(func() {
+		check.Start(now.Add(-time.Second))
+		check.Finish(ui.Done, "", now)
+		stack.Start(now)
+		g := stack.Add("Containers", ui.Running)
+		g.Add("mdb-mysql-1", ui.Failed).Detail = "Unhealthy"
+		g.Add("mdb-phpmyadmin-1", ui.Running).Detail = "Waiting"
+		stack.Finish(ui.Failed, "", now)
+		stack.AbandonRunning(now)
+	})
+	_ = sc.fail("scripts/runtime up", `{"error":true,"message":"container mdb-mysql-1 is unhealthy"}`, exitStatus(1))
+	out := buf.String()
+	snaps := snapshots(t, out)
+	if len(snaps) == 0 {
+		t.Fatalf("no run snapshot in:\n%s", out)
+	}
+	last := snaps[len(snaps)-1]
+	if last.State != "failed" || last.Failure == nil {
+		t.Fatalf("the last snapshot says how the run ended: %+v", last)
+	}
+	f := last.Failure
+	if f.Headline != "container mdb-mysql-1 is unhealthy" || f.Step != "Start the stack" || f.Index != 2 || f.Exit != 1 || f.Service != "mysql" {
+		t.Errorf("failure, cause first: %+v", f)
+	}
+	if len(last.Facts) != 3 || last.Facts[0] != [2]string{"profiles", "pg,mysql"} {
+		t.Errorf("facts: %v", last.Facts)
+	}
+	kids := last.Steps[1].Children[0].Children
+	if kids[0].State != "failed" || kids[1].State != "skipped" || kids[1].Detail != "not started" {
+		t.Errorf("honest container states: %+v", kids)
+	}
+	if !strings.Contains(out, "✖ container mdb-mysql-1 is unhealthy") || !strings.Contains(out, "exit 1") || !strings.Contains(out, "dbpantry logs mysql") {
+		t.Errorf("the tail leads with the cause and points at the log:\n%s", out)
+	}
+}
+
+func TestScreenWithoutEventsPrintsNoSnapshot(t *testing.T) {
+	var buf bytes.Buffer
+	a := &app{stdout: &buf, environ: func() []string { return nil }, pretty: true, noColor: true}
+	sc := a.newScreen("down")
+	sc.add("Stop the stack").Finish(ui.Done, "", time.Now())
+	sc.start()
+	sc.stop()
+	if strings.Contains(buf.String(), runEventPrefix) {
+		t.Fatalf("snapshots are for the dashboard only:\n%s", buf.String())
+	}
+}
+
+func TestErrorHeadlineReadsTheScriptMessage(t *testing.T) {
+	if got := errorHeadline([]string{"noise", `{"error":true,"message":"port 5432 is taken"}`}, nil); got != "port 5432 is taken" {
+		t.Errorf("headline = %q", got)
+	}
+	if got := errorHeadline([]string{"first", "last line", ""}, nil); got != "last line" {
+		t.Errorf("headline = %q", got)
+	}
+	if got := errorHeadline(nil, exitStatus(3)); got != "exit status 3" {
+		t.Errorf("headline = %q", got)
 	}
 }
 

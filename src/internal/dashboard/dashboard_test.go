@@ -627,39 +627,47 @@ func TestProjectsShowWhatTheEnginesSay(t *testing.T) {
 	}
 }
 
-// Job drawer markFor must not paint "·" on tree/plain rows — that was the
-// dotted left gutter beside ├─ / └─ lines (design.md D-105). Long steps also
-// get a row progress bar and coalesced tree keys for under-the-hood compose work.
-func TestJobDrawerMarkOmitsTreeDot(t *testing.T) {
+// The job drawer renders the structured run snapshots the CLI prints with
+// --events (design.md D-106) instead of parsing pretty text: no middle-dot
+// marks, unfinished nodes settle when the job ends, long work gets a bar after
+// 3s, and the tree uses drawn connectors rather than text glyphs.
+func TestJobDrawerRendersRunSnapshots(t *testing.T) {
 	js, err := os.ReadFile(filepath.Join("resources", "assets", "js", "manage.js")) // #nosec G304 -- fixed path in this package
 	if err != nil {
 		t.Fatal(err)
 	}
 	src := string(js)
 	if strings.Contains(src, "return '·'") || strings.Contains(src, `return "·"`) {
-		t.Error("markFor must not fall through to a middle-dot mark")
+		t.Error("the drawer must not fall through to a middle-dot mark")
 	}
-	if !strings.Contains(src, "durationSeconds") || !strings.Contains(src, "splitTreeLine") || !strings.Contains(src, "settleJobRows") {
-		t.Error("drawer must split tree lines, settle leftover spinners, and parse elapsed")
+	for _, want := range []string{
+		"'::dbpantry-run:: '", // snapshot line prefix, matches cli.runEventPrefix
+		"function settleRun",  // spinners stop when the job ends
+		">= 3000",             // indeterminate bar after 3 seconds
+		"data-run-toggle",     // foldable steps
+		"g-elbow",             // drawn tree connectors
+		"data-job-retry",      // failure banner offers Retry
+	} {
+		if !strings.Contains(src, want) {
+			t.Errorf("manage.js lacks %q", want)
+		}
 	}
-	if !strings.Contains(src, "silent: true") || !strings.Contains(src, "mdb-job-row-bar") {
-		t.Error("ASCII progress bars must update the header silently; long steps keep a row bar")
-	}
-	if !strings.Contains(src, ">= 3") {
-		t.Error("progress bars kick in after 3 seconds without waiting for Stop")
+	for _, gone := range []string{"splitTreeLine", "classifyJobLine", "mdb-job-row-bar"} {
+		if strings.Contains(src, gone) {
+			t.Errorf("manage.js still carries the old text parser (%q)", gone)
+		}
 	}
 	css, err := os.ReadFile(filepath.Join("resources", "assets", "css", "dashboard.css")) // #nosec G304 -- fixed path in this package
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(css), ".mdb-job-tree-row") || !strings.Contains(string(css), ".mdb-job-plain .mdb-job-mark") {
-		t.Error("tree-row / plain CSS must keep status marks without a dotted gutter")
-	}
-	if !strings.Contains(string(css), ".mdb-job-row-bar") {
-		t.Error("CSS must style per-row progress bars for long steps")
-	}
-	if !strings.Contains(string(css), "padding: .85rem 0 1.1rem") {
-		t.Error("job viewer must keep comfortable top/bottom padding")
+	for _, want := range []string{
+		".mdb-panel-head", ".mdb-job-facts", ".mdb-job-segments", ".mdb-job-banner.is-fail",
+		".mdb-run-row", ".mdb-run-g.g-elbow", ".mdb-run-indet", ".mdb-raw-row", "prefers-reduced-motion",
+	} {
+		if !strings.Contains(string(css), want) {
+			t.Errorf("dashboard.css lacks %q", want)
+		}
 	}
 }
 
@@ -730,8 +738,17 @@ func TestConnectSnippetsAreVisible(t *testing.T) {
 	if !strings.Contains(partial, `data-sync="engines-menu"`) {
 		t.Error("partial refresh must carry data-sync=engines-menu for the Stack › By engine menu")
 	}
-	if !strings.Contains(ov, `mdb-job-viewer`) || !strings.Contains(ov, `id="mdb-job-plain"`) || !strings.Contains(ov, `data-job-progress-wrap`) {
-		t.Error("job drawer must use the structured viewer with plain-text copy and progress meta")
+	for _, want := range []string{
+		`id="mdb-job-plain"`, `data-job-facts`, `data-job-segments`, `data-job-banner`,
+		`data-job-view="steps"`, `data-job-view="raw"`, `data-job-search`, `data-job-level="issues"`,
+		`data-job-follow-btn`, `data-job-steps`,
+	} {
+		if !strings.Contains(ov, want) {
+			t.Errorf("job drawer lacks %q", want)
+		}
+	}
+	if strings.Count(ov, `mdb-panel-head`) < 2 {
+		t.Error("job and status drawers must share the slide-in panel header")
 	}
 	withConfig := func(ctx context.Context) (Snapshot, error) {
 		s, err := fixture(ctx)

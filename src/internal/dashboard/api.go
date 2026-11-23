@@ -277,7 +277,8 @@ func startJob(o Options) http.HandlerFunc {
 }
 
 // events is GET /api/v1/jobs/{id}/events: the job as server-sent events,
-// one "line" event per output line (its id is the line's number, so a
+// one "line" event per output line, {"line": text, "t": unix ms} (its id is
+// the line's number, so a
 // reconnecting EventSource resumes with Last-Event-ID) and one "end" event
 // with the finished job.
 func events(o Options) http.HandlerFunc {
@@ -304,8 +305,15 @@ func events(o Options) http.HandlerFunc {
 		h.Set("X-Accel-Buffering", "no")
 		w.WriteHeader(http.StatusOK)
 		fl.Flush()
-		err := o.Runner.Watch(r.Context(), id, from, func(n int, line string) error {
-			b, _ := json.Marshal(sanitizeLine(line))
+		err := o.Runner.Watch(r.Context(), id, from, func(n int, line string, at time.Time) error {
+			ev := struct {
+				Line string `json:"line"`
+				At   int64  `json:"t,omitempty"`
+			}{Line: sanitizeLine(line)}
+			if !at.IsZero() {
+				ev.At = at.UnixMilli()
+			}
+			b, _ := json.Marshal(ev)
 			if _, err := fmt.Fprintf(w, "id: %d\nevent: line\ndata: %s\n\n", n, b); err != nil {
 				return err
 			}

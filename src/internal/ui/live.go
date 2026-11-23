@@ -22,6 +22,10 @@ type Live struct {
 	// summary, when set, is the one-line progress printed off a terminal.
 	// When nil, stream mode stays quiet until Stop (aside from tree lines).
 	summary func(frame int, now time.Time) string
+	// events, when set, is a machine-readable line printed off a terminal
+	// whenever it changes, and once more at Stop (the run snapshot).
+	events    func(now time.Time) string
+	lastEvent string
 
 	mu       sync.Mutex
 	lines    int
@@ -39,6 +43,22 @@ func NewLive(w io.Writer, terminal bool, draw func(frame int, now time.Time) []s
 // SetSummary sets the one-line progress printer used off a terminal.
 func (l *Live) SetSummary(fn func(frame int, now time.Time) string) {
 	l.summary = fn
+}
+
+// SetEvents sets the machine-readable line printed off a terminal whenever
+// it changes. On a terminal it is never called.
+func (l *Live) SetEvents(fn func(now time.Time) string) {
+	l.events = fn
+}
+
+func (l *Live) emitEvent(now time.Time) {
+	if l.events == nil {
+		return
+	}
+	if ev := l.events(now); ev != "" && ev != l.lastEvent {
+		l.lastEvent = ev
+		_, _ = fmt.Fprintln(l.w, ev)
+	}
 }
 
 // Terminal reports whether Live redraws in place.
@@ -167,6 +187,7 @@ func (l *Live) streamTick(last *string) {
 			}
 		}
 	}
+	defer l.emitEvent(now)
 	if l.draw == nil {
 		return
 	}
@@ -221,11 +242,13 @@ func (l *Live) Stop() {
 	}
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	final := l.draw(l.frame, time.Now())
+	now := time.Now()
+	final := l.draw(l.frame, now)
 	if !l.terminal {
 		for _, s := range final {
 			_, _ = fmt.Fprintln(l.w, s)
 		}
+		l.emitEvent(now)
 		return
 	}
 	l.paint(final)

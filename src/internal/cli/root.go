@@ -46,6 +46,9 @@ type app struct {
 	plain bool
 	// pretty draws the formatted output off a terminal too (less -R, a test).
 	pretty bool
+	// events adds a run snapshot line (runEventPrefix + JSON) to --pretty
+	// output off a terminal, which the dashboard's job drawer renders.
+	events bool
 	// profiles is a wrapped command's --profiles, when it has one.
 	profiles string
 	// jsonErrors is set by a command run with -o json: its failure is
@@ -97,6 +100,8 @@ replaces them one bounded context at a time (refactor plan, phase 2).`,
 	pf.BoolVar(&a.plain, "plain", false, "print the scripts' own output, without the step tree, progress bars and tables drawn on a terminal")
 	pf.BoolVar(&a.pretty, "pretty", false, "draw the step tree, progress bars and tables even when output is not a terminal (e.g. into less -R)")
 	root.MarkFlagsMutuallyExclusive("plain", "pretty")
+	pf.BoolVar(&a.events, "events", false, "with --pretty off a terminal, also print run snapshots as JSON lines (used by the dashboard)")
+	_ = pf.MarkHidden("events")
 
 	// The tree, declared one command at a time (TestTreeIsDeclared).
 	root.AddCommand(

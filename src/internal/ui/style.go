@@ -10,13 +10,21 @@ package ui
 import (
 	"regexp"
 	"strings"
-	"unicode/utf8"
 )
 
 // Style decides how text is painted. The zero value paints nothing.
 type Style struct {
 	// Color enables ANSI colour and weight.
 	Color bool
+	// Emoji draws a node's Icon before its label (terminals only: a log or
+	// a dashboard stream stays plain).
+	Emoji bool
+	// AlignTimes right-aligns durations into one column and draws a running
+	// node's progress bar on its own row instead of a line beneath it.
+	AlignTimes bool
+	// FoldDone hides the children of a finished top-level step that has a
+	// summary: what passed folds to "2 files", the active or failed step stays open.
+	FoldDone bool
 }
 
 const (
@@ -71,6 +79,24 @@ const (
 	Skipped
 )
 
+// String names the state the way the run snapshot (and the job drawer) does.
+func (st State) String() string {
+	switch st {
+	case Running:
+		return "running"
+	case Done:
+		return "done"
+	case Warning:
+		return "warning"
+	case Failed:
+		return "failed"
+	case Skipped:
+		return "skipped"
+	default:
+		return "pending"
+	}
+}
+
 var spinner = []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
 
 // Icon is the state's mark; a running state animates with frame.
@@ -94,8 +120,25 @@ func (s Style) Icon(st State, frame int) string {
 var ansi = regexp.MustCompile(`\x1b\[[0-9;]*[A-Za-z]`)
 
 // Width is the number of terminal cells text takes, ignoring colour codes.
-// Every glyph this package draws is one cell wide.
-func Width(text string) int { return utf8.RuneCountInString(ansi.ReplaceAllString(text, "")) }
+// Pictographic emoji (step icons) take two cells; everything else one.
+func Width(text string) int {
+	n := 0
+	for _, r := range ansi.ReplaceAllString(text, "") {
+		n += runeWidth(r)
+	}
+	return n
+}
+
+func runeWidth(r rune) int {
+	switch {
+	case r == 0xFE0F || r == 0x200D:
+		return 0
+	case r >= 0x1F300 && r <= 0x1FAFF, r == 0x26A1:
+		return 2
+	default:
+		return 1
+	}
+}
 
 // Pad right-pads text with spaces to n cells.
 func Pad(text string, n int) string {
@@ -111,9 +154,18 @@ func Truncate(text string, n int) string {
 	if n <= 0 || Width(text) <= n {
 		return text
 	}
-	plain := []rune(ansi.ReplaceAllString(text, ""))
 	if n == 1 {
 		return "…"
 	}
-	return string(plain[:n-1]) + "…"
+	var b strings.Builder
+	used := 0
+	for _, r := range ansi.ReplaceAllString(text, "") {
+		w := runeWidth(r)
+		if used+w > n-1 {
+			break
+		}
+		b.WriteRune(r)
+		used += w
+	}
+	return b.String() + "…"
 }

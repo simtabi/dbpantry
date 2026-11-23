@@ -39,7 +39,7 @@ func waitEnd(t *testing.T, r *Runner, id string) Job {
 	var final Job
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	if err := r.Watch(ctx, id, 0, func(int, string) error { return nil }, func(j Job) error { final = j; return nil }); err != nil {
+	if err := r.Watch(ctx, id, 0, func(int, string, time.Time) error { return nil }, func(j Job) error { final = j; return nil }); err != nil {
 		t.Fatal(err)
 	}
 	return final
@@ -105,7 +105,7 @@ func TestWatchSendsEverythingInOrder(t *testing.T) {
 	go func() { time.Sleep(20 * time.Millisecond); close(release) }()
 	var lines []string
 	var final Job
-	err = r.Watch(context.Background(), j.ID, 0, func(n int, l string) error {
+	err = r.Watch(context.Background(), j.ID, 0, func(n int, l string, _ time.Time) error {
 		if n != len(lines) {
 			t.Errorf("line %d arrived as number %d", len(lines), n)
 		}

@@ -128,8 +128,15 @@ Server-sent events while the job runs:
 
 | Event | Data |
 |---|---|
-| `line` | one output line (JSON string) |
+| `line` | `{"line": "…", "t": 1763900000123}` — one output line and when the job wrote it (unix ms) |
 | `end` | the finished job as JSON |
+
+Dashboard jobs run the CLI with `--events`, so pretty commands (`up`, `down`,
+`project new`) also print `::dbpantry-run:: {json}` lines: a snapshot of the
+whole run tree (steps, groups, resources, states, timings, progress, failure
+cause, Connect rows, Next steps), repeated when it changes and once at the end.
+The drawer renders the newest snapshot and hides those lines from the raw log
+(design.md D-106). Other clients may ignore any line with that prefix.
 
 Scope: read.
 

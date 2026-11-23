@@ -3,9 +3,13 @@ package cli
 import (
 	"bytes"
 	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
+	"regexp"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -48,6 +52,19 @@ func (a *app) style() ui.Style {
 	return ui.Style{Color: !a.noColor && a.env("NO_COLOR") == "" && a.env("TERM") != "dumb"}
 }
 
+// screenStyle is style() plus what only a terminal gets: step icons, one
+// right-aligned duration column, and finished steps folded to their summary
+// (folding applies off a terminal too, so the final tree in a log is short).
+// DBPANTRY_NO_EMOJI turns the icons off.
+func (a *app) screenStyle() ui.Style {
+	st := a.style()
+	tty := a.isTTY() && a.env("TERM") != "dumb"
+	st.Emoji = tty && a.env("DBPANTRY_NO_EMOJI") == ""
+	st.AlignTimes = tty
+	st.FoldDone = true
+	return st
+}
+
 // width is the terminal's width, or 100 when it cannot be read.
 func (a *app) width() int {
 	if f, ok := a.stdout.(*os.File); ok {
@@ -71,13 +88,89 @@ type screen struct {
 	mu sync.Mutex
 	// refresh, when set, updates nodes from a running step before a frame.
 	refresh func()
+	// project is the Compose project, to name a failed container's service.
+	project  string
+	finished bool
+	failure  *runFailure
+	connect  []connectRow
+	next     []nextItem
 }
 
 func (a *app) newScreen(title string, facts ...string) *screen {
-	s := &screen{a: a, st: a.style(), title: title, facts: facts}
+	s := &screen{a: a, st: a.screenStyle(), title: title, facts: facts}
 	s.live = ui.NewLive(a.stdout, a.isTTY(), s.draw)
 	s.live.SetSummary(s.summary)
+	if a.events && !a.isTTY() {
+		s.live.SetEvents(s.event)
+	}
 	return s
+}
+
+// runEventPrefix starts a run snapshot line in --events output. The job
+// drawer renders the latest one and keeps every other line as the raw log.
+const runEventPrefix = "::dbpantry-run:: "
+
+// runSnapshot is the whole run as data: the steps and their resources, how
+// it ended, and what to do next.
+type runSnapshot struct {
+	V       int           `json:"v"`
+	Title   string        `json:"title"`
+	Facts   [][2]string   `json:"facts,omitempty"`
+	State   string        `json:"state"`
+	Steps   []ui.SnapNode `json:"steps"`
+	Failure *runFailure   `json:"failure,omitempty"`
+	Connect []connectRow  `json:"connect,omitempty"`
+	Next    []nextItem    `json:"next,omitempty"`
+}
+
+// runFailure is why a run stopped, cause first.
+type runFailure struct {
+	What     string   `json:"what"`
+	Step     string   `json:"step,omitempty"`
+	Index    int      `json:"index,omitempty"`
+	Headline string   `json:"headline"`
+	Lines    []string `json:"lines,omitempty"`
+	Exit     int      `json:"exit,omitempty"`
+	Service  string   `json:"service,omitempty"`
+}
+
+// event is the run snapshot line, as the steps stand now.
+func (s *screen) event(now time.Time) string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	state := "running"
+	switch {
+	case s.failure != nil:
+		state = "failed"
+	case s.finished:
+		state = "done"
+	}
+	b, err := json.Marshal(runSnapshot{
+		V: 1, Title: s.title, Facts: splitFacts(s.facts), State: state,
+		Steps: ui.Snapshot(s.steps, now), Failure: s.failure, Connect: s.connect, Next: s.next,
+	})
+	if err != nil {
+		return ""
+	}
+	return runEventPrefix + string(b)
+}
+
+// splitFacts reads "profiles pg,mysql" as a named fact; anything else
+// ("data volumes are kept", a project name) is a note with no name.
+func splitFacts(facts []string) [][2]string {
+	var out [][2]string
+	for _, f := range facts {
+		k, v, ok := strings.Cut(f, " ")
+		switch k {
+		case "profiles", "publish", "backend":
+			if ok {
+				out = append(out, [2]string{k, v})
+				continue
+			}
+		}
+		out = append(out, [2]string{"", f})
+	}
+	return out
 }
 
 func (s *screen) draw(frame int, now time.Time) []string {
@@ -88,6 +181,9 @@ func (s *screen) draw(frame int, now time.Time) []string {
 	}
 	w := s.a.width()
 	head := s.st.Bold(s.st.Cyan("dbpantry")) + s.st.Dim(" › ") + s.st.Bold(s.title)
+	if s.st.Emoji {
+		head = "⚡ " + head
+	}
 	if len(s.facts) > 0 {
 		head += "  " + s.st.Dim(strings.Join(s.facts, " · "))
 	}
@@ -144,15 +240,29 @@ func (s *screen) start() {
 // stop draws the final frame and leaves the cursor on the next line (no
 // extra blank — callers add one blank only when another section follows).
 func (s *screen) stop() {
+	s.mu.Lock()
+	s.finished = true
+	s.mu.Unlock()
 	s.live.Stop()
 }
 
-func (s *screen) add(label string) *ui.Node {
+// add appends a step, with the icon a terminal draws before it.
+func (s *screen) add(label string, icon ...string) *ui.Node {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	n := &ui.Node{Label: label, State: ui.Pending}
+	if len(icon) > 0 {
+		n.Icon = icon[0]
+	}
 	s.steps = append(s.steps, n)
 	return n
+}
+
+// setTail records the Connect rows and next steps the final snapshot carries.
+func (s *screen) setTail(connect []connectRow, next []nextItem) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.connect, s.next = connect, next
 }
 
 // update changes nodes while frames are drawn.
@@ -237,17 +347,127 @@ func (s *screen) run(ctx context.Context, root string, env []string, node *ui.No
 	return all.String(), nil
 }
 
-// fail stops the screen and prints what a failed step said.
+// fail stops the screen and prints why, cause first: the headline (a
+// script's {"error":true,"message":…} read out), then everything the failed
+// step said, its exit status, and where to look next.
 func (s *screen) fail(what, output string, err error) error {
-	s.stop()
+	var lines []string
 	if out := strings.TrimRight(output, "\n"); out != "" {
-		_, _ = fmt.Fprintln(s.a.stdout)
-		_, _ = fmt.Fprintln(s.a.stdout, s.st.Rule(what+" said", s.a.width()))
 		for _, l := range strings.Split(out, "\n") {
-			_, _ = fmt.Fprintln(s.a.stdout, sanitize(l))
+			lines = append(lines, sanitize(l))
 		}
 	}
+	f := &runFailure{What: what, Headline: errorHeadline(lines, err), Lines: lines, Exit: exitCodeOf(err)}
+	s.mu.Lock()
+	for i, n := range s.steps {
+		if n.State == ui.Failed {
+			f.Step, f.Index = n.Label, i+1
+			break
+		}
+	}
+	f.Service = failedService(s.steps, s.project)
+	s.failure = f
+	s.mu.Unlock()
+	s.stop()
+
+	st, out := s.st, s.a.stdout
+	_, _ = fmt.Fprintln(out)
+	if !slices.ContainsFunc(lines, func(l string) bool { return strings.TrimSpace(l) == f.Headline }) {
+		// A read-out message leads; a plain last line is not printed twice.
+		_, _ = fmt.Fprintln(out, st.Bold(st.Red("✖ "+f.Headline)))
+	}
+	if len(lines) > 0 {
+		title := what + " said"
+		if st.Emoji {
+			title = "💥 " + title
+		}
+		_, _ = fmt.Fprintln(out, st.Rule(title, s.a.width()))
+		for _, l := range lines {
+			if errorLine(l) {
+				l = st.Red(l)
+			}
+			_, _ = fmt.Fprintln(out, l)
+		}
+	}
+	if f.Exit > 0 {
+		_, _ = fmt.Fprintln(out, st.Dim(fmt.Sprintf("exit %d", f.Exit)))
+	}
+	if f.Service != "" {
+		_, _ = fmt.Fprintln(out, st.Dim("›")+" "+ui.Pad("Read its log", 22)+st.Cyan("dbpantry logs "+f.Service))
+	}
 	return err
+}
+
+// errorHeadline is the one line that says what went wrong: the message of
+// the last {"error":…} object a script printed, else its last line, else
+// the error itself.
+func errorHeadline(lines []string, err error) string {
+	for i := len(lines) - 1; i >= 0; i-- {
+		l := strings.TrimSpace(lines[i])
+		if !strings.HasPrefix(l, "{") {
+			continue
+		}
+		var m struct {
+			Message string `json:"message"`
+		}
+		if json.Unmarshal([]byte(l), &m) == nil && m.Message != "" {
+			return sanitize(m.Message)
+		}
+	}
+	for i := len(lines) - 1; i >= 0; i-- {
+		if l := strings.TrimSpace(lines[i]); l != "" {
+			return l
+		}
+	}
+	if err != nil {
+		return sanitize(err.Error())
+	}
+	return "failed"
+}
+
+func errorLine(l string) bool {
+	t := strings.TrimSpace(l)
+	return strings.HasPrefix(t, `{"error"`) || strings.HasPrefix(strings.ToLower(t), "error")
+}
+
+// exitCodeOf is the failed command's exit status, 1 when it has none.
+func exitCodeOf(err error) int {
+	if err == nil {
+		return 0
+	}
+	var ec interface{ ExitCode() int }
+	if errors.As(err, &ec) && ec.ExitCode() > 0 {
+		return ec.ExitCode()
+	}
+	return 1
+}
+
+var replicaSuffix = regexp.MustCompile(`-\d+$`)
+
+// failedService names the Compose service of the first failed container
+// (<project>-<service>-<n>), so the failure can point at its log.
+func failedService(steps []*ui.Node, project string) string {
+	var walk func(nodes []*ui.Node, parent string) string
+	walk = func(nodes []*ui.Node, parent string) string {
+		for _, n := range nodes {
+			if len(n.Children) > 0 {
+				if svc := walk(n.Children, n.Label); svc != "" {
+					return svc
+				}
+				continue
+			}
+			if n.State != ui.Failed || parent != "Containers" {
+				continue
+			}
+			name := replicaSuffix.ReplaceAllString(strings.TrimSpace(n.Label), "")
+			if project != "" {
+				name = strings.TrimPrefix(name, project+"-")
+			}
+			return name
+		}
+		return ""
+	}
+	return walk(steps, "")
 }
 
 // lineWriter calls fn once per complete line written to it.
