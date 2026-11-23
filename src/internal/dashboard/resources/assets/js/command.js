@@ -1,4 +1,4 @@
-// Command palette: ⌘K / Ctrl+K search over pages and actions; g-then-letter jumps.
+// Command palette: ⌘K / Ctrl+K or / search over pages and actions; g-then-letter jumps.
 (function () {
   'use strict';
 
@@ -41,10 +41,14 @@
     return modalEl.classList.contains('show');
   }
 
+  var isMac = /mac|iphone|ipad/i.test((navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || '');
+  document.querySelectorAll('[data-cmd-shortcut]').forEach(function (k) { k.textContent = isMac ? '⌘K' : 'Ctrl K'; });
+
+  // A failed fetch is not cached, so the next open tries again.
   function loadActions() {
     if (actionsCache) { return Promise.resolve(actionsCache); }
     return fetch('/api/v1/actions', { credentials: 'same-origin', cache: 'no-store' })
-      .then(function (r) { return r.ok ? r.json() : []; })
+      .then(function (r) { if (!r.ok) { throw new Error(String(r.status)); } return r.json(); })
       .then(function (rows) {
         actionsCache = (rows || []).map(function (a) {
           return {
@@ -58,7 +62,7 @@
         });
         return actionsCache;
       })
-      .catch(function () { actionsCache = []; return actionsCache; });
+      .catch(function () { return []; });
   }
 
   function match(item, q) {
@@ -164,16 +168,17 @@
     }
   }
 
+  // Pages show at once; actions join the list when they arrive.
   function open() {
-    loadActions().then(function () {
-      qEl.value = '';
-      active = 0;
-      render();
-      var m = modal();
-      if (m) { m.show(); }
-      setTimeout(function () { qEl.focus(); }, 50);
-    });
+    qEl.value = '';
+    active = 0;
+    render();
+    var m = modal();
+    if (m) { m.show(); }
+    loadActions().then(function () { if (isOpen()) { render(); } });
   }
+
+  modalEl.addEventListener('shown.bs.modal', function () { qEl.focus(); });
 
   function close() {
     var m = modal();
@@ -229,6 +234,11 @@
       return;
     }
     if (typing || e.metaKey || e.ctrlKey || e.altKey) { return; }
+    if (e.key === '/' && !isOpen() && !document.querySelector('.modal.show, .offcanvas.show')) {
+      e.preventDefault();
+      open();
+      return;
+    }
     if (gPending) {
       var second = (e.key || '').toLowerCase();
       clearTimeout(gPending.timer);

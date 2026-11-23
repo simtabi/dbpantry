@@ -81,6 +81,7 @@ type Engine struct {
 	AuthMethod       string      `json:"auth_method"`
 	AuthOffUpstream  bool        `json:"auth_off_by_default_upstream"`
 	TLSAlways        bool        `json:"tls_always"`
+	RotateSecrets    bool        `json:"rotate_secrets"`
 	Pooling          string      `json:"pooling"`
 	PoolingRationale string      `json:"pooling_rationale,omitempty"`
 	Pooler           *Pooler     `json:"pooler,omitempty"`
@@ -216,6 +217,7 @@ func fromDescriptor(d Descriptor, root string, bases map[string]map[string]strin
 		AuthMethod:       d.Value("MDB_ENGINE_AUTH_METHOD"),
 		AuthOffUpstream:  boolean("MDB_ENGINE_AUTH_OFF_BY_DEFAULT_UPSTREAM"),
 		TLSAlways:        boolean("MDB_ENGINE_TLS_ALWAYS"),
+		RotateSecrets:    boolean("MDB_ENGINE_ROTATE_SECRETS"),
 		Pooling:          d.Value("MDB_ENGINE_POOLING"),
 		PoolingRationale: d.Value("MDB_ENGINE_POOLING_RATIONALE"),
 		Driver:           d.Value("MDB_ENGINE_DRIVER"),

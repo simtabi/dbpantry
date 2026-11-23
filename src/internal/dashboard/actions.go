@@ -267,9 +267,12 @@ var Actions = []Action{
 		Command: func(Values) []string { return []string{"certs", "renew"} },
 	},
 	{
-		Name: "secrets.rotate", Title: "Rotate every password", Area: "security", Scope: ScopeAdmin, Destructive: true,
-		ConfirmHint:  "ROTATE",
-		Command:      func(Values) []string { return []string{"secrets", "rotate"} },
+		Name: "secrets.rotate", Title: "Rotate passwords", Area: "security", Scope: ScopeAdmin, Destructive: true,
+		Params:      []Param{{Name: "engine", Label: "Engine (empty: every running engine)", Kind: KindEngine}},
+		ConfirmHint: "ROTATE",
+		Command: func(v Values) []string {
+			return optional([]string{"secrets", "rotate"}, "--engine", v["engine"])
+		},
 		ConfirmValue: func(Values, func(string) string) string { return "ROTATE" },
 	},
 

@@ -149,6 +149,8 @@ func TestCommandsRunTheirScripts(t *testing.T) {
 		{[]string{"certs", "init"}, []string{"scripts/certs " + p}},
 		{[]string{"certs", "renew"}, []string{"scripts/certs-renew " + p}},
 		{[]string{"secrets", "rotate", "--yes"}, []string{"scripts/rotate-secrets --yes" + p, "scripts/runtime compose restart mysql-pooler" + p}},
+		{[]string{"secrets", "rotate", "--yes", "--engine", "pg"}, []string{"scripts/rotate-secrets --yes --engine pg" + p}},
+		{[]string{"secrets", "rotate", "--yes", "--engine", "mysql"}, []string{"scripts/rotate-secrets --yes --engine mysql" + p, "scripts/runtime compose restart mysql-pooler" + p}},
 		{[]string{"images", "build"}, []string{"scripts/build " + p}},
 		{[]string{"images", "build", "pg", "mysql"}, []string{"scripts/build pg mysql" + p}},
 		{[]string{"images", "scan", "pg"}, []string{"scripts/scan pg" + p}},

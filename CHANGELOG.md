@@ -64,6 +64,15 @@ waiving them.
   DOM/`#content` reveal (optional full `window` load / fonts via attributes).
 
 ### Changed
+- **One button size and radius, per-engine password rotation, quieter engine page (D-107).**
+  Every `.btn` and `.btn-sm` is the same 2rem control with the same corner radius as the header
+  chips and the search trigger; only `.btn-lg` is bigger, and the drawers no longer square their
+  buttons. Icon avatars are circles. The engine page shows Start once (the header), with a one-line
+  status strip instead of a second title, status and Start. The Principals card rotates this
+  engine's passwords or every engine's: `secrets rotate --engine pg|mysql|mariadb` and the
+  `secrets.rotate` action's optional `engine`. The header search shows Ctrl K off macOS, opens at
+  once (actions join when loaded, and a failed load is retried), focuses on open, answers `/`, and
+  drops the tooltip that repeated its label.
 - **Job drawer and slide-in panels redesigned (D-106).** The drawer now renders structured run
   snapshots the CLI prints with `--events` instead of parsing pretty text: status/duration/profile
   facts, one bar per step, a failure-first banner with Retry and a link to the failing service's log,
