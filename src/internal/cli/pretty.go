@@ -178,6 +178,7 @@ func (s *screen) draw(frame int, now time.Time) []string {
 	defer s.mu.Unlock()
 	if s.refresh != nil {
 		s.refresh()
+		s.settleFinished()
 	}
 	w := s.a.width()
 	head := s.st.Bold(s.st.Cyan("dbpantry")) + s.st.Dim(" › ") + s.st.Bold(s.title)
@@ -203,6 +204,7 @@ func (s *screen) summary(frame int, now time.Time) string {
 	defer s.mu.Unlock()
 	if s.refresh != nil {
 		s.refresh()
+		s.settleFinished()
 	}
 	for _, n := range s.steps {
 		if n.State != ui.Running {
@@ -281,7 +283,25 @@ func (s *screen) watch(refresh func()) func() {
 		s.mu.Lock()
 		s.refresh()
 		s.refresh = nil
+		s.settleFinished()
 		s.mu.Unlock()
+	}
+}
+
+// settleFinished stops anything still running under a step that has ended.
+// A watch refresh rebuilds children from what the runtime last said, which
+// can be "Waiting" for a container the failed step will never start. Call
+// with s.mu held.
+func (s *screen) settleFinished() {
+	for _, n := range s.steps {
+		if n.State == ui.Running || n.State == ui.Pending {
+			continue
+		}
+		end := n.Ended
+		if end.IsZero() {
+			end = time.Now()
+		}
+		n.AbandonRunning(end)
 	}
 }
 
@@ -365,6 +385,8 @@ func (s *screen) fail(what, output string, err error) error {
 			break
 		}
 	}
+	s.settleFinished()
+	blameContainer(s.steps, f.Headline)
 	f.Service = failedService(s.steps, s.project)
 	s.failure = f
 	s.mu.Unlock()
@@ -443,6 +465,61 @@ func exitCodeOf(err error) int {
 }
 
 var replicaSuffix = regexp.MustCompile(`-\d+$`)
+
+// blameContainer marks the container a failure headline names ("container
+// mdb-mysql-1 is unhealthy") as the one that failed, with its group, so the
+// tree and the drawer show the culprit rather than a container that was
+// merely never started.
+func blameContainer(steps []*ui.Node, headline string) {
+	detail := "Failed"
+	if strings.Contains(strings.ToLower(headline), "unhealthy") {
+		detail = "Unhealthy"
+	}
+	var walk func(nodes []*ui.Node, parent *ui.Node) bool
+	walk = func(nodes []*ui.Node, parent *ui.Node) bool {
+		for _, n := range nodes {
+			if len(n.Children) > 0 {
+				if walk(n.Children, n) {
+					return true
+				}
+				continue
+			}
+			if parent == nil || parent.Label != "Containers" || n.State == ui.Failed || !namesToken(headline, strings.TrimSpace(n.Label)) {
+				continue
+			}
+			n.State, n.Detail = ui.Failed, detail
+			if n.Ended.IsZero() {
+				n.Ended = time.Now()
+			}
+			parent.State = ui.Failed
+			return true
+		}
+		return false
+	}
+	walk(steps, nil)
+}
+
+// namesToken reports whether s contains name as a whole word, so mdb-pg-1
+// does not match inside mdb-pg-10.
+func namesToken(s, name string) bool {
+	if name == "" {
+		return false
+	}
+	word := func(b byte) bool {
+		return b == '-' || b == '_' || b >= '0' && b <= '9' || b >= 'a' && b <= 'z' || b >= 'A' && b <= 'Z'
+	}
+	for i := 0; ; {
+		j := strings.Index(s[i:], name)
+		if j < 0 {
+			return false
+		}
+		at, end := i+j, i+j+len(name)
+		if (at == 0 || !word(s[at-1])) && (end == len(s) || !word(s[end])) {
+			return true
+		}
+		i = at + 1
+	}
+}
 
 // failedService names the Compose service of the first failed container
 // (<project>-<service>-<n>), so the failure can point at its log.

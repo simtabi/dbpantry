@@ -814,7 +814,7 @@
   // settleRun closes a snapshot the command never finished (killed, aborted):
   // nothing may keep spinning once the job is over.
   function settleRun(failed) {
-    if (!run || run.state !== 'running') { return; }
+    if (!run) { return; }
     var now = Date.now();
     (function walk(nodes) {
       (nodes || []).forEach(function (n) {
@@ -827,7 +827,7 @@
         }
       });
     })(run.steps);
-    run.state = failed ? 'failed' : 'done';
+    if (run.state === 'running') { run.state = failed ? 'failed' : 'done'; }
   }
 
   function renderFacts() {
@@ -1397,7 +1397,7 @@
     show('[data-job-pause]', state === 'running');
     show('[data-job-continue]', state === 'paused');
     show('[data-job-abort]', active);
-    show('[data-job-restart]', !active && !!currentJobId);
+    show('[data-job-restart]', !active && !!currentJobId && state !== 'failed');
     var rl = drawerEl.querySelector('[data-job-restart-label]');
     if (rl) { rl.textContent = state === 'failed' ? 'Retry' : 'Restart'; }
     var lockedText = drawerEl.querySelector('[data-job-locked-text]');
