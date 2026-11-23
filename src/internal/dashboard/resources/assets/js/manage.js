@@ -82,6 +82,12 @@
     if (window.mdbSetLivePaused) { window.mdbSetLivePaused(false); }
   }
 
+  // setBusyLabel renames the busy bar without taking another hold on it.
+  function setBusyLabel(label) {
+    var lab = document.querySelector('#mdb-busy-bar [data-busy-label]');
+    if (lab && busyDepth > 0) { lab.textContent = label; }
+  }
+
   function setButtonBusy(btn, on, label) {
     if (!btn) { return; }
     if (on) {
@@ -583,7 +589,7 @@
         });
       };
       if (missing.length === 0 && !needSoft && !needTyped) {
-        setPageBusy(true, 'Starting ' + a.title + '…');
+        setBusyLabel('Starting ' + a.title + '…');
         if (trigger) { setButtonBusy(trigger, true, 'Starting…'); }
         submit({}, '').then(function () {
           setPageBusy(false);
@@ -686,7 +692,8 @@
     failed: '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
     skipped: '<path d="M6 12h12"/>',
     warning: '<path d="M12 4 2.5 20h19z"/><path d="M12 10v4"/><path d="M12 17v.01"/>',
-    pending: '<circle cx="12" cy="12" r="7"/>'
+    pending: '<circle cx="12" cy="12" r="7"/>',
+    note: '<circle cx="12" cy="12" r="2" fill="currentColor"/>'
   };
   var currentJob = null;
   var currentJobId = null;
@@ -787,11 +794,43 @@
     return !!currentJob && (currentJob.state === 'running' || currentJob.state === 'paused');
   }
 
-  function effectiveView() {
-    if (pickedView) { return pickedView === 'steps' && !run ? 'raw' : pickedView; }
-    if (run) { return 'steps'; }
-    return rawLines.length ? 'raw' : 'steps';
+  // Steps is the default view for every job; Raw log only when picked.
+  function effectiveView() { return pickedView || 'steps'; }
+
+  // fallbackRun is the Steps view of a command that prints no run snapshot
+  // (restart, config validate, …): one step for the job, its output lines as
+  // rows, so Steps never sits empty or disabled.
+  function fallbackRun() {
+    var job = currentJob || {};
+    var state = { running: 'running', paused: 'running', succeeded: 'done', failed: 'failed', cancelled: 'skipped' }[job.state] || 'running';
+    var started = job.started ? Date.parse(job.started) : (rawLines[0] && rawLines[0].t) || Date.now();
+    var kids = [];
+    rawLines.forEach(function (l) {
+      var text = String(l.text || '').replace(/\s+$/, '');
+      if (!text.trim()) { return; }
+      var level = rawLevel(text);
+      kids.push({
+        label: text.replace(/^\s*[✔✖·…⚠]\s?/, ''),
+        state: { err: 'failed', warn: 'warning', ok: 'done' }[level] || 'note',
+        line: true
+      });
+    });
+    return {
+      title: (job.args || []).join(' '),
+      facts: [],
+      state: state === 'running' ? 'running' : state,
+      steps: [{
+        label: jobTitle(job),
+        state: state,
+        detail: state === 'skipped' ? 'stopped' : '',
+        started: started,
+        ended: job.ended ? Date.parse(job.ended) : null,
+        children: kids
+      }]
+    };
   }
+
+  function viewRun() { return run || fallbackRun(); }
 
   // runProgress is the whole run's progress: finished steps plus the
   // running step's own fraction, and that step's estimate of time left.
@@ -966,7 +1005,7 @@
       }
       var acts = el('div', { 'class': 'btn-list mt-2' });
       var retry = el('button', { type: 'button', 'class': 'btn btn-primary btn-sm', 'data-job-retry': '', title: 'Run the same command again' });
-      retry.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg> Retry';
+      retry.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg> Retry';
       acts.appendChild(retry);
       if (f && f.service) {
         var logs = el('a', { 'class': 'btn btn-sm', href: '/services/' + encodeURIComponent(f.service) + '/logs', title: 'Open the ' + f.service + ' log' });
@@ -1016,10 +1055,10 @@
 
   // flatRows lays the snapshot out as rows: steps, then (when open) their
   // groups and resources, each knowing its ancestors for filtering.
-  function flatRows() {
+  function flatRows(r) {
     var rows = [];
     var filt = filtering();
-    (run.steps || []).forEach(function (st, i) {
+    (r.steps || []).forEach(function (st, i) {
       var key = i + ':' + st.label;
       var has = !!(st.children && st.children.length);
       var defOpen = st.state === 'running' || st.state === 'failed' || st.state === 'warning' || !st.detail;
@@ -1040,11 +1079,13 @@
     return rows;
   }
 
+  // issueTotal counts each problem once: a parent that failed because a
+  // child did is the same issue as that child.
   function issueTotal(nodes) {
     var n = 0;
     (nodes || []).forEach(function (x) {
-      if (isIssue(x.state)) { n++; }
-      n += issueTotal(x.children);
+      var below = issueTotal(x.children);
+      n += below || (isIssue(x.state) ? 1 : 0);
     });
     return n;
   }
@@ -1056,7 +1097,7 @@
   function metaText(row) {
     var n = row.node;
     if (row.kind === 'step') { return ''; }
-    if (row.kind === 'group') { return ''; }
+    if (row.kind === 'group' || n.line) { return ''; }
     if (n.state === 'skipped') { return (n.detail || 'not started').replace(/^./, function (c) { return c.toUpperCase(); }); }
     if (n.state === 'done') { return n.status || n.detail || 'Done'; }
     if (n.state === 'failed') { return n.detail || n.status || 'Failed'; }
@@ -1113,7 +1154,7 @@
 
   function renderRow(row, dim, now) {
     var n = row.node;
-    var cls = 'mdb-run-row is-' + row.kind + ' st-' + n.state + (dim ? ' is-dim' : '') + (row.has ? ' is-toggle' : '');
+    var cls = 'mdb-run-row is-' + row.kind + ' st-' + n.state + (dim ? ' is-dim' : '') + (row.has ? ' is-toggle' : '') + (n.line ? ' is-line' : '');
     var r = el('div', { 'class': cls });
     if (row.has) {
       r.setAttribute('role', 'button');
@@ -1166,13 +1207,13 @@
     return r;
   }
 
-  function renderContext(box) {
+  function renderContext(box, r) {
     var line = el('div', { 'class': 'mdb-run-context' });
     line.appendChild(el('span', { 'class': 'mdb-run-emoji', 'aria-hidden': 'true' }, '⚡'));
     line.appendChild(el('b', null, 'dbpantry'));
     line.appendChild(document.createTextNode(' › '));
-    line.appendChild(el('span', { 'class': 'is-info' }, run.title || ''));
-    (run.facts || []).forEach(function (f, i) {
+    line.appendChild(el('span', { 'class': 'is-info' }, r.title || ''));
+    (r.facts || []).forEach(function (f, i) {
       line.appendChild(document.createTextNode(i === 0 ? '  ' : ' · '));
       if (f[0]) { line.appendChild(document.createTextNode(f[0] + ' ')); }
       line.appendChild(el('span', { 'class': f[0] === 'publish' ? 'is-warn' : 'is-info' }, f[1]));
@@ -1268,9 +1309,9 @@
     var box = jobEl('[data-job-steps]');
     if (!box) { return { hits: 0, issues: 0 }; }
     box.textContent = '';
-    if (!run) { return { hits: 0, issues: 0 }; }
-    renderContext(box);
-    var rows = flatRows();
+    var r = viewRun();
+    renderContext(box, r);
+    var rows = flatRows(r);
     var filt = filtering();
     var keep = {};
     var hits = 0;
@@ -1286,11 +1327,11 @@
     rows.forEach(function (row, i) {
       if (keep[i]) { box.appendChild(renderRow(row, filt && !row.hit, now)); }
     });
-    if (!filt) {
+    if (!filt && run) {
       if (run.failure) { renderFailTail(box); }
       if (run.state === 'done') { renderOkTail(box); }
     }
-    return { hits: hits, issues: issueTotal(run.steps) };
+    return { hits: hits, issues: issueTotal(r.steps) };
   }
 
   var RAW_DUR = /\s+(\d+(?:\.\d+)?(?:ms|s)|\d+m\s?\d{2}s|\d+h\s?\d{2}m)$/;
@@ -1352,14 +1393,17 @@
       b.classList.toggle('active', on);
       b.setAttribute('aria-pressed', on ? 'true' : 'false');
       if (b.getAttribute('data-job-view') === 'steps') {
-        b.disabled = !run;
-        b.title = run ? 'One row per step, updated in place' : 'This command prints no step view; see the raw log';
+        b.disabled = false;
+        b.title = run ? 'One row per step, updated in place' : 'The job and each line it printed, as rows';
       }
     });
     var lines = jobEl('[data-job-lines]');
     if (lines) { lines.textContent = rawLines.length + (rawLines.length === 1 ? ' line' : ' lines'); }
     var issuesEl = jobEl('[data-job-issues]');
-    if (issuesEl) { issuesEl.textContent = String(res.issues); }
+    if (issuesEl) {
+      issuesEl.textContent = String(res.issues);
+      issuesEl.classList.toggle('is-some', res.issues > 0);
+    }
     var ts = jobEl('[data-job-ts]');
     if (ts) {
       ts.classList.toggle('d-none', view !== 'raw' || !res.hasTimes);
@@ -1379,7 +1423,7 @@
       if (nt) { nt.textContent = jobQuery.trim() ? 'No lines match “' + jobQuery.trim() + '”' : 'No issues in this run'; }
     }
     var empty = jobEl('[data-job-empty]');
-    if (empty) { empty.classList.toggle('d-none', !!run || rawLines.length > 0 || !jobActive()); }
+    if (empty) { empty.classList.toggle('d-none', view === 'steps' || rawLines.length > 0 || !jobActive()); }
     var followBtn = jobEl('[data-job-follow-btn]');
     if (followBtn) {
       followBtn.classList.toggle('d-none', !jobActive());

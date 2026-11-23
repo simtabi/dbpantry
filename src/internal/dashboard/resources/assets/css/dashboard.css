@@ -550,7 +550,8 @@
 .mdb-inst-head { display: flex; align-items: center; gap: .75rem; min-width: 0; }
 .mdb-inst-head .subheader { margin-bottom: .125rem; }
 .mdb-inst-value { font-size: 1rem; font-weight: var(--tblr-font-weight-bold); line-height: 1.3; }
-.mdb-inst-chips { display: flex; flex-wrap: wrap; gap: .25rem; }
+.mdb-inst-chips { display: flex; flex-wrap: wrap; gap: .5rem; }
+.mdb-inst-chips .badge { padding: .3125rem .625rem; font-size: .8125rem; }
 .mdb-inst-facts {
   display: grid;
   grid-template-columns: 4.5rem minmax(0, 1fr);
@@ -1231,7 +1232,8 @@ body.mdb-page-busy #mdb-job { z-index: 1055; }
 .mdb-job-facts {
   --tblr-datagrid-item-width: 7.5rem;
   --tblr-datagrid-padding: 1rem;
-  padding: .875rem 1.25rem;
+  --tblr-datagrid-title-margin-bottom: .5rem;
+  padding: 1.25rem;
   border-bottom: var(--tblr-border-width) solid var(--tblr-border-color);
 }
 .mdb-job-facts .datagrid-content { font-weight: var(--tblr-font-weight-medium); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -1385,7 +1387,8 @@ body.mdb-page-busy #mdb-job { z-index: 1055; }
 .mdb-job-tsbtn { border: 1px solid var(--mdb-rule); }
 .mdb-job-levels button.active,
 .mdb-job-tsbtn.active { color: var(--tblr-body-color); background: var(--tblr-bg-surface-secondary); box-shadow: inset 0 -2px 0 var(--tblr-body-color); }
-.mdb-job-levels [data-job-issues] { font-family: var(--mdb-mono); color: var(--mdb-err); }
+.mdb-job-levels [data-job-issues] { font-family: var(--mdb-mono); color: var(--mdb-dim); }
+.mdb-job-levels [data-job-issues].is-some { color: var(--mdb-err); }
 .mdb-job-count { margin-left: auto; font-family: var(--mdb-mono); font-variant-numeric: tabular-nums; color: var(--mdb-dim); white-space: nowrap; }
 .mdb-job-count.is-hit { color: var(--tblr-primary); font-weight: 600; }
 .mdb-job-body {
@@ -1481,6 +1484,13 @@ body.mdb-page-busy #mdb-job { z-index: 1055; }
 .mdb-run-sum { margin-left: .6rem; font-weight: 400; color: var(--mdb-dim); overflow: hidden; text-overflow: ellipsis; }
 .st-pending > .mdb-run-name,
 .st-skipped > .mdb-run-name { color: var(--mdb-dim); }
+/* An output line in the fallback Steps view wraps: it is the content. */
+.mdb-run-row.is-line > .mdb-run-meta,
+.mdb-run-row.is-line > .mdb-run-bar { display: none; }
+.mdb-run-row.is-line > .mdb-run-name { grid-column: 4 / 7; white-space: pre-wrap; overflow: visible; padding-block: .3rem; }
+.mdb-run-row.is-line .mdb-run-label { overflow: visible; text-overflow: clip; overflow-wrap: anywhere; }
+.st-failed.is-line > .mdb-run-name { color: var(--mdb-err); }
+.st-warning.is-line > .mdb-run-name { color: var(--mdb-warn); }
 .mdb-run-meta {
   display: flex;
   align-items: center;

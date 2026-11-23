@@ -87,7 +87,9 @@ operate actions; typed confirmation for destructive ones — the same value the
 CLI checks). Missing parameters are collected in that modal. Output streams in
 a slide-in job drawer as the same step tree, progress bars, percentage and ETA
 the CLI draws on a terminal (jobs run with `--pretty`, not a BuildKit wall).
-The drawer bar tracks `%` from those lines. While a job is running the drawer
+The drawer bar tracks `%` from those lines. The drawer opens on **Steps** for
+every job; a command that draws no step tree shows one step for the job with
+each line it printed as a row, and **Raw log** has every line verbatim. While a job is running the drawer
 stays open (close, Escape and backdrop are blocked) so progress keeps
 streaming; a reload warns and re-opens the job from `sessionStorage` if it is
 still running; the confirm modal likewise stays put until the action has
