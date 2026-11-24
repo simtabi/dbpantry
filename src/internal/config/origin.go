@@ -63,7 +63,7 @@ func (s *Settings) Show(examplePath string) ([]Entry, error) {
 		if e.Origin == OriginFile || e.Origin == OriginEnv {
 			e.File = s.EnvFile
 		}
-		if looksSecret(key) {
+		if LooksSecret(key) {
 			e.Secret = true
 			if e.Value != "" {
 				e.Value = "***"
@@ -185,7 +185,10 @@ func looksLikeHeading(s string) bool {
 	return len(words) >= 1 && len(words) <= 6
 }
 
-func looksSecret(key string) bool {
+// LooksSecret reports whether a key's value is masked wherever it is shown:
+// the Configuration page, and the arguments a dashboard job records
+// (config.set's value in the job list and the audit log).
+func LooksSecret(key string) bool {
 	u := strings.ToUpper(key)
 	for _, part := range []string{"PASSWORD", "SECRET", "TOKEN", "KEY", "HASH", "CREDENTIAL"} {
 		if strings.Contains(u, part) {

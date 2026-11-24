@@ -116,6 +116,7 @@ type job struct {
 	exclusive bool
 	aborted   bool     // Abort was requested; Exec may return a plain exit status
 	runArgs   []string // unredacted exec argv; never exposed in JSON
+	hide      []string // values redacted in Args, blanked in output lines too
 	changed   chan struct{}
 	unpause   chan struct{} // closed to wake a paused writer; replaced on Pause
 	times     []time.Time   // when each line of Lines was written
@@ -124,6 +125,9 @@ type job struct {
 // addLine appends one output line, stamped with when it arrived. Called
 // with r.mu held.
 func (j *job) addLine(text string, at time.Time) {
+	for _, h := range j.hide {
+		text = strings.ReplaceAll(text, h, "***")
+	}
 	j.Lines = append(j.Lines, text)
 	j.times = append(j.times, at)
 }
@@ -165,6 +169,7 @@ func (r *Runner) Start(action, actor string, exclusive bool, args, shown []strin
 		cancel:    jcancel,
 		exclusive: exclusive,
 		runArgs:   append([]string(nil), args...),
+		hide:      hidden(args, shown),
 		changed:   make(chan struct{}),
 		unpause:   make(chan struct{}),
 	}
@@ -178,6 +183,28 @@ func (r *Runner) Start(action, actor string, exclusive bool, args, shown []strin
 	r.wg.Add(1)
 	go r.run(jctx, j, args, exclusive)
 	return j.snapshot(), nil
+}
+
+// hidden lists the values the caller redacted: each argument whose shown
+// form differs from it ("x" shown as "***", "--flag=x" as "--flag=***").
+// Output lines are blanked of them too, so a command that echoes its
+// arguments cannot undo the redaction. Values under 4 bytes are left alone:
+// blanking them would mangle ordinary text.
+func hidden(args, shown []string) []string {
+	var out []string
+	for i := 0; i < len(args) && i < len(shown); i++ {
+		if args[i] == shown[i] {
+			continue
+		}
+		v := args[i]
+		if k, rest, ok := strings.Cut(v, "="); ok && shown[i] == k+"=***" {
+			v = rest
+		}
+		if len(v) >= 4 {
+			out = append(out, v)
+		}
+	}
+	return out
 }
 
 func (r *Runner) run(ctx context.Context, j *job, args []string, exclusive bool) {

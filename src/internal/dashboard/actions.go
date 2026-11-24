@@ -6,6 +6,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/simtabi/dbpantry/src/internal/config"
 	"github.com/simtabi/dbpantry/src/internal/envtype"
 )
 
@@ -66,6 +67,9 @@ type Action struct {
 	ConfirmValue func(v Values, env func(string) string) string `json:"-"`
 	// Secret names the flags whose values never reach the audit log.
 	Secret []string `json:"-"`
+	// Mask, when set, hides a positional value in the arguments as shown
+	// and audited (Redact handles flags only); the command gets them whole.
+	Mask func(shown []string, v Values) []string `json:"-"`
 }
 
 // optional appends flag and value when the value is set.
@@ -255,6 +259,19 @@ var Actions = []Action{
 			{Name: "value", Label: "Value", Kind: KindText, Required: true},
 		},
 		Command: func(v Values) []string { return []string{"config", "set", v["key"], v["value"]} },
+		// A key the Configuration page masks is masked in the job too.
+		Mask: func(shown []string, v Values) []string {
+			if !config.LooksSecret(v["key"]) {
+				return shown
+			}
+			out := append([]string(nil), shown...)
+			for i := range out {
+				if out[i] == v["value"] {
+					out[i] = "***"
+				}
+			}
+			return out
+		},
 	},
 
 	// --- Security ------------------------------------------------------------

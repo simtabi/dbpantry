@@ -260,6 +260,9 @@ func startJob(o Options) http.HandlerFunc {
 			args = append(args, "--confirm", want)
 		}
 		shown := jobs.Redact(args, a.Secret...)
+		if a.Mask != nil {
+			shown = a.Mask(shown, v)
+		}
 		j, err := o.Runner.Start(a.Name, p.Actor, a.Scope > ScopeRead, args, shown)
 		var busy jobs.ErrBusy
 		if errors.As(err, &busy) {
