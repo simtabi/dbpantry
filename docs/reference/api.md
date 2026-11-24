@@ -19,10 +19,17 @@ Three modes, from `config/dashboard.json` / the instance's `dashboard.json` /
 | `password` | Sign in at `/login` with `secrets/dashboard_password.txt`. | Same Bearer tokens |
 | `none` | Loopback only: the first GET gets a session (for CSRF). Refused on a non-loopback listen. | Same Bearer tokens |
 
-Browser mutations (any method but GET/HEAD) also need:
+Browser mutations (any method but GET/HEAD) also need, in every mode:
 
-- `Sec-Fetch-Site: same-origin` (or no `Sec-Fetch-Site`), and
+- `Sec-Fetch-Site: same-origin`, or, from a browser that sends no
+  `Sec-Fetch-Site`, an `Origin` header naming this host (a request with
+  neither is refused), and
 - the session's CSRF token in `X-CSRF-Token` (the layout's `<meta name="csrf-token">`).
+
+Signing in uses `GET /login` (the form) and `POST /login` (password mode;
+same-origin only, since there is no session yet), and `POST /logout` ends the
+session. After signing in the browser returns to `?next=`, a path on this site
+only.
 
 API tokens: `dbpantry api token create NAME --scope read|operate|admin`. Shown once,
 stored as SHA-256, expiry required. Scopes nest: `admin` ⊃ `operate` ⊃ `read`.
@@ -142,10 +149,14 @@ Scope: read.
 
 ### `POST /api/v1/jobs/{id}/control`
 
-Pause, continue, abort or restart a job (design.md D-98). Scope: operate.
+Pause, continue, abort or restart a job (design.md D-98). Scope: the job's
+action's (an operate token cannot control an admin job). A restart is a new run
+of the action: for a destructive one it needs the typed confirmation again, and
+it is refused for a volume delete while `allow_destroy` is off.
 
 ```json
 { "op": "abort" }
+{ "op": "restart", "confirm": "ROTATE" }
 ```
 
 `op` is one of `abort` (alias `stop`), `pause`, `continue` (alias `resume`),
@@ -203,10 +214,18 @@ List, create and revoke API tokens. Create returns the plaintext once. Scope: ad
 
 ## Pages (HTML)
 
-The same authentication gates the HTML pages: `/`, `/services`, `/images`,
-`/engines`, `/projects`, `/backups`, `/connect`, `/config`, `/operations`,
-`/jobs`, `/services/{service}/logs`. A partial refresh sends `X-Partial: 1` and
-receives the page content without the layout.
+The same authentication gates the HTML pages: `/`, `/status`, `/system`,
+`/services`, `/services/{service}/logs`, `/images`, `/engines`,
+`/engines/{engine}`, `/projects`, `/projects/{engine}/{name}`, `/databases`,
+`/backups`, `/addons`, `/envs`, `/ha`, `/connect`, `/config`, `/operations`,
+`/jobs`, `/help`, `/about`. A partial refresh sends `X-Partial: 1` and receives
+the page content without the layout.
+
+A project's page carries its password, so it needs the operate scope; a job's
+detail and event stream need its action's scope, since a job's output can carry
+what only that scope may see (the block `project new` prints). `/operations`
+lists API tokens to an admin only. `src/internal/dashboard`'s
+`TestEveryRouteIsDocumented` fails when a route is registered and missing here.
 
 ## Errors
 

@@ -347,9 +347,11 @@ services:
   # ---------------------------------------------------------------------------
   # Metrics — exporters on the internal network, published to nothing.
   #
-  # Prometheus and Grafana are out of scope (SPEC section 12); these expose the
-  # endpoints and it is up to your monitoring stack to scrape them over the
-  # mdb network.
+  # Prometheus and Grafana are not shipped yet: SPEC section 12 left them out,
+  # and the refactor plan's X13 (accepted 2026-11-02) brings them in as an
+  # opt-in profile in its phase 5, not built (design.md D-110). Until then
+  # these expose the endpoints and your monitoring stack scrapes them over
+  # the mdb network.
   # ---------------------------------------------------------------------------
   pg-exporter:
     profiles: [metrics]

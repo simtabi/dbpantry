@@ -10,7 +10,7 @@ import (
 func TestWithContainerPathAppendsKnownDirs(t *testing.T) {
 	home := t.TempDir()
 	orb := filepath.Join(home, ".orbstack", "bin")
-	if err := os.MkdirAll(orb, 0o755); err != nil {
+	if err := os.MkdirAll(orb, 0o750); err != nil {
 		t.Fatal(err)
 	}
 	local := "/usr/local/bin"

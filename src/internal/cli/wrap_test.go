@@ -102,6 +102,10 @@ func runStub(t *testing.T, root, log string, extraEnv []string, stdin string, ar
 func TestCommandsRunTheirScripts(t *testing.T) {
 	root, log := stubRoot(t)
 	p := "|stdin=|profiles=pg,ui|tags=|checks="
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
 	cases := []struct {
 		args []string
 		want []string
@@ -138,7 +142,11 @@ func TestCommandsRunTheirScripts(t *testing.T) {
 		{[]string{"pitr", "info", "--engine", "pg"}, []string{"scripts/pitr info --engine pg" + p}},
 		{[]string{"pitr", "backup", "--engine", "pg", "--type", "full"}, []string{"scripts/pitr backup --engine pg --type full" + p}},
 		{[]string{"pitr", "restore", "--engine", "pg", "--to", "2026-11-16 10:00"}, []string{"scripts/pitr restore --engine pg --to 2026-11-16 10:00" + p}},
-		{[]string{"data", "import", "--engine", "pg", "--db", "shop", "--from", "in.sql"}, []string{"scripts/transfer import --engine pg --db shop --from in.sql" + p}},
+		// A relative path is the caller's, made absolute: scripts run with
+		// the kit as their working directory (2026-11-24 audit, K6).
+		{[]string{"data", "import", "--engine", "pg", "--db", "shop", "--from", "in.sql"}, []string{"scripts/transfer import --engine pg --db shop --from " + filepath.Join(wd, "in.sql") + p}},
+		{[]string{"data", "import", "--engine", "pg", "--db", "shop", "--from", "/srv/in.sql"}, []string{"scripts/transfer import --engine pg --db shop --from /srv/in.sql" + p}},
+		{[]string{"data", "export", "--engine", "pg", "--db", "shop", "--to", "out.sql"}, []string{"scripts/transfer export --engine pg --db shop --to " + filepath.Join(wd, "out.sql") + p}},
 		{[]string{"data", "export", "--engine", "pg", "--db", "shop"}, []string{"scripts/transfer export --engine pg --db shop" + p}},
 		{[]string{"upgrade", "--engine", "pg", "--from", "17", "--to", "18"}, []string{"scripts/upgrade --engine pg --from 17 --to 18" + p}},
 		{[]string{"ha", "status"}, []string{"scripts/ha status" + p}},

@@ -52,3 +52,6 @@ src/internal/kit/files/*
 # Local agent smoke / e2e artefacts.
 .tmp-e2e/
 .tmp-smoke/
+
+# GoReleaser's working directory (src/.goreleaser.yaml dist:).
+.goreleaser-dist/

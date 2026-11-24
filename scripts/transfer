@@ -19,6 +19,9 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # shellcheck source=backend-lib.sh
 . "$ROOT/scripts/backend-lib.sh"
+# --from and --to are the caller's paths, relative to where it ran: kept
+# before the cd below, which makes them relative to the kit otherwise.
+CALLER_PWD="$PWD"
 cd "$ROOT" || exit 1
 
 log() { printf '[transfer] %s\n' "$*"; }
@@ -39,6 +42,8 @@ while (( $# )); do
         *) die "unknown argument: $1" ;;
     esac
 done
+
+[[ -z "$FILE" || "$FILE" == /* ]] || FILE="$CALLER_PWD/$FILE"
 
 [[ -n "$ENGINE" ]] || die "specify --engine <pg|mysql|mariadb>"
 [[ -n "$DB" ]]     || die "specify --db <name>"
@@ -69,7 +74,11 @@ fi
 if [[ -n "$FROM_HOST" ]]; then
     [[ -n "$FROM_USER" ]] || die "--from-host also needs --from-user"
     stamp="$(date -u '+%Y%m%dT%H%M%SZ')"
-    FILE="backups/imported_${ENGINE}_${DB}_${stamp}.sql"
+    # The configured dump directory in the instance home, not the kit's
+    # backups/ (2026-11-24 audit, K5).
+    dumps="$(mdb_backup_dir "$MDB_HOME" "${MDB_ENV_FILE:-$MDB_HOME/.env}")"
+    mkdir -p "$dumps"
+    FILE="$dumps/imported_${ENGINE}_${DB}_${stamp}.sql"
 
     log "dumping $DB from $FROM_HOST as $FROM_USER"
     log "you will be prompted for that server's password"

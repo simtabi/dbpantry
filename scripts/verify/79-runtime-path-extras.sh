@@ -22,10 +22,11 @@ host_docker="$(command -v docker 2>/dev/null || true)"
 host_podman="$(command -v podman 2>/dev/null || true)"
 host_nerdctl="$(command -v nerdctl 2>/dev/null || true)"
 
-if [[ -z "$host_docker$host_podman$host_nerdctl" ]]; then
-    vinfo "no container CLI on this host; skip thin-PATH probe"
-    exit 0
-fi
+# A container runtime is required (CLAUDE.md): without one this check has
+# nothing to prove, and passing would say the PATH extras work (2026-11-24
+# audit, G5).
+[[ -n "$host_docker$host_podman$host_nerdctl" ]] \
+    || vfail "no container CLI (docker, podman or nerdctl) on PATH; a runtime is required"
 
 # A CLI already under /usr/bin or /bin does not exercise the extras; still
 # assert the binary answers with a thin PATH.

@@ -227,6 +227,8 @@ func Handler(src Sources, o Options) (http.Handler, error) {
 		return nil, err
 	}
 	readStack := cached(src.Snapshot, time.Now)
+	// Completion events come from the runner, once per finished job.
+	o.Runner.OnEnd(func(j jobs.Job) { endJob(o, j) })
 	if o.Choices == nil {
 		o.Choices = func(ctx context.Context) (Choices, error) {
 			s, err := readStack(ctx)
@@ -369,8 +371,9 @@ func Handler(src Sources, o Options) (http.Handler, error) {
 		if !ok {
 			return
 		}
+		// The token list is an admin's, as on /api/v1/tokens.
 		var tokens []Token
-		if o.Auth.tokens != nil {
+		if o.Auth.tokens != nil && principal(r).Scope >= ScopeAdmin {
 			var err error
 			if tokens, err = o.Auth.tokens.List(); err != nil {
 				fail(w, r, s, http.StatusInternalServerError, "The API tokens could not be read: "+err.Error())
@@ -394,6 +397,12 @@ func Handler(src Sources, o Options) (http.Handler, error) {
 	mux.HandleFunc("GET /projects/{engine}/{name}", func(w http.ResponseWriter, r *http.Request) {
 		if site := r.Header.Get("Sec-Fetch-Site"); site != "" && site != "same-origin" && site != "none" {
 			http.Error(w, "cross-site request refused", http.StatusForbidden)
+			return
+		}
+		// The page carries the project's password: the scope that provisions
+		// projects (operate) may see it, read may not (management-plan.md §3.1).
+		if principal(r).Scope < ScopeOperate {
+			http.Error(w, "a project's connection block needs the operate scope", http.StatusForbidden)
 			return
 		}
 		s, ok := snap(w, r)
@@ -446,6 +455,10 @@ func Handler(src Sources, o Options) (http.Handler, error) {
 			return
 		}
 		svc := r.PathValue("service")
+		if s.ServicesErr != "" {
+			fail(w, r, s, http.StatusServiceUnavailable, "Services are unavailable: "+s.ServicesErr)
+			return
+		}
 		if !contains(ChoicesOf(s).Services, svc) {
 			fail(w, r, s, http.StatusNotFound, "There is no service named "+svc+" in the stack.")
 			return
@@ -471,6 +484,10 @@ func Handler(src Sources, o Options) (http.Handler, error) {
 			apiError(w, http.StatusNotFound, err.Error())
 			return
 		}
+		if need := jobScope(j.Action); principal(r).Scope < need {
+			apiError(w, http.StatusForbidden, "the output of "+j.Action+" needs the "+need.String()+" scope")
+			return
+		}
 		for i, l := range j.Lines {
 			j.Lines[i] = sanitizeLine(l)
 		}
@@ -491,7 +508,7 @@ func Handler(src Sources, o Options) (http.Handler, error) {
 // (running ones first), the services and fixture services that exist, and its dumps. Volumes come
 // from the backend (the command that serves the dashboard sets Choices).
 func ChoicesOf(s Snapshot) Choices {
-	var c Choices
+	c := Choices{ServicesErr: s.ServicesErr}
 	var stopped []string
 	seen := map[string]bool{}
 	addProfile := func(p string) {

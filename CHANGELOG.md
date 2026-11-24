@@ -64,6 +64,11 @@ waiving them.
   DOM/`#content` reveal (optional full `window` load / fonts via attributes).
 
 ### Changed
+- **The release ships the `dbpantry` binary.** `release.yml` now publishes through `simtabi/.github`'s
+  shared `go-release.yml`: the binary for Linux, macOS (plus a universal build), Windows and FreeBSD on
+  amd64 and arm64, each with the kit inside (`make kit` runs first), the source archive, checksums,
+  SBOMs, provenance and the `src/vX.Y.Z` module tag. Pre-release tags (`vX.Y.Z-rc.N`) build a GitHub
+  pre-release. See docs/guides/release.md and design.md D-110.
 - **Configuration › This instance is three tiles** (env file, profiles, network), each with its
   icon, main value, the real values behind it (path and keys set in the file; engines on and
   extras; subnet, project name, backend and publish mode) and its buttons on one aligned footer.
@@ -106,6 +111,25 @@ waiving them.
   The converge-failed marker survived restarts, and nothing removed it, so the healthcheck kept refusing
   after a later start converged. Each convergence stage now clears it first; check 80 guards it. Rebuild
   the images (`make build`) to pick it up.
+- **Aborting a job ends what it started.** Dashboard jobs and log streams run in a process group of their
+  own, killed as a whole; an aborted build no longer kept the job, and the one-change lock, until docker
+  finished. An aborted job can no longer be paused.
+- **A finished job sends one completion webhook**, whether no page or several watch it.
+- **A runtime outage reads as unavailable (503)**, never as "no such service".
+- **Off-site backups find their credentials** in the instance home, or `/run/secrets` in the backup
+  sidecar, which died after its first dump with S3 configured.
+- **A separate home's `MDB_BACKEND` is honoured**; it silently ran Compose.
+- **`env copy` and `env migrate` reach each home's own stack.** The caller's `COMPOSE_PROJECT_NAME`,
+  `MDB_ENV_FILE` and profiles no longer outrank each home's `.env`, which pointed both steps at one stack
+  while the copy reported success.
+- **A project's volumes are its own**: project `mdb` no longer lists `mdb_dev`'s, which `destroy --all`
+  would have offered for deletion.
+- **`data import --from` and `export --to` take paths relative to where you run them**, and an import
+  from a live server lands in the configured dump directory, not the kit's `backups/`.
+- **`--listen` accepts a unix socket path**, sessions are capped in mode `none`, a value such as `-1`
+  is no longer read as a flag by `config set`, and `/operations` lists API tokens to admins only.
+- **`make go-lint` and `go test -race` pass again**: 64 lint findings and a data race in a test had
+  reached `main` while CI's jobs were not running.
 - **Job drawer kept spinning after fail and painted a dead 0% bar.** Failed steps abandon
   running children; the drawer settles leftover spinners, strips double ✔ from tree rows,
   drives the header from ASCII bars without dumping ░ rows, and tightens line spacing.
@@ -665,6 +689,18 @@ waiving them.
 
 ### Security
 
+- **Job control keeps each action's gates** (codebase audit, 2026-11-24). An operate-scope API token could
+  restart a finished admin job through `POST /api/v1/jobs/{id}/control`, re-running `secrets rotate`,
+  `project drop`, `restore` or a volume delete with its stored typed confirmation. Abort, pause, continue
+  and restart now need the job's action's scope; a restart needs the typed confirmation again
+  (`"confirm"`) and is refused for a volume delete while `allow_destroy` is off.
+- **Read scope no longer sees passwords.** A project's page needs `operate`, and a job's output and event
+  stream need its action's scope, so a read token cannot read the `.env` block `project new` prints.
+- **A secret set through `config set` is masked** in the job list, the Jobs page, the audit log and
+  webhooks when the key is one the Configuration page masks; the runner also blanks it from the job's
+  output lines.
+- **Sign-in returns only to a same-site path**: `/\host` and its encoded form, which browsers read as
+  `//host`, now go to `/`.
 - **The Go toolchain moves to 1.27.4** for GO-2026-6859 in `net/http`, which the dashboard's HTTP server made reachable from the binary (`govulncheck` reported 17 call paths; it reports none on 1.27.4).
 - **The images' Go build stage moves to 1.27.4**, the release `src/go.mod` uses, so gosu, rclone and postgres_exporter are built with the `net/http` fix for GO-2026-6859 too. Check 02 now fails when `images/bases.tsv`'s Go image and `src/go.mod`'s toolchain name different releases (design.md D-82).
 - **Every service drops privileges, has a health signal, and is limited under prod** (design.md D-75). etcd and

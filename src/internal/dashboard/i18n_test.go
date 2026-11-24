@@ -31,14 +31,14 @@ func TestCatalogsComplete(t *testing.T) {
 
 func TestNegotiateLang(t *testing.T) {
 	w := httptest.NewRecorder()
-	r := httptest.NewRequest(http.MethodGet, "/?lang=fr", nil)
+	r := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/?lang=fr", nil)
 	if got := NegotiateLang(w, r, false); got != "fr" {
 		t.Fatalf("?lang=fr → %q", got)
 	}
 	if c := w.Result().Cookies(); len(c) == 0 || c[0].Name != langCookie || c[0].Value != "fr" {
 		t.Fatalf("expected mdb_lang=fr cookie, got %+v", w.Result().Cookies())
 	}
-	r2 := httptest.NewRequest(http.MethodGet, "/", nil)
+	r2 := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/", nil)
 	r2.Header.Set("Accept-Language", "de-DE,de;q=0.9,en;q=0.8")
 	if got := NegotiateLang(httptest.NewRecorder(), r2, false); got != "de" {
 		t.Fatalf("Accept-Language de-DE → %q", got)

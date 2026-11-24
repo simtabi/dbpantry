@@ -47,10 +47,27 @@ done < <(
         | grep -vE "^(${INTERNAL_VARS})\$" | sort -u
 )
 
-if (( ${#used[@]} == 0 )); then
-    vinfo "no MDB_ variables consumed yet; ${#documented[@]} documented and ready"
-    exit 0
-fi
+# The compose files and images consume dozens; none means the scan broke,
+# not that nothing is configured (it used to exit 0 here).
+(( ${#used[@]} >= 50 )) || vfail "found only ${#used[@]} MDB_ variable(s) in compose files and images; the scan is broken"
+
+# A key a script or the binary reads from the env file is user-settable by
+# definition: get/mdb_env_get/env_get MDB_X in scripts/, and
+# Effective/File/env("MDB_X") in the Go binary (2026-11-24 audit, G4: the
+# MDB_DASHBOARD_* settings were read and documented nowhere).
+read_keys=()
+while IFS= read -r v; do
+    [ -n "$v" ] && read_keys+=("$v")
+done < <(
+    { grep -rhoE '\b(get|mdb_env_get|env_get) +"?MDB_[A-Z0-9_]+' scripts --exclude-dir=verify 2>/dev/null
+      grep -rhoE '(Effective|File|env)\("MDB_[A-Z0-9_]+"' src --include='*.go' --exclude='*_test.go' 2>/dev/null
+    } | grep -oE 'MDB_[A-Z0-9_]+' | sort -u
+)
+(( ${#read_keys[@]} >= 30 )) || vfail "found only ${#read_keys[@]} key(s) read from the env file; the scan is broken"
+for v in "${read_keys[@]}"; do
+    printf '%s\n' "$v" | grep -qxE "$INTERNAL_VARS" && continue
+    printf '%s\n' "${used[@]}" | grep -qx "$v" || used+=("$v")
+done
 
 missing=0
 for v in "${used[@]}"; do

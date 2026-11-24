@@ -113,7 +113,7 @@ var chipTones = []string{"blue", "orange", "teal", "purple", "lime", "pink", "cy
 func toneFor(name string) string {
 	h := fnv.New32a()
 	_, _ = h.Write([]byte(name))
-	return chipTones[h.Sum32()%uint32(len(chipTones))]
+	return chipTones[h.Sum32()%uint32(len(chipTones))] // #nosec G115 -- chipTones is a short fixed list
 }
 
 // toneMap colours a list of names: each starts from its own toneFor and
@@ -124,7 +124,7 @@ func toneMap(names []string) map[string]string {
 	for _, n := range names {
 		h := fnv.New32a()
 		_, _ = h.Write([]byte(n))
-		start := int(h.Sum32() % uint32(len(chipTones)))
+		start := int(h.Sum32() % uint32(len(chipTones))) // #nosec G115 -- chipTones is a short fixed list
 		tone := chipTones[start]
 		for i := 0; i < len(chipTones); i++ {
 			if c := chipTones[(start+i)%len(chipTones)]; !used[c] {

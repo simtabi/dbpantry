@@ -46,15 +46,15 @@ func ParseListing(stdout []byte) (Listing, error) {
 type State string
 
 const (
-	// Active: the password file and the database both exist.
+	// Active means the password file and the database both exist.
 	Active State = "active"
-	// Orphaned: the engine answers and has no such database; only the
+	// Orphaned means the engine answers and has no such database; only the
 	// password files are left (audit 2026-11-18, B1). `project drop` removes
 	// them.
 	Orphaned State = "orphaned"
-	// Unknown: the engine is not running or did not answer.
+	// Unknown means the engine is not running or did not answer.
 	Unknown State = "unknown"
-	// Unmanaged: a database with no password file, which dbpantry did not
+	// Unmanaged means a database with no password file, which dbpantry did not
 	// provision and will not drop.
 	Unmanaged State = "unmanaged"
 )

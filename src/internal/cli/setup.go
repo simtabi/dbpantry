@@ -98,9 +98,9 @@ func (a *app) configCmd() *cobra.Command {
 			}
 			for _, e := range entries {
 				if origin {
-					fmt.Fprintf(c.OutOrStdout(), "%s\t%s\t%s\n", e.Key, e.Value, e.Origin)
+					_, _ = fmt.Fprintf(c.OutOrStdout(), "%s\t%s\t%s\n", e.Key, e.Value, e.Origin)
 				} else if e.Value != "" || e.Origin != config.OriginNone {
-					fmt.Fprintf(c.OutOrStdout(), "%s=%s\n", e.Key, e.Value)
+					_, _ = fmt.Fprintf(c.OutOrStdout(), "%s=%s\n", e.Key, e.Value)
 				}
 			}
 			return nil
@@ -124,7 +124,7 @@ func (a *app) configCmd() *cobra.Command {
 			if err := s.Set(args[0], args[1]); err != nil {
 				return err
 			}
-			fmt.Fprintf(c.OutOrStdout(), "wrote %s in %s\n", args[0], s.EnvFile)
+			_, _ = fmt.Fprintf(c.OutOrStdout(), "wrote %s in %s\n", args[0], s.EnvFile)
 			return nil
 		},
 	}

@@ -83,6 +83,10 @@ type Principal struct {
 	Session bool
 }
 
+// maxSessions caps the session table: in mode none every cookieless GET
+// starts one, so a local poller would otherwise grow it without bound.
+const maxSessions = 256
+
 type session struct {
 	csrf    string
 	expires time.Time
@@ -183,15 +187,38 @@ func (a *Auth) newSession(w http.ResponseWriter, secure bool) (Principal, error)
 		return Principal{}, err
 	}
 	a.mu.Lock()
+	a.pruneLocked()
 	a.session[id] = session{csrf: csrf, expires: a.now().Add(a.ttl)}
 	a.mu.Unlock()
-	http.SetCookie(w, &http.Cookie{Name: a.cookie, Value: id, Path: "/", HttpOnly: true, Secure: secure,
+	// Secure under TLS only: a loopback dashboard is plain HTTP, where a
+	// Secure cookie would never come back. HttpOnly and SameSite=Strict always.
+	http.SetCookie(w, &http.Cookie{Name: a.cookie, Value: id, Path: "/", HttpOnly: true, Secure: secure, // #nosec G124 -- Secure follows TLS (above)
 		SameSite: http.SameSiteStrictMode, MaxAge: int(a.ttl.Seconds())})
 	actor := "browser"
 	if a.mode == AuthNone {
 		actor = "local"
 	}
 	return Principal{Actor: actor, Scope: ScopeAdmin, CSRF: csrf, Session: true}, nil
+}
+
+// pruneLocked drops expired sessions and, at maxSessions, the one closest
+// to expiring (the oldest), to make room. Called with a.mu held.
+func (a *Auth) pruneLocked() {
+	now := a.now()
+	for id, s := range a.session {
+		if now.After(s.expires) {
+			delete(a.session, id)
+		}
+	}
+	for len(a.session) >= maxSessions {
+		oldest, at := "", time.Time{}
+		for id, s := range a.session {
+			if oldest == "" || s.expires.Before(at) {
+				oldest, at = id, s.expires
+			}
+		}
+		delete(a.session, oldest)
+	}
 }
 
 // exchange trades the launch token for a session. It works once.
@@ -221,7 +248,7 @@ func (a *Auth) logout(w http.ResponseWriter, r *http.Request) {
 		delete(a.session, c.Value)
 		a.mu.Unlock()
 	}
-	http.SetCookie(w, &http.Cookie{Name: a.cookie, Value: "", Path: "/", HttpOnly: true, SameSite: http.SameSiteStrictMode, MaxAge: -1})
+	http.SetCookie(w, &http.Cookie{Name: a.cookie, Value: "", Path: "/", HttpOnly: true, SameSite: http.SameSiteStrictMode, MaxAge: -1}) // #nosec G124 -- an expired cookie that clears the session
 }
 
 // sameOrigin is the check every browser POST must pass, in every mode:

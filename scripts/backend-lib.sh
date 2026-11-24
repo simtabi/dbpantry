@@ -73,10 +73,11 @@ _mdb_be_load() {
 mdb_backend_init() {
     [[ -n "${MDB_BACKEND_READY:-}" && "${MDB_BACKEND_READY}" == "${MDB_BACKEND:-}" ]] && return 0
     [[ -n "$MDB_BACKENDS" ]] || _mdb_be_load
-    local want="${MDB_BACKEND:-}" root
+    local want="${MDB_BACKEND:-}"
     if [[ -z "$want" ]]; then
-        root="${MDB_RT_ROOT:-$(cd "$_mdb_be_dir/.." && pwd)}"
-        want="$(mdb_env_get MDB_BACKEND "$root/.env")"
+        # The instance's .env: the home's when it is separate (D-84), else
+        # MDB_RT_ROOT's, as before (mdb_env_default_file).
+        want="$(mdb_env_get MDB_BACKEND "$(mdb_env_default_file)")"
     fi
     want="${want:-compose}"
     case " $MDB_BACKENDS " in

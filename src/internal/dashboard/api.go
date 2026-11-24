@@ -99,7 +99,7 @@ func gate(next http.Handler, o Options) http.Handler {
 				q.Del("token")
 				u := *r.URL
 				u.RawQuery = q.Encode()
-				http.Redirect(w, r, u.RequestURI(), http.StatusSeeOther)
+				http.Redirect(w, r, u.RequestURI(), http.StatusSeeOther) // #nosec G710 -- the request's own path, minus the token
 				return
 			}
 			if a.Mode() == AuthNone {
@@ -241,6 +241,10 @@ func startJob(o Options) http.HandlerFunc {
 			}
 		}
 		v, err := a.validate(req.Params, c)
+		if errors.Is(err, ErrServicesUnavailable) {
+			apiError(w, http.StatusServiceUnavailable, err.Error())
+			return
+		}
 		if err != nil {
 			apiError(w, http.StatusUnprocessableEntity, err.Error())
 			return
@@ -260,7 +264,11 @@ func startJob(o Options) http.HandlerFunc {
 			args = append(args, "--confirm", want)
 		}
 		shown := jobs.Redact(args, a.Secret...)
-		j, err := o.Runner.Start(a.Name, p.Actor, a.Scope > ScopeRead, args, shown)
+		if a.Mask != nil {
+			shown = a.Mask(shown, v)
+		}
+		j, err := o.Runner.Start(a.Name, p.Actor, a.Scope > ScopeRead, args, shown) //nolint:contextcheck // a job outlives the request that starts it
+
 		var busy jobs.ErrBusy
 		if errors.As(err, &busy) {
 			writeJSON(w, http.StatusConflict, map[string]any{"error": busy.Error(), "job": busy.Job})
@@ -270,7 +278,7 @@ func startJob(o Options) http.HandlerFunc {
 			apiError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
-		emitJob(o, hooks.JobStarted, j, p.Actor)
+		emitJob(o, hooks.JobStarted, j, p.Actor) //nolint:contextcheck // webhook delivery outlives the request
 		w.Header().Set("Location", "/api/v1/jobs/"+j.ID)
 		writeJSON(w, http.StatusAccepted, j)
 	}
@@ -289,8 +297,13 @@ func events(o Options) http.HandlerFunc {
 			return
 		}
 		id := r.PathValue("id")
-		if _, err := o.Runner.Get(id); err != nil {
+		j, err := o.Runner.Get(id)
+		if err != nil {
 			apiError(w, http.StatusNotFound, err.Error())
+			return
+		}
+		if need := jobScope(j.Action); principal(r).Scope < need {
+			apiError(w, http.StatusForbidden, "the output of "+j.Action+" needs the "+need.String()+" scope")
 			return
 		}
 		from := 0
@@ -305,7 +318,7 @@ func events(o Options) http.HandlerFunc {
 		h.Set("X-Accel-Buffering", "no")
 		w.WriteHeader(http.StatusOK)
 		fl.Flush()
-		err := o.Runner.Watch(r.Context(), id, from, func(n int, line string, at time.Time) error {
+		err = o.Runner.Watch(r.Context(), id, from, func(n int, line string, at time.Time) error {
 			ev := struct {
 				Line string `json:"line"`
 				At   int64  `json:"t,omitempty"`
@@ -320,14 +333,6 @@ func events(o Options) http.HandlerFunc {
 			fl.Flush()
 			return nil
 		}, func(j jobs.Job) error {
-			typ := hooks.JobSucceeded
-			switch j.State {
-			case jobs.Failed:
-				typ = hooks.JobFailed
-			case jobs.Cancelled:
-				typ = hooks.JobCancelled
-			}
-			emitJob(o, typ, j, j.Actor)
 			j.Lines = nil
 			b, _ := json.Marshal(j)
 			_, err := fmt.Fprintf(w, "event: end\ndata: %s\n\n", b)
@@ -477,6 +482,10 @@ func logStream(o Options, logs Logs) http.HandlerFunc {
 			apiError(w, http.StatusServiceUnavailable, err.Error())
 			return
 		}
+		if c.ServicesErr != "" {
+			apiError(w, http.StatusServiceUnavailable, "services are unavailable: "+c.ServicesErr)
+			return
+		}
 		if !patterns[KindService].MatchString(svc) || !contains(c.Services, svc) {
 			apiError(w, http.StatusNotFound, "there is no service "+strconv.Quote(svc)+" in the stack")
 			return
@@ -559,7 +568,7 @@ func login(o Options) http.HandlerFunc {
 			return
 		}
 		next := r.URL.Query().Get("next")
-		if !strings.HasPrefix(next, "/") || strings.HasPrefix(next, "//") {
+		if !sameSitePath(next) {
 			next = "/"
 		}
 		failed := false
@@ -576,7 +585,7 @@ func login(o Options) http.HandlerFunc {
 					http.Error(w, err.Error(), http.StatusInternalServerError)
 					return
 				}
-				http.Redirect(w, r, next, http.StatusSeeOther)
+				http.Redirect(w, r, next, http.StatusSeeOther) // #nosec G710 -- next passed sameSitePath
 				return
 			}
 			failed = true
@@ -588,6 +597,20 @@ func login(o Options) http.HandlerFunc {
 		}
 		_ = loginTemplate.Execute(w, map[string]any{"Next": next, "Failed": failed})
 	}
+}
+
+// sameSitePath reports whether p is a path on this site to return to after
+// signing in: absolute, not "//host", and with no backslash, raw or encoded,
+// since browsers read "/\host" as "//host".
+func sameSitePath(p string) bool {
+	if !strings.HasPrefix(p, "/") || strings.HasPrefix(p, "//") {
+		return false
+	}
+	if strings.Contains(p, `\`) || strings.Contains(strings.ToLower(p), "%5c") {
+		return false
+	}
+	u, err := url.Parse(p)
+	return err == nil && u.Scheme == "" && u.Host == ""
 }
 
 // logout is POST /logout.

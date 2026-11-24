@@ -222,13 +222,16 @@ push_s3() {
     key_file="$(get MDB_S3_KEY_ID_FILE)";     key_file="${key_file:-secrets/s3_key_id.txt}"
     secret_file="$(get MDB_S3_KEY_SECRET_FILE)"; secret_file="${secret_file:-secrets/s3_key_secret.txt}"
 
-    [[ -s "$ROOT/$key_file" && -s "$ROOT/$secret_file" ]] \
-        || die "MDB_S3_BUCKET is set but $key_file or $secret_file is missing or empty"
+    # The home's secrets/ on the host, /run/secrets in the sidecar (D-84).
+    local key_path secret_path
+    key_path="$(mdb_secret_path "$key_file")"; secret_path="$(mdb_secret_path "$secret_file")"
+    [[ -s "$key_path" && -s "$secret_path" ]] \
+        || die "MDB_S3_BUCKET is set but $key_path or $secret_path is missing or empty"
 
     RCLONE_S3_PROVIDER="$(get MDB_S3_PROVIDER)"
     export RCLONE_S3_PROVIDER="${RCLONE_S3_PROVIDER:-Other}"
-    RCLONE_S3_ACCESS_KEY_ID="$(tr -d '\n' < "$ROOT/$key_file")"
-    RCLONE_S3_SECRET_ACCESS_KEY="$(tr -d '\n' < "$ROOT/$secret_file")"
+    RCLONE_S3_ACCESS_KEY_ID="$(tr -d '\n' < "$key_path")"
+    RCLONE_S3_SECRET_ACCESS_KEY="$(tr -d '\n' < "$secret_path")"
     export RCLONE_S3_ACCESS_KEY_ID RCLONE_S3_SECRET_ACCESS_KEY
 
     local host region
