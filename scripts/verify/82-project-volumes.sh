@@ -8,35 +8,36 @@ source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 cd "$MDB_ROOT" || exit 1
 
 # 2026-11-24 audit, K4. mdb_project_volumes matched ^${project}_ as a regex,
-# so project mdb also took mdb_dev's volumes (mdb_dev_pg_data), and
+# so project mdb also took mdb_dev's volumes, and
 # `destroy --all` on mdb would list them for deletion. A project name may
 # hold an underscore (env init --project), so the prefix alone cannot tell
 # them apart: the Compose project label does.
 #
 # The container CLI is stubbed: volume ls prints the names below, volume
-# inspect the label each was created with. No runtime is touched.
+# inspect the label each was created with. No runtime is touched, and the
+# names carry the test prefix (check 60).
 # shellcheck disable=SC2016  # expanded by the inner bash
 got="$(bash -c '
     . scripts/runtime-lib.sh
     mdb_runtime_init() { return 0; }
     mdb_ctr() {
         case "$1 $2" in
-            "volume ls")      printf "%s\n" mdb_pg_data mdb_pg_pitr mdb_dev_pg_data mdb_dev_mysql_data mdbx_pg_data old_mdb_pg_data mdb_legacy_data ;;
+            "volume ls")      printf "%s\n" mdbverify_pg_data mdbverify_pg_pitr mdbverify_dev_pg_data mdbverify_dev_mysql_data mdbverifyx_pg_data old_mdbverify_pg_data mdbverify_legacy_data ;;
             "volume inspect") case "${*: -1}" in
-                                  mdb_dev_*) echo mdb_dev ;;
-                                  mdb_legacy_data) echo "" ;;
-                                  *) echo mdb ;;
+                                  mdbverify_dev_*) echo mdbverify_dev ;;
+                                  mdbverify_legacy_data) echo "" ;;
+                                  *) echo mdbverify ;;
                               esac ;;
         esac
     }
-    mdb_project_volumes mdb
+    mdb_project_volumes mdbverify
 ' 2>&1)"
-want="$(printf '%s\n' mdb_legacy_data mdb_pg_data mdb_pg_pitr)"
-[[ "$got" == "$want" ]] || vfail "project mdb's volumes:
+want="$(printf '%s\n' mdbverify_legacy_data mdbverify_pg_data mdbverify_pg_pitr)"
+[[ "$got" == "$want" ]] || vfail "project mdbverify's volumes:
 $got
        want:
 $want"
-vinfo "project mdb lists its own volumes, not mdb_dev's, mdbx's or an unrelated prefix"
+vinfo "a project lists its own volumes, not those of a project it prefixes (mdbverify_dev), a longer name or an unrelated prefix"
 
 # A name is matched as text: a project name is never a regex.
 # shellcheck disable=SC2016  # expanded by the inner bash
