@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"github.com/spf13/cobra"
@@ -124,6 +125,13 @@ func (a *app) runStepTo(ctx context.Context, root string, env []string, s step, 
 	// jobs (ContextWithJobKill) keep the default Cancel so Abort ends them.
 	if !s.Interruptible && !jobKillOnCancel(ctx) {
 		cmd.Cancel = func() error { return nil }
+	}
+	// A dashboard job, or the page's log stream, ends with everything the
+	// script started, and never waits more than WaitDelay for a child still
+	// holding the output pipe once the script has gone.
+	if jobKillOnCancel(ctx) {
+		killGroupOnCancel(cmd)
+		cmd.WaitDelay = 5 * time.Second
 	}
 	cmd.Dir = root
 	cmd.Env = append(append([]string{}, env...), s.Env...)

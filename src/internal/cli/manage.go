@@ -144,7 +144,8 @@ func (a *app) serviceLogs(root string, env []string) dashboard.Logs {
 		}
 		st := script(append(args, service)...)
 		st.Interruptible = true
-		return a.runStepTo(ctx, root, env, st, w, w)
+		// Killed with its follower when the page goes away (S4, 2026-11-24).
+		return a.runStepTo(ContextWithJobKill(ctx), root, env, st, w, w)
 	}
 }
 
