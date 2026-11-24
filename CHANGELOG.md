@@ -115,6 +115,9 @@ waiving them.
 - **Off-site backups find their credentials** in the instance home, or `/run/secrets` in the backup
   sidecar, which died after its first dump with S3 configured.
 - **A separate home's `MDB_BACKEND` is honoured**; it silently ran Compose.
+- **`env copy` and `env migrate` reach each home's own stack.** The caller's `COMPOSE_PROJECT_NAME`,
+  `MDB_ENV_FILE` and profiles no longer outrank each home's `.env`, which pointed both steps at one stack
+  while the copy reported success.
 - **A project's volumes are its own**: project `mdb` no longer lists `mdb_dev`'s, which `destroy --all`
   would have offered for deletion.
 - **`data import --from` and `export --to` take paths relative to where you run them**, and an import

@@ -199,6 +199,38 @@ func (a *app) scriptEnv(ctx context.Context, root string) ([]string, error) {
 	return append(env, "COMPOSE_PROFILES="+strings.TrimSpace(out.String())), nil
 }
 
+// runInHome runs one step in another instance home (env copy, env migrate)
+// with the environment scriptEnv would give it were that home this one. The
+// caller's COMPOSE_PROJECT_NAME, MDB_ENV_FILE, COMPOSE_PROFILES and PROFILES
+// are dropped, since each outranks the home's .env, so the step reaches that
+// home's own stack: its project from its .env, its profiles from its
+// MDB_PROFILES (2026-11-24 audit, K3).
+func (a *app) runInHome(c *cobra.Command, home string, s step) error {
+	root, err := a.root()
+	if err != nil {
+		return err
+	}
+	base := a.environ
+	b := *a
+	b.profiles = ""
+	b.environ = func() []string {
+		out := make([]string, 0, len(base())+1)
+		for _, kv := range base() {
+			switch k, _, _ := strings.Cut(kv, "="); k {
+			case "MDB_HOME", "MDB_ENV_FILE", "COMPOSE_PROJECT_NAME", "COMPOSE_PROFILES", "PROFILES":
+				continue
+			}
+			out = append(out, kv)
+		}
+		return append(out, "MDB_HOME="+home)
+	}
+	env, err := b.scriptEnv(c.Context(), root)
+	if err != nil {
+		return err
+	}
+	return a.runStep(c.Context(), root, env, s)
+}
+
 // confirmed returns a step's standard input for a typed confirmation: the
 // --confirm value, or nil to let the script prompt. Under --no-input, with
 // no --confirm and nothing else satisfying the prompt, it refuses: exit 7.

@@ -240,16 +240,14 @@ database is replaced; --confirm must match the database name.`,
 				return nil
 			}
 			_, _ = fmt.Fprintf(a.stdout, "exporting %s/%s from %s\n", eng, db, src)
-			if err := a.runSteps(c, step{
+			if err := a.runInHome(c, src, step{
 				Args: []string{"scripts/transfer", "export", "--engine", eng, "--db", db, "--to", dump},
-				Env:  []string{"MDB_HOME=" + src},
 			}); err != nil {
 				return err
 			}
 			_, _ = fmt.Fprintf(a.stdout, "restoring into %s\n", dst)
-			return a.runSteps(c, step{
+			return a.runInHome(c, dst, step{
 				Args:  []string{"scripts/restore", "--engine", eng, "--db", db, "--file", dump},
-				Env:   []string{"MDB_HOME=" + dst},
 				Input: in,
 			})
 		},
