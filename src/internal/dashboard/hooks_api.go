@@ -121,6 +121,17 @@ func controlAllowed(o Options, p Principal, cur jobs.Job, op, confirm string) (i
 	return 0, ""
 }
 
+// jobScope is the scope a job's output and control need: its action's.
+// The output of an action may carry what only that scope may see, such as
+// the password project.new prints. A job whose action is not in the
+// registry needs admin.
+func jobScope(action string) Scope {
+	if a, ok := actionByName(action); ok {
+		return a.Scope
+	}
+	return ScopeAdmin
+}
+
 // flagValue is the value after flag in args, or "".
 func flagValue(args []string, flag string) string {
 	for i := 0; i+1 < len(args); i++ {

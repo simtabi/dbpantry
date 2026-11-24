@@ -396,6 +396,12 @@ func Handler(src Sources, o Options) (http.Handler, error) {
 			http.Error(w, "cross-site request refused", http.StatusForbidden)
 			return
 		}
+		// The page carries the project's password: the scope that provisions
+		// projects (operate) may see it, read may not (management-plan.md §3.1).
+		if principal(r).Scope < ScopeOperate {
+			http.Error(w, "a project's connection block needs the operate scope", http.StatusForbidden)
+			return
+		}
 		s, ok := snap(w, r)
 		if !ok {
 			return
@@ -469,6 +475,10 @@ func Handler(src Sources, o Options) (http.Handler, error) {
 		j, err := o.Runner.Get(r.PathValue("id"))
 		if err != nil {
 			apiError(w, http.StatusNotFound, err.Error())
+			return
+		}
+		if need := jobScope(j.Action); principal(r).Scope < need {
+			apiError(w, http.StatusForbidden, "the output of "+j.Action+" needs the "+need.String()+" scope")
 			return
 		}
 		for i, l := range j.Lines {

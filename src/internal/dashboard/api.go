@@ -289,8 +289,13 @@ func events(o Options) http.HandlerFunc {
 			return
 		}
 		id := r.PathValue("id")
-		if _, err := o.Runner.Get(id); err != nil {
+		j, err := o.Runner.Get(id)
+		if err != nil {
 			apiError(w, http.StatusNotFound, err.Error())
+			return
+		}
+		if need := jobScope(j.Action); principal(r).Scope < need {
+			apiError(w, http.StatusForbidden, "the output of "+j.Action+" needs the "+need.String()+" scope")
 			return
 		}
 		from := 0
@@ -305,7 +310,7 @@ func events(o Options) http.HandlerFunc {
 		h.Set("X-Accel-Buffering", "no")
 		w.WriteHeader(http.StatusOK)
 		fl.Flush()
-		err := o.Runner.Watch(r.Context(), id, from, func(n int, line string, at time.Time) error {
+		err = o.Runner.Watch(r.Context(), id, from, func(n int, line string, at time.Time) error {
 			ev := struct {
 				Line string `json:"line"`
 				At   int64  `json:"t,omitempty"`
