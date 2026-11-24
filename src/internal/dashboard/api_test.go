@@ -448,6 +448,53 @@ func TestReadScopeSeesNoPasswords(t *testing.T) {
 	}
 }
 
+// TestASecretSetIsNeverShown: config.set of a key the Configuration page
+// masks (config.LooksSecret) reaches the command whole, and the audit log,
+// the job list and the job's shown arguments as ***.
+func TestASecretSetIsNeverShown(t *testing.T) {
+	m := newMgmt(t, AuthNone, Defaults, false)
+	c, csrf := m.session(t)
+	r := m.post(c, csrf, `{"action":"config.set","params":{"key":"MDB_UI_BASIC_AUTH_HASH","value":"`+testPassword+`"}}`)
+	if r.Code != http.StatusAccepted {
+		t.Fatalf("config.set = %d %s", r.Code, r.Body)
+	}
+	if strings.Contains(r.Body.String(), testPassword) {
+		t.Error("the 202 response shows the secret")
+	}
+	var j jobs.Job
+	_ = json.Unmarshal(r.Body.Bytes(), &j)
+	wait(t, m.runner, j.ID)
+	m.mu.Lock()
+	ran := strings.Join(m.ran[len(m.ran)-1], " ")
+	m.mu.Unlock()
+	if !strings.Contains(ran, testPassword) {
+		t.Fatalf("the command did not get the value: %q", ran)
+	}
+	for name, body := range map[string]string{
+		"job list":   m.do(call{method: http.MethodGet, path: "/api/v1/jobs", cookie: c}).Body.String(),
+		"job detail": m.do(call{method: http.MethodGet, path: "/api/v1/jobs/" + j.ID, cookie: c}).Body.String(),
+		"Jobs page":  m.do(call{method: http.MethodGet, path: "/jobs", cookie: c}).Body.String(),
+	} {
+		if strings.Contains(body, testPassword) {
+			t.Errorf("the %s shows the secret", name)
+		}
+	}
+	entries, err := jobs.ReadAudit(m.audit, 0)
+	if err != nil || len(entries) == 0 {
+		t.Fatalf("audit = %v %v", entries, err)
+	}
+	if got := strings.Join(entries[0].Args, " "); strings.Contains(got, testPassword) || !strings.Contains(got, "***") {
+		t.Errorf("the audit log has %q", got)
+	}
+	// A key that is not secret is shown as set.
+	r = m.post(c, csrf, `{"action":"config.set","params":{"key":"MDB_PROFILES","value":"pg"}}`)
+	_ = json.Unmarshal(r.Body.Bytes(), &j)
+	wait(t, m.runner, j.ID)
+	if got, _ := m.runner.Get(j.ID); !strings.Contains(strings.Join(got.Args, " "), "MDB_PROFILES pg") {
+		t.Errorf("a plain key's value was hidden: %v", got.Args)
+	}
+}
+
 func TestLaunchTokenWorksOnce(t *testing.T) {
 	m := newMgmt(t, AuthToken, Defaults, false)
 	if r := m.do(call{method: http.MethodGet, path: "/"}); r.Code != http.StatusUnauthorized {
