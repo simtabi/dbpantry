@@ -26,10 +26,9 @@ done < <(
         -not -path './.git/*' | sort
 )
 
-if (( ${#candidates[@]} == 0 )); then
-    vinfo "no Dockerfiles, compose files, or workflows exist yet"
-    exit 0
-fi
+# Dozens exist; a handful means the find broke, and passing then would
+# report pinned versions it never read (2026-11-24 audit, G5).
+(( ${#candidates[@]} >= 10 )) || vfail "found only ${#candidates[@]} Dockerfile(s) and compose file(s); the scan is broken"
 
 violations=0
 
