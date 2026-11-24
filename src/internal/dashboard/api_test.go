@@ -409,6 +409,45 @@ func TestRestartingADestroyRespectsAllowDestroy(t *testing.T) {
 	}
 }
 
+// TestReadScopeSeesNoPasswords: a project's page carries its password, and
+// project.new prints the paste-ready block into its job's output, so both
+// need the scope that provisions it (operate), not read. Until 2026-11-24 a
+// read token got DB_PASSWORD from either.
+func TestReadScopeSeesNoPasswords(t *testing.T) {
+	m := newMgmt(t, AuthToken, Settings{Auth: AuthToken, Listen: "127.0.0.1:0", Confirm: ConfirmAll, SessionHours: 1}, false)
+	tok := map[Scope]string{}
+	for _, sc := range []Scope{ScopeRead, ScopeOperate} {
+		plain, _, err := m.tokens.Create("p"+sc.String(), sc, time.Hour, time.Now())
+		if err != nil {
+			t.Fatal(err)
+		}
+		tok[sc] = plain
+	}
+	get := func(sc Scope, path string) *httptest.ResponseRecorder {
+		return m.do(call{method: http.MethodGet, path: path, header: map[string]string{"Authorization": "Bearer " + tok[sc]}})
+	}
+	r := m.do(call{method: http.MethodPost, path: "/api/v1/jobs", body: `{"action":"project.new","params":{"name":"app","engine":"pg"}}`,
+		header: map[string]string{"Authorization": "Bearer " + tok[ScopeOperate]}})
+	if r.Code != http.StatusAccepted {
+		t.Fatalf("project.new = %d %s", r.Code, r.Body)
+	}
+	var j jobs.Job
+	_ = json.Unmarshal(r.Body.Bytes(), &j)
+	wait(t, m.runner, j.ID)
+	for _, path := range []string{"/projects/pg/settings", "/api/v1/jobs/" + j.ID, "/api/v1/jobs/" + j.ID + "/events"} {
+		if r := get(ScopeRead, path); r.Code != http.StatusForbidden || strings.Contains(r.Body.String(), testPassword) {
+			t.Errorf("a read token's GET %s = %d, want 403 with no password", path, r.Code)
+		}
+		if r := get(ScopeOperate, path); r.Code != http.StatusOK {
+			t.Errorf("an operate token's GET %s = %d, want 200", path, r.Code)
+		}
+	}
+	// The project list names projects to read scope, without passwords.
+	if r := get(ScopeRead, "/projects"); r.Code != http.StatusOK || strings.Contains(r.Body.String(), testPassword) {
+		t.Errorf("a read token's /projects = %d", r.Code)
+	}
+}
+
 func TestLaunchTokenWorksOnce(t *testing.T) {
 	m := newMgmt(t, AuthToken, Defaults, false)
 	if r := m.do(call{method: http.MethodGet, path: "/"}); r.Code != http.StatusUnauthorized {
