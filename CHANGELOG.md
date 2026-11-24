@@ -15,7 +15,6 @@ gate on every image, replacing Cassandra's vulnerable vendored JARs rather than
 waiving them.
 
 ### Upgrade
-
 - **Every make target now needs Go.** Each one runs the `dbpantry` binary, which `make` builds from `src/`
   the first time a target needs it after a Go file changes. Install the Go named in `src/go.mod` (1.27)
   before `make init`. What each target does is unchanged (docs/reference/cli.md, design.md D-80).
@@ -50,8 +49,6 @@ waiving them.
 - **Add-ons grouped by engine with toggles.** Status, Engine and Add-ons pages group catalog rows
   by database engine (then kind) and expose on/off switches that run `addon.enable` /
   `addon.disable`.
-
-### Added
 - **Primary & replicas + concurrent engines in the dashboard (D-104).** `/ha` explains PostgreSQL
   primary/replicas (`ha` profile), links failover/rebuild, and points at multi-engine
   `MDB_PROFILES` and multi-home Environments. Engines page: “Start several engines…”.
@@ -62,177 +59,6 @@ waiving them.
 - **Page splash / preloader (D-102).** Fluent TypeScript loader (`resources/ts/pageloader`, seven
   classes) bound by `data-dbpantry-*`; determinate `%` and stage labels; defaults favour a fast
   DOM/`#content` reveal (optional full `window` load / fonts via attributes).
-
-### Changed
-- **The release ships the `dbpantry` binary.** `release.yml` now publishes through `simtabi/.github`'s
-  shared `go-release.yml`: the binary for Linux, macOS (plus a universal build), Windows and FreeBSD on
-  amd64 and arm64, each with the kit inside (`make kit` runs first), the source archive, checksums,
-  SBOMs, provenance and the `src/vX.Y.Z` module tag. Pre-release tags (`vX.Y.Z-rc.N`) build a GitHub
-  pre-release. See docs/guides/release.md and design.md D-110.
-- **Configuration › This instance is three tiles** (env file, profiles, network), each with its
-  icon, main value, the real values behind it (path and keys set in the file; engines on and
-  extras; subnet, project name, backend and publish mode) and its buttons on one aligned footer.
-- **Slide-in panel heads use Tabler components.** The job, status and add-on panels share an
-  `offcanvas-header` with a `subheader` kicker and `offcanvas-title`; the job's facts are a
-  `datagrid`, its status the same `badge bg-*-lt` + status dot as everywhere else, its result a
-  Tabler `alert` (danger, warning, success) and Steps / Raw log a `nav-segmented`.
-- **The job output console is always dark**, in the light theme too, like the Logs view: it
-  scopes Tabler's dark theme (`data-bs-theme="dark"`) to the console.
-- **Status guide (D-108).** Help has a “What the statuses mean” section, and
-  [docs/guides/statuses.md](docs/guides/statuses.md) the same tables: engine (running, stopped,
-  leftover, disabled), service health, project, job and Live badge, each with what to do next.
-  Stack › By engine, Engines and the Status page link it. Every badge's tooltip and the Live
-  legend now read one table (`StateGuide`), and a test regenerates and checks the doc.
-  `dbpantry endpoints` prints PROFILE `enabled`/`disabled` instead of `true`/`false`, and
-  `status` / `endpoints` help point to the guide.
-- **One button size and radius, per-engine password rotation, quieter engine page (D-107).**
-  Every `.btn` and `.btn-sm` is the same 2rem control with the same corner radius as the header
-  chips and the search trigger; only `.btn-lg` is bigger, and the drawers no longer square their
-  buttons. Icon avatars are circles. The engine page shows Start once (the header), with a one-line
-  status strip instead of a second title, status and Start. The Principals card rotates this
-  engine's passwords or every engine's: `secrets rotate --engine pg|mysql|mariadb` and the
-  `secrets.rotate` action's optional `engine`. The header search shows Ctrl K off macOS, opens at
-  once (actions join when loaded, and a failed load is retried), focuses on open, answers `/`, and
-  drops the tooltip that repeated its label.
-- **Job drawer and slide-in panels redesigned (D-106).** The drawer now renders structured run
-  snapshots the CLI prints with `--events` instead of parsing pretty text: status/duration/profile
-  facts, one bar per step, a failure-first banner with Retry and a link to the failing service's log,
-  Steps/Raw views, search (`/`), an Issues filter, timestamps, Follow, foldable steps with drawn
-  tree connectors, and Connect/Next tails. Status and Add-ons drawers share the same header. SSE
-  `line` events carry the time each line was written. CLI: step icons, folded finished steps,
-  durations in one right-aligned column, unfinished work shown as `not started`/`stopped` rather
-  than failed, and failures headlined by the script's own message plus `dbpantry logs <service>`.
-- **Engine page layout rebalanced (D-101).** “Where to connect” is compact label/value rows
-  beside Projects (`row-deck`); Add-ons open in a slide-in panel with on/total badge, not a
-  tall inline card. Live refresh skips while any offcanvas or modal is open.
-
-### Fixed
-- **One failed convergence left MySQL, MariaDB and PostgreSQL unhealthy for good (D-109).**
-  The converge-failed marker survived restarts, and nothing removed it, so the healthcheck kept refusing
-  after a later start converged. Each convergence stage now clears it first; check 80 guards it. Rebuild
-  the images (`make build`) to pick it up.
-- **Aborting a job ends what it started.** Dashboard jobs and log streams run in a process group of their
-  own, killed as a whole; an aborted build no longer kept the job, and the one-change lock, until docker
-  finished. An aborted job can no longer be paused.
-- **A finished job sends one completion webhook**, whether no page or several watch it.
-- **A runtime outage reads as unavailable (503)**, never as "no such service".
-- **Off-site backups find their credentials** in the instance home, or `/run/secrets` in the backup
-  sidecar, which died after its first dump with S3 configured.
-- **A separate home's `MDB_BACKEND` is honoured**; it silently ran Compose.
-- **`env copy` and `env migrate` reach each home's own stack.** The caller's `COMPOSE_PROJECT_NAME`,
-  `MDB_ENV_FILE` and profiles no longer outrank each home's `.env`, which pointed both steps at one stack
-  while the copy reported success.
-- **A project's volumes are its own**: project `mdb` no longer lists `mdb_dev`'s, which `destroy --all`
-  would have offered for deletion.
-- **`data import --from` and `export --to` take paths relative to where you run them**, and an import
-  from a live server lands in the configured dump directory, not the kit's `backups/`.
-- **`--listen` accepts a unix socket path**, sessions are capped in mode `none`, a value such as `-1`
-  is no longer read as a flag by `config set`, and `/operations` lists API tokens to admins only.
-- **`make go-lint` and `go test -race` pass again**: 64 lint findings and a data race in a test had
-  reached `main` while CI's jobs were not running.
-- **Job drawer kept spinning after fail and painted a dead 0% bar.** Failed steps abandon
-  running children; the drawer settles leftover spinners, strips double ✔ from tree rows,
-  drives the header from ASCII bars without dumping ░ rows, and tightens line spacing.
-- **Pretty CLI tree looked padded and dotted (D-105).** Removed the left gutter and title blank,
-  dropped the continuing `│` column under nested steps, and tightened blanks between the tree,
-  Connect table and Next hints so `up` / `down` / `project new` read flush and natural. Done
-  leaves no longer echo Compose’s `Healthy`/`Built` text; Overview flags leftover engines.
-  Job drawer follow-up: stop painting `·` marks on tree/plain rows, collapse that empty mark
-  column in CSS, and print the title once on Stop. Interactive follow-up: off-TTY `--pretty`
-  streams nested compose tree lines mid-flight, prints each finished step as ✔, buckets elapsed
-  every 3s, and the drawer shows header + per-row progress bars with %/ETA when known.
-- **Splash could cover the page forever.** A synchronous `<head>` boot captured a null splash
-  root, so hide cleared `data-dbpantry-loading` but left the overlay visible. Script is `defer`,
-  root is re-queried, maxMs race is cleared, and `<noscript>` reveals the page.
-- **Add-ons / Databases Live wiped wizard state.** Those pages keep Live off (`Refresh: false`)
-  so a partial refresh cannot drop step/selection or `?engine=`.
-- **Overview “Needs attention” showed a “Soon” stub** next to enabled-but-stopped engines, and
-  could claim “Nothing needs attention” while Publish=`none` was listed. Labels are View / Start /
-  Review / Optional; empty state only when no rows apply.
-- **Engines cards were unclickable when off or leftover.** Tabler's `card-inactive` sets
-  `pointer-events: none`, which killed every link and the ⋮ menu on non-running engines. Cards
-  now use a visual dim class only; title is a stretched link; menus stay above it.
-- **`dbpantry doctor` and Operate → System.** Host, binary and container-runtime facts on the CLI
-  and `/system` (design.md D-93).
-- **Declarative add-ons.** Catalog of poolers, PostgreSQL extensions, embed toggles and UIs the
-  stack already ships; `dbpantry addon ls|enable|disable` (enable runs `CREATE EXTENSION` on project
-  DBs; disable never `DROP`s), multi-step `/addons` wizard (engine → catalog → review → job), Status
-  card (supported + enabled engines only), and a per-engine strip with `?engine=` (design.md D-96).
-- **Databases & users wizard.** Data → Databases & users: shared-hosting provision steps, privileges
-  matrix, rename-via-recreate, password reveal on the project page (design.md D-97).
-
-### Fixed
-- **Job drawer dumped spinner frames as white text.** Each Live progress tick became a new
-  `pre` line (no colours, no %/ETA), and Stack › By engine stayed stale after activate/deactivate
-  because it was outside `data-sync`. Off-TTY Live now skips spinner-/sub-second-only updates; the
-  drawer is a structured viewer with step coalesce, status colours, and a progress bar with
-  percentage and ETA; engine nav syncs on every partial refresh. Containers still up after profiles
-  drop them show `up · off` (azure) instead of a green dot beside a plain `off` badge
-  (design.md D-95).
-- **Connect (and project) code snippets were invisible.** Tabler styles every `<pre>` with a light
-  colour for dark code blocks; `.mdb-env` sits on the light surface, so Join-the-network, TLS CA path
-  and `.env` blocks looked empty and Copy seemed broken. `.mdb-env` now sets `--tblr-body-color`.
-- **Projects nav badge disagreed with its dropdown.** The badge counted every password-file project
-  (including orphaned) while the menu hid orphans. The menu now lists them with an `orphaned` badge,
-  and Connect is a top-level nav link (not only under Help).
-- **Connect page and instance menu.** Publish modes are three cards with In use / Available, Switch
-  via `config.set`, and Start to apply; engine address Copy sits in Quick access. The Instance menu
-  is short links (Configuration, Connect, About, Status JSON); profiles, network and env editing
-  live on Configuration's instance summary.
-- **Dashboard confirms and feedback.** With `confirm: all` (default), operate actions open a soft
-  confirm modal first; destructive ones always need the CLI's typed value. Job output uses an
-  improved slide-in drawer (follow toggle, clearer progress); toasts report copy, job start and
-  finish. Running jobs show the action's title instead of its machine name.
-- **Thin PATH finds Docker.** `dbpantry` appends well-known container CLI directories
-  (`/usr/local/bin`, Homebrew, OrbStack, …) when it runs scripts, so a dashboard started with
-  `PATH=/usr/bin:/bin` still lists services. Check 79 guards it (design.md D-88).
-- **Grouped dashboard nav.** Overview · Stack (services, images, engines) · Data (projects,
-  backups) · Operate · Connect · Help, with section headers inside each menu instead of a flat
-  nine-item bar and broken split carets.
-- **Dashboard jobs no longer dump BuildKit.** Jobs run with `--pretty`, so the drawer shows the
-  same step tree, progress bar, percentage and ETA as a terminal `up` (design.md D-89). Closing the
-  drawer or the confirm modal is blocked while a command is running or starting.
-- **Tooltips and popovers on actions and nav.** Every action button names the `dbpantry` command it
-  runs; Operations rows use popovers; Tabler tooltips bind on load and after each refresh.
-- **Connect and Engines actions.** Engine cards keep clickable details links plus a ⋮ menu
-  (restart, rebuild/update, disconnect, destroy volume, verify). Connect's next-steps card runs
-  declared jobs (`project.new`, `stack.start`, `up`/`down`, `verify`); interactive shells stay
-  Copy-only. Connect is a main-nav item (no duplicate header CTA); Live pauses/resumes refresh; Back
-  and job restore across reload (design.md D-90).
-- **Dropdowns no longer clip; tooltips no longer stack.** In-page ⋮ / More menus use Popper
-  `strategy: fixed` so `.table-responsive` / cards cannot hide them. Tooltips dispose before each
-  partial refresh, skip `.dropdown-menu` items, and hide when a menu or action opens. Live refresh
-  skips while a menu is open (no more random autoclose). Engine ⋮ uses Operate / Stop submenus.
-- **Stack nav dots reflect running state**, not only `MDB_PROFILES`. Engines nest under By engine.
-  **Status as JSON** opens a slide-in panel. Config group rows use a theme-aware section style
-  (no white `table-light` bars in dark mode). Configuration hosts Switch profiles / Configure
-  subnet / Rename project (`config.set`). Operate adds Clients: connection details, project `.env`,
-  provision, verify, and status JSON.
-- **Dashboard i18n** (en/es/fr/de/pt/ja) for chrome; **Help** and **About** pages with version,
-  licences and engine licence table; page-header **Back/Forward** history. Projects and unmanaged
-  databases use ⋮ action menus (adopt unmanaged via `project.new`). Help links prefer in-app
-  `/help`, `/about` and `/api/v1/actions` over unpublished GitHub doc paths.
-- **Header status chrome and Connect feedback** (design.md D-92). Notifications, language (`EN`)
-  and Instance menus follow Tabler patterns; header service/engine/image counters live in a
-  stats dropdown chip beside Live. Live badge colours Live / Paused / Retrying / Disconnected.
-  Overview “Where to connect” is stacked list rows (no horizontal scroll). Connect explains
-  `MDB_PUBLISH=none` with an alert, equal-height publish cards, and matching Join/TLS cards.
-- **Overview CRM layout.** Welcome lead, eight icon-left KPI cards, stack funnel and needs-attention
-  list, services and connect side by side, projects table with recent jobs — denser Tabler CRM home.
-- **Dashboard demo URL.** Launch line always prints a browser-openable `http://127.0.0.1:…/` (rewrites
-  `0.0.0.0`/`::`); docs stress Host must be localhost. `make demo-dashboard` runs a detached
-  AUTH=none process via `scripts/demo-dashboard` (survives SIGHUP; `demo-dashboard-stop` /
-  `scripts/demo-dashboard status`). Status drawer uses `/api/v1/status`.
-- **Dashboard cold-cache stampede.** Concurrent first page loads no longer each start a full stack
-  reading; `cached` single-flights the in-flight snapshot (design.md D-83).
-- **Services health / image overflow.** Health uses compact badges (`no check` for none) instead of
-  Tabler's fixed-height `.status` pill; image digests truncate via `.mdb-cell-ref` (ellipsis + title).
-- **Page header chrome.** Back/forward history chips sit in the top navbar beside Live; page titles
-  use Tabler breadcrumbs (under the title; every crumb is a real page) and coloured page icons.
-- **Service log viewer.** `/services/{svc}/logs` formats lines into prefix / level / message with
-  colours, filter, level chips, wrap and a follow-hold “new lines” pill.
-
-### Added
 - **`/status` page.** Health %, services, engines, images/projects, recent jobs and a Live badge
   legend; linked from the header counters, Operate, Help, footer and Overview.
 - **`stack.start` dashboard action.** Boots and optionally provisions via `dbpantry start
@@ -248,122 +74,6 @@ waiving them.
 - **`project ls` / `project rotate` / `project drop`.** Live databases and extensions per engine, joined
   with password files; atomic password rotation; typed-confirmation drop of database, roles, secrets and
   client certs.
-
-### Changed
-- **The `dbpantry` binary runs with no checkout.** It carries the kit (scripts, compose files, engines,
-  image sources) and, run where there is no checkout, extracts it to `~/.config/dbpantry/kit/<version>`,
-  verified by checksum on every run, with the instance in `~/.config/dbpantry`. `--home` or
-  `DBPANTRY_HOME` choose another home. `make kit` generates the embedded copy (design.md D-85).
-- **`check-env` no longer refuses a fresh init on a machine running PostgreSQL** when the stack publishes
-  no ports: it used to fall back to every port in the env file, HAProxy's 5432 included, though HA was off.
-- **The instance can live outside the checkout.** `MDB_HOME`, set in the environment, names the
-  directory that holds `.env`, `secrets/`, `certs/`, `backups/`, the generated compose files and the
-  rendered config; with it set, nothing is written into the checkout. It defaults to the checkout,
-  so nothing changes unless you set it. Check 77 boots a stack with a separate home and fails if the
-  checkout changes (docs/guides/configuration.md, design.md D-84).
-- **`fixture up` runs beside the stack instead of replacing it.** It is now its own Compose project
-  (`<project>-fixture`) on `MDB_FIXTURE_PORT_BASE` (default 55000), so a test suite's tmpfs engines
-  no longer restart every application's database, and `fixture down` stops only the fixture. No
-  consumer read the fixture's old ports (searched simtabi, laranail and sangehq, 11,677 files). Check 64
-  now looks for the fixture's containers and volumes in its own project, and fails if it finds no fixture
-  container or one in the stack's project.
--- **The make targets run the `dbpantry` binary** (refactor plan phase 2, design.md D-80). Every target
-  except `help`, `dbpantry` and the `go-*` targets now runs a `dbpantry` command, which runs the script the
-  target used to run, with the same arguments, and exits with that script's status. Check 74 holds each
-  target to the command `docs/reference/parity.tsv` names. `make test-profile` is `dbpantry up --profile test`,
-  `make shell` is `dbpantry tools`, and the engine shells pass their client to `dbpantry shell SERVICE --`.
-- **`dbpantry` usage errors exit 64, not 2**, following the exit-code table dbpantry shares with mesobia.
-  A typed confirmation refused under `--no-input` exits 7. An unknown subcommand is now a usage error
-  rather than the parent's help with exit 0.
-- **`scripts/exposure-notice` lists every engine the stack can run** from the descriptors, not `pg` and
-  `mysql` only (refactor plan §14.2).
- **Container images are no longer published.** A release publishes the GitHub release only, with
-  the notes and the source tarball (owner, 2026-11-13). The `ghcr.io/simtabi/dbpantry-*` images are
-  frozen: no new tag is pushed and nothing is deleted from ghcr.io. Build the images with
-  `make build` (design.md D-77).
-- **Images are built, run and deployed as `localhost/dbpantry-<component>:<tag>`,** and nothing
-  falls back to a remote registry. One default, `MDB_IMAGE_PREFIX=localhost` in
-  `scripts/env-lib.sh`, replaces every hard-coded registry: Compose, the generated engine and pooler
-  services, the patroni build, the Makefile, `scripts/{build,upgrade,verify-backups,transfer,scan}`,
-  the verify checks and the CI scan steps. The Helm chart's `global.imageRegistry` defaults to
-  `localhost`, `make up` on Kubernetes passes it the prefix the images were built under, and kind
-  loading follows it; `imagePullPolicy` stays `IfNotPresent`. Setting `MDB_IMAGE_PREFIX` (or
-  `global.imageRegistry` when installing the chart by hand) prefixes every image. The Kubernetes
-  guide shows `kind load docker-image`, `minikube image load` and pushing to your own registry.
-  Check 73 fails if any default names a remote registry or a set prefix stops reaching every image,
-  and check 49 now resolves every `${VAR:-default}` in an image reference. Checks 42 and 72 recognise
-  our images as `localhost/dbpantry-*`, and `make init-prod` resolves the caddy image the way Compose
-  does (`mdb_compose_ref`) before running it (design.md D-78).
-- **A release runs on a pushed `vX.Y.Z` tag, or on request for a tag already on GitHub:**
-  `gh workflow run release.yml --repo simtabi/dbpantry -f tag=vX.Y.Z`. This replaces the dispatch
-  gated on `-f confirm=release-go` (D-76). Every job checks out the tag, and the first step refuses
-  anything but a version tag that exists on GitHub (docs/guides/release.md, design.md D-77).
-- **`make dbpantry` writes `build/<os>/dbpantry`** (`build/macos/dbpantry`, `build/linux/dbpantry`),
-  the org's build layout: one folder per OS and nothing else in `build/`. It wrote `build/dbpantry`
-  before; delete that file if you built one. Check 67 fails on anything else in `build/`, and the
-  binary finds its checkout from either location.
-- **The prod overlay is applied** (design.md D-73). Nothing put `compose.prod.yml` in `COMPOSE_FILE`, so a prod
-  `make up` applied none of it. `make init-prod` now writes `COMPOSE_FILE` with the overlay and a generated
-  `compose.prod.engines.yml` that covers every engine and pooler; `check-env` refuses a prod boot without them
-  and names `make prod-overlay`, and detects `prod` from `PROFILES=` as well as `MDB_PROFILES`.
-  `MDB_PUBLISH_ENGINES=true` is the deprecated opt-out.
-- **pgBouncer serves client TLS** (design.md D-69). It reuses the certificate `make certs` issues for
-  PostgreSQL, so a client trusting `certs/ca.crt` can use `sslmode=verify-full` against `pg-pooler`.
-  Under `MDB_TLS_ENFORCE=true` (the prod profile) it sets `client_tls_sslmode = require`, refusing
-  plaintext clients, and `server_tls_sslmode = require`, so the hop to PostgreSQL can no longer fall
-  back to plaintext; it refuses to start with no certificate mounted. Otherwise it sets
-  `client_tls_sslmode = prefer` and plaintext still connects. Before this the pooler accepted
-  plaintext only, so an application connecting from another host with `sslmode=require` could not
-  connect. Check 68 proves both modes; no new `MDB_` variable.
-- `scripts/certs` adds `DNS:pg-pooler` to the PostgreSQL certificate, and an `MDB_EXTRA_SANS` entry
-  that is an IP address now also gets an `IP:` SAN (it was written as `DNS:` only). Run
-  `make certs-renew` to re-issue existing certificates; restart `pg-pooler` afterwards, since it
-  copies the certificate at start (`certs-renew` says so when it is running).
-- docs/runbooks/operations.md covers an application on another host (direct publish of the pooler
-  on a private `MDB_BIND_ADDR`) and a firewall that works with Docker's DNAT, matching
-  `DOCKER-USER` on `--ctorigdstport`; docs/guides/pooling.md gives the client settings.
-- The CI build matrix comes from `dbpantry manifest --matrix versions`; `scripts/ci-matrix` stays
-  and check 62 holds the two byte-identical.
-- `scripts/helm-values` and the Kubernetes backend read the engine list from the descriptors
-  (every implemented engine) instead of listing five engines each. The list is the same five.
-- The `.env.example` note on published ports said BASE plus the engine's own port; it is BASE
-  plus the descriptor's offset, which is what `gen-compose` has always done.
-- Markdown files use lowercase slug names (design.md D-61): `design.md`, `docs/runbooks/*.md`,
-  `docs/reference/spec.md`, `kit.md` and others. Git and GitHub conventional names stay upper case:
-  `README.md` (also `rls/README.md` and `scripts/runtimes/README.md`), `CHANGELOG.md`, `CONTRIBUTING.md`,
-  `SECURITY.md`, `CODE_OF_CONDUCT.md`, `LICENSE`, `CLAUDE.md` and `.github/PULL_REQUEST_TEMPLATE.md`.
-
-- **Each engine now maintains its current and latest version only** (design.md D-57,
-  [Supported versions](docs/guides/versions.md)): the newest supported line and the one before it,
-  confirmed from each project's own end-of-life page. The menu goes from 16 versions to 11:
-  PostgreSQL 17 · 18, MySQL 8.4 · 9.7, MariaDB 11.8 · 12.3, MongoDB 7.0 · 8.0 · 9.0, Cassandra 5.0
-  and FerretDB 2. A `.env` naming a version that left the menu fails `make check-env` and its
-  volume is untouched; [Upgrade](docs/runbooks/upgrade.md) covers moving it, or keep it through
-  `MDB_<ENGINE>_BASE_IMAGE`, unsupported.
-- **The MariaDB default moves from 11.4 to 11.8.** MongoDB keeps 7.0 as its default, the
-  one exception to the policy: 8.x and 9.x refuse to start on kernels reporting 6.19 to
-  7.0.13 (SERVER-121912), and every Ubuntu 7.0 kernel, GitHub's runners included, reports
-  7.0.0 (SERVER-136848).
-- MongoDB 7.0 is repinned to 7.0.45, and 8.0 to 8.0.34.
-- **The project is renamed dbpantry** (design.md D-54). The repository moved from
-  `simtabi/multidb-server-docker` to `simtabi/dbpantry`; GitHub redirects the old URL. Images
-  are now `dbpantry-<engine>`: run `make build` again, and the next `make up`
-  regenerates the compose files with the new names. The `MDB_` variables, the `mdb`
-  Compose project and `mdb_net` network, and the engine descriptor contract keep their names,
-  so existing `.env` files, containers and volumes carry over unchanged.
-- The README drops the GHCR badge and the hosted-docs link, which pointed at pages that do not
-  exist yet.
-- **Files are grouped by how they are used** (design.md D-59, [the plan](docs/reorganization-plan.md)).
-  `caddy/`, `haproxy/` and `proxysql/` move under `config/`; `docs/` splits into `guides/`,
-  `runbooks/` and `reference/`, and `IMAGE-PROVENANCE.md` becomes
-  `docs/reference/image-provenance.md`. Every link and path is updated. A checkout with
-  rendered files in the old `caddy/` regenerates them on the next `make up`.
-- `make verify` takes `CHECKS=21,28` and `TAGS=pg,backup`; `VERIFY_TAGS` accepts several tags,
-  and a filter that matches nothing fails rather than reporting green.
-- design.md: the second D-51 (vulnerability waivers) is renumbered D-58, and D-23 and
-  D-52 to D-57, which sat after the end of the document, are back in the decision log.
-
-### Added
 - **A step tree, progress bars and tables on a terminal** (design.md D-81). `make up` shows each step with a spinner and its time, and groups Compose's work into networks, images and containers. Each image build gets a bar with its percentage and an estimated time left. The run ends with a Connect table for the engines you started. `make down` shows what it removed. `make new-project` shows what it generated, the roles and each extension (with a warning for one that could not be created), a table of the project, and the `.env` block flush left between rules. Off a terminal, or with `--plain`, output is unchanged. `--pretty` forces the view.
 - **`make start`: everything in one command.** It boots `PROFILES`, provisions `PROJECTS=name[:engine],…` on every engine in them, then serves the dashboard. Every step is idempotent; `NO_DASHBOARD=1` stops after provisioning.
 - **`make dashboard`**: a read-only web dashboard on `http://127.0.0.1:8484/`, built with Tabler 1.7.5's CSS and JavaScript embedded in the binary. Tabler's two-row header and icon menu lead to Overview, Services (state, health, uptime, image), Images, Engines (one page each: addresses, pooler, TLS, extensions, principals), Projects, Backups and Connect. Each project's page has its paste-ready `.env` block, the password blurred until shown, with copy buttons. Pages refresh every five seconds, and the same data, without passwords, is at `/api/status`.
@@ -477,8 +187,290 @@ waiving them.
 - Check 47 fails on a compose bind-mount source, build context or dockerfile that does not
   exist and is not a known generated file.
 
-### Fixed
+### Changed
+- **The release ships the `dbpantry` binary.** `release.yml` now publishes through `simtabi/.github`'s
+  shared `go-release.yml`: the binary for Linux, macOS (plus a universal build), Windows and FreeBSD on
+  amd64 and arm64, each with the kit inside (`make kit` runs first), the source archive, checksums,
+  SBOMs, provenance and the `src/vX.Y.Z` module tag. Pre-release tags (`vX.Y.Z-rc.N`) build a GitHub
+  pre-release. See docs/guides/release.md and design.md D-110.
+- **Configuration › This instance is three tiles** (env file, profiles, network), each with its
+  icon, main value, the real values behind it (path and keys set in the file; engines on and
+  extras; subnet, project name, backend and publish mode) and its buttons on one aligned footer.
+- **Slide-in panel heads use Tabler components.** The job, status and add-on panels share an
+  `offcanvas-header` with a `subheader` kicker and `offcanvas-title`; the job's facts are a
+  `datagrid`, its status the same `badge bg-*-lt` + status dot as everywhere else, its result a
+  Tabler `alert` (danger, warning, success) and Steps / Raw log a `nav-segmented`.
+- **The job output console is always dark**, in the light theme too, like the Logs view: it
+  scopes Tabler's dark theme (`data-bs-theme="dark"`) to the console.
+- **Status guide (D-108).** Help has a “What the statuses mean” section, and
+  [docs/guides/statuses.md](docs/guides/statuses.md) the same tables: engine (running, stopped,
+  leftover, disabled), service health, project, job and Live badge, each with what to do next.
+  Stack › By engine, Engines and the Status page link it. Every badge's tooltip and the Live
+  legend now read one table (`StateGuide`), and a test regenerates and checks the doc.
+  `dbpantry endpoints` prints PROFILE `enabled`/`disabled` instead of `true`/`false`, and
+  `status` / `endpoints` help point to the guide.
+- **One button size and radius, per-engine password rotation, quieter engine page (D-107).**
+  Every `.btn` and `.btn-sm` is the same 2rem control with the same corner radius as the header
+  chips and the search trigger; only `.btn-lg` is bigger, and the drawers no longer square their
+  buttons. Icon avatars are circles. The engine page shows Start once (the header), with a one-line
+  status strip instead of a second title, status and Start. The Principals card rotates this
+  engine's passwords or every engine's: `secrets rotate --engine pg|mysql|mariadb` and the
+  `secrets.rotate` action's optional `engine`. The header search shows Ctrl K off macOS, opens at
+  once (actions join when loaded, and a failed load is retried), focuses on open, answers `/`, and
+  drops the tooltip that repeated its label.
+- **Job drawer and slide-in panels redesigned (D-106).** The drawer now renders structured run
+  snapshots the CLI prints with `--events` instead of parsing pretty text: status/duration/profile
+  facts, one bar per step, a failure-first banner with Retry and a link to the failing service's log,
+  Steps/Raw views, search (`/`), an Issues filter, timestamps, Follow, foldable steps with drawn
+  tree connectors, and Connect/Next tails. Status and Add-ons drawers share the same header. SSE
+  `line` events carry the time each line was written. CLI: step icons, folded finished steps,
+  durations in one right-aligned column, unfinished work shown as `not started`/`stopped` rather
+  than failed, and failures headlined by the script's own message plus `dbpantry logs <service>`.
+- **Engine page layout rebalanced (D-101).** “Where to connect” is compact label/value rows
+  beside Projects (`row-deck`); Add-ons open in a slide-in panel with on/total badge, not a
+  tall inline card. Live refresh skips while any offcanvas or modal is open.
+- **The `dbpantry` binary runs with no checkout.** It carries the kit (scripts, compose files, engines,
+  image sources) and, run where there is no checkout, extracts it to `~/.config/dbpantry/kit/<version>`,
+  verified by checksum on every run, with the instance in `~/.config/dbpantry`. `--home` or
+  `DBPANTRY_HOME` choose another home. `make kit` generates the embedded copy (design.md D-85).
+- **`check-env` no longer refuses a fresh init on a machine running PostgreSQL** when the stack publishes
+  no ports: it used to fall back to every port in the env file, HAProxy's 5432 included, though HA was off.
+- **The instance can live outside the checkout.** `MDB_HOME`, set in the environment, names the
+  directory that holds `.env`, `secrets/`, `certs/`, `backups/`, the generated compose files and the
+  rendered config; with it set, nothing is written into the checkout. It defaults to the checkout,
+  so nothing changes unless you set it. Check 77 boots a stack with a separate home and fails if the
+  checkout changes (docs/guides/configuration.md, design.md D-84).
+- **`fixture up` runs beside the stack instead of replacing it.** It is now its own Compose project
+  (`<project>-fixture`) on `MDB_FIXTURE_PORT_BASE` (default 55000), so a test suite's tmpfs engines
+  no longer restart every application's database, and `fixture down` stops only the fixture. No
+  consumer read the fixture's old ports (searched simtabi, laranail and sangehq, 11,677 files). Check 64
+  now looks for the fixture's containers and volumes in its own project, and fails if it finds no fixture
+  container or one in the stack's project.
+-- **The make targets run the `dbpantry` binary** (refactor plan phase 2, design.md D-80). Every target
+  except `help`, `dbpantry` and the `go-*` targets now runs a `dbpantry` command, which runs the script the
+  target used to run, with the same arguments, and exits with that script's status. Check 74 holds each
+  target to the command `docs/reference/parity.tsv` names. `make test-profile` is `dbpantry up --profile test`,
+  `make shell` is `dbpantry tools`, and the engine shells pass their client to `dbpantry shell SERVICE --`.
+- **`dbpantry` usage errors exit 64, not 2**, following the exit-code table dbpantry shares with mesobia.
+  A typed confirmation refused under `--no-input` exits 7. An unknown subcommand is now a usage error
+  rather than the parent's help with exit 0.
+- **`scripts/exposure-notice` lists every engine the stack can run** from the descriptors, not `pg` and
+  `mysql` only (refactor plan §14.2).
+ **Container images are no longer published.** A release publishes the GitHub release only, with
+  the notes and the source tarball (owner, 2026-11-13). The `ghcr.io/simtabi/dbpantry-*` images are
+  frozen: no new tag is pushed and nothing is deleted from ghcr.io. Build the images with
+  `make build` (design.md D-77).
+- **Images are built, run and deployed as `localhost/dbpantry-<component>:<tag>`,** and nothing
+  falls back to a remote registry. One default, `MDB_IMAGE_PREFIX=localhost` in
+  `scripts/env-lib.sh`, replaces every hard-coded registry: Compose, the generated engine and pooler
+  services, the patroni build, the Makefile, `scripts/{build,upgrade,verify-backups,transfer,scan}`,
+  the verify checks and the CI scan steps. The Helm chart's `global.imageRegistry` defaults to
+  `localhost`, `make up` on Kubernetes passes it the prefix the images were built under, and kind
+  loading follows it; `imagePullPolicy` stays `IfNotPresent`. Setting `MDB_IMAGE_PREFIX` (or
+  `global.imageRegistry` when installing the chart by hand) prefixes every image. The Kubernetes
+  guide shows `kind load docker-image`, `minikube image load` and pushing to your own registry.
+  Check 73 fails if any default names a remote registry or a set prefix stops reaching every image,
+  and check 49 now resolves every `${VAR:-default}` in an image reference. Checks 42 and 72 recognise
+  our images as `localhost/dbpantry-*`, and `make init-prod` resolves the caddy image the way Compose
+  does (`mdb_compose_ref`) before running it (design.md D-78).
+- **A release runs on a pushed `vX.Y.Z` tag, or on request for a tag already on GitHub:**
+  `gh workflow run release.yml --repo simtabi/dbpantry -f tag=vX.Y.Z`. This replaces the dispatch
+  gated on `-f confirm=release-go` (D-76). Every job checks out the tag, and the first step refuses
+  anything but a version tag that exists on GitHub (docs/guides/release.md, design.md D-77).
+- **`make dbpantry` writes `build/<os>/dbpantry`** (`build/macos/dbpantry`, `build/linux/dbpantry`),
+  the org's build layout: one folder per OS and nothing else in `build/`. It wrote `build/dbpantry`
+  before; delete that file if you built one. Check 67 fails on anything else in `build/`, and the
+  binary finds its checkout from either location.
+- **The prod overlay is applied** (design.md D-73). Nothing put `compose.prod.yml` in `COMPOSE_FILE`, so a prod
+  `make up` applied none of it. `make init-prod` now writes `COMPOSE_FILE` with the overlay and a generated
+  `compose.prod.engines.yml` that covers every engine and pooler; `check-env` refuses a prod boot without them
+  and names `make prod-overlay`, and detects `prod` from `PROFILES=` as well as `MDB_PROFILES`.
+  `MDB_PUBLISH_ENGINES=true` is the deprecated opt-out.
+- **pgBouncer serves client TLS** (design.md D-69). It reuses the certificate `make certs` issues for
+  PostgreSQL, so a client trusting `certs/ca.crt` can use `sslmode=verify-full` against `pg-pooler`.
+  Under `MDB_TLS_ENFORCE=true` (the prod profile) it sets `client_tls_sslmode = require`, refusing
+  plaintext clients, and `server_tls_sslmode = require`, so the hop to PostgreSQL can no longer fall
+  back to plaintext; it refuses to start with no certificate mounted. Otherwise it sets
+  `client_tls_sslmode = prefer` and plaintext still connects. Before this the pooler accepted
+  plaintext only, so an application connecting from another host with `sslmode=require` could not
+  connect. Check 68 proves both modes; no new `MDB_` variable.
+- `scripts/certs` adds `DNS:pg-pooler` to the PostgreSQL certificate, and an `MDB_EXTRA_SANS` entry
+  that is an IP address now also gets an `IP:` SAN (it was written as `DNS:` only). Run
+  `make certs-renew` to re-issue existing certificates; restart `pg-pooler` afterwards, since it
+  copies the certificate at start (`certs-renew` says so when it is running).
+- docs/runbooks/operations.md covers an application on another host (direct publish of the pooler
+  on a private `MDB_BIND_ADDR`) and a firewall that works with Docker's DNAT, matching
+  `DOCKER-USER` on `--ctorigdstport`; docs/guides/pooling.md gives the client settings.
+- The CI build matrix comes from `dbpantry manifest --matrix versions`; `scripts/ci-matrix` stays
+  and check 62 holds the two byte-identical.
+- `scripts/helm-values` and the Kubernetes backend read the engine list from the descriptors
+  (every implemented engine) instead of listing five engines each. The list is the same five.
+- The `.env.example` note on published ports said BASE plus the engine's own port; it is BASE
+  plus the descriptor's offset, which is what `gen-compose` has always done.
+- Markdown files use lowercase slug names (design.md D-61): `design.md`, `docs/runbooks/*.md`,
+  `docs/reference/spec.md`, `kit.md` and others. Git and GitHub conventional names stay upper case:
+  `README.md` (also `rls/README.md` and `scripts/runtimes/README.md`), `CHANGELOG.md`, `CONTRIBUTING.md`,
+  `SECURITY.md`, `CODE_OF_CONDUCT.md`, `LICENSE`, `CLAUDE.md` and `.github/PULL_REQUEST_TEMPLATE.md`.
 
+- **Each engine now maintains its current and latest version only** (design.md D-57,
+  [Supported versions](docs/guides/versions.md)): the newest supported line and the one before it,
+  confirmed from each project's own end-of-life page. The menu goes from 16 versions to 11:
+  PostgreSQL 17 · 18, MySQL 8.4 · 9.7, MariaDB 11.8 · 12.3, MongoDB 7.0 · 8.0 · 9.0, Cassandra 5.0
+  and FerretDB 2. A `.env` naming a version that left the menu fails `make check-env` and its
+  volume is untouched; [Upgrade](docs/runbooks/upgrade.md) covers moving it, or keep it through
+  `MDB_<ENGINE>_BASE_IMAGE`, unsupported.
+- **The MariaDB default moves from 11.4 to 11.8.** MongoDB keeps 7.0 as its default, the
+  one exception to the policy: 8.x and 9.x refuse to start on kernels reporting 6.19 to
+  7.0.13 (SERVER-121912), and every Ubuntu 7.0 kernel, GitHub's runners included, reports
+  7.0.0 (SERVER-136848).
+- MongoDB 7.0 is repinned to 7.0.45, and 8.0 to 8.0.34.
+- **The project is renamed dbpantry** (design.md D-54). The repository moved from
+  `simtabi/multidb-server-docker` to `simtabi/dbpantry`; GitHub redirects the old URL. Images
+  are now `dbpantry-<engine>`: run `make build` again, and the next `make up`
+  regenerates the compose files with the new names. The `MDB_` variables, the `mdb`
+  Compose project and `mdb_net` network, and the engine descriptor contract keep their names,
+  so existing `.env` files, containers and volumes carry over unchanged.
+- The README drops the GHCR badge and the hosted-docs link, which pointed at pages that do not
+  exist yet.
+- **Files are grouped by how they are used** (design.md D-59, [the plan](docs/reorganization-plan.md)).
+  `caddy/`, `haproxy/` and `proxysql/` move under `config/`; `docs/` splits into `guides/`,
+  `runbooks/` and `reference/`, and `IMAGE-PROVENANCE.md` becomes
+  `docs/reference/image-provenance.md`. Every link and path is updated. A checkout with
+  rendered files in the old `caddy/` regenerates them on the next `make up`.
+- `make verify` takes `CHECKS=21,28` and `TAGS=pg,backup`; `VERIFY_TAGS` accepts several tags,
+  and a filter that matches nothing fails rather than reporting green.
+- design.md: the second D-51 (vulnerability waivers) is renumbered D-58, and D-23 and
+  D-52 to D-57, which sat after the end of the document, are back in the decision log.
+
+### Removed
+- **Cassandra 4.1** (design.md D-57). It vendors snakeyaml 1.x, open to CVE-2022-1471, and
+  cannot load the 2.x line that fixes it. D-57 records when it comes back.
+- PostgreSQL 15 and 16, MySQL 8.0, MariaDB 10.11 and 11.4, MongoDB 8.3 from the
+  maintained menu. Each still runs through `MDB_<ENGINE>_BASE_IMAGE`, unsupported.
+
+### Fixed
+- **One failed convergence left MySQL, MariaDB and PostgreSQL unhealthy for good (D-109).**
+  The converge-failed marker survived restarts, and nothing removed it, so the healthcheck kept refusing
+  after a later start converged. Each convergence stage now clears it first; check 80 guards it. Rebuild
+  the images (`make build`) to pick it up.
+- **Aborting a job ends what it started.** Dashboard jobs and log streams run in a process group of their
+  own, killed as a whole; an aborted build no longer kept the job, and the one-change lock, until docker
+  finished. An aborted job can no longer be paused.
+- **A finished job sends one completion webhook**, whether no page or several watch it.
+- **A runtime outage reads as unavailable (503)**, never as "no such service".
+- **Off-site backups find their credentials** in the instance home, or `/run/secrets` in the backup
+  sidecar, which died after its first dump with S3 configured.
+- **A separate home's `MDB_BACKEND` is honoured**; it silently ran Compose.
+- **`env copy` and `env migrate` reach each home's own stack.** The caller's `COMPOSE_PROJECT_NAME`,
+  `MDB_ENV_FILE` and profiles no longer outrank each home's `.env`, which pointed both steps at one stack
+  while the copy reported success.
+- **A project's volumes are its own**: project `mdb` no longer lists `mdb_dev`'s, which `destroy --all`
+  would have offered for deletion.
+- **`data import --from` and `export --to` take paths relative to where you run them**, and an import
+  from a live server lands in the configured dump directory, not the kit's `backups/`.
+- **`--listen` accepts a unix socket path**, sessions are capped in mode `none`, a value such as `-1`
+  is no longer read as a flag by `config set`, and `/operations` lists API tokens to admins only.
+- **`make go-lint` and `go test -race` pass again**: 64 lint findings and a data race in a test had
+  reached `main` while CI's jobs were not running.
+- **Job drawer kept spinning after fail and painted a dead 0% bar.** Failed steps abandon
+  running children; the drawer settles leftover spinners, strips double ✔ from tree rows,
+  drives the header from ASCII bars without dumping ░ rows, and tightens line spacing.
+- **Pretty CLI tree looked padded and dotted (D-105).** Removed the left gutter and title blank,
+  dropped the continuing `│` column under nested steps, and tightened blanks between the tree,
+  Connect table and Next hints so `up` / `down` / `project new` read flush and natural. Done
+  leaves no longer echo Compose’s `Healthy`/`Built` text; Overview flags leftover engines.
+  Job drawer follow-up: stop painting `·` marks on tree/plain rows, collapse that empty mark
+  column in CSS, and print the title once on Stop. Interactive follow-up: off-TTY `--pretty`
+  streams nested compose tree lines mid-flight, prints each finished step as ✔, buckets elapsed
+  every 3s, and the drawer shows header + per-row progress bars with %/ETA when known.
+- **Splash could cover the page forever.** A synchronous `<head>` boot captured a null splash
+  root, so hide cleared `data-dbpantry-loading` but left the overlay visible. Script is `defer`,
+  root is re-queried, maxMs race is cleared, and `<noscript>` reveals the page.
+- **Add-ons / Databases Live wiped wizard state.** Those pages keep Live off (`Refresh: false`)
+  so a partial refresh cannot drop step/selection or `?engine=`.
+- **Overview “Needs attention” showed a “Soon” stub** next to enabled-but-stopped engines, and
+  could claim “Nothing needs attention” while Publish=`none` was listed. Labels are View / Start /
+  Review / Optional; empty state only when no rows apply.
+- **Engines cards were unclickable when off or leftover.** Tabler's `card-inactive` sets
+  `pointer-events: none`, which killed every link and the ⋮ menu on non-running engines. Cards
+  now use a visual dim class only; title is a stretched link; menus stay above it.
+- **`dbpantry doctor` and Operate → System.** Host, binary and container-runtime facts on the CLI
+  and `/system` (design.md D-93).
+- **Declarative add-ons.** Catalog of poolers, PostgreSQL extensions, embed toggles and UIs the
+  stack already ships; `dbpantry addon ls|enable|disable` (enable runs `CREATE EXTENSION` on project
+  DBs; disable never `DROP`s), multi-step `/addons` wizard (engine → catalog → review → job), Status
+  card (supported + enabled engines only), and a per-engine strip with `?engine=` (design.md D-96).
+- **Databases & users wizard.** Data → Databases & users: shared-hosting provision steps, privileges
+  matrix, rename-via-recreate, password reveal on the project page (design.md D-97).
+- **Job drawer dumped spinner frames as white text.** Each Live progress tick became a new
+  `pre` line (no colours, no %/ETA), and Stack › By engine stayed stale after activate/deactivate
+  because it was outside `data-sync`. Off-TTY Live now skips spinner-/sub-second-only updates; the
+  drawer is a structured viewer with step coalesce, status colours, and a progress bar with
+  percentage and ETA; engine nav syncs on every partial refresh. Containers still up after profiles
+  drop them show `up · off` (azure) instead of a green dot beside a plain `off` badge
+  (design.md D-95).
+- **Connect (and project) code snippets were invisible.** Tabler styles every `<pre>` with a light
+  colour for dark code blocks; `.mdb-env` sits on the light surface, so Join-the-network, TLS CA path
+  and `.env` blocks looked empty and Copy seemed broken. `.mdb-env` now sets `--tblr-body-color`.
+- **Projects nav badge disagreed with its dropdown.** The badge counted every password-file project
+  (including orphaned) while the menu hid orphans. The menu now lists them with an `orphaned` badge,
+  and Connect is a top-level nav link (not only under Help).
+- **Connect page and instance menu.** Publish modes are three cards with In use / Available, Switch
+  via `config.set`, and Start to apply; engine address Copy sits in Quick access. The Instance menu
+  is short links (Configuration, Connect, About, Status JSON); profiles, network and env editing
+  live on Configuration's instance summary.
+- **Dashboard confirms and feedback.** With `confirm: all` (default), operate actions open a soft
+  confirm modal first; destructive ones always need the CLI's typed value. Job output uses an
+  improved slide-in drawer (follow toggle, clearer progress); toasts report copy, job start and
+  finish. Running jobs show the action's title instead of its machine name.
+- **Thin PATH finds Docker.** `dbpantry` appends well-known container CLI directories
+  (`/usr/local/bin`, Homebrew, OrbStack, …) when it runs scripts, so a dashboard started with
+  `PATH=/usr/bin:/bin` still lists services. Check 79 guards it (design.md D-88).
+- **Grouped dashboard nav.** Overview · Stack (services, images, engines) · Data (projects,
+  backups) · Operate · Connect · Help, with section headers inside each menu instead of a flat
+  nine-item bar and broken split carets.
+- **Dashboard jobs no longer dump BuildKit.** Jobs run with `--pretty`, so the drawer shows the
+  same step tree, progress bar, percentage and ETA as a terminal `up` (design.md D-89). Closing the
+  drawer or the confirm modal is blocked while a command is running or starting.
+- **Tooltips and popovers on actions and nav.** Every action button names the `dbpantry` command it
+  runs; Operations rows use popovers; Tabler tooltips bind on load and after each refresh.
+- **Connect and Engines actions.** Engine cards keep clickable details links plus a ⋮ menu
+  (restart, rebuild/update, disconnect, destroy volume, verify). Connect's next-steps card runs
+  declared jobs (`project.new`, `stack.start`, `up`/`down`, `verify`); interactive shells stay
+  Copy-only. Connect is a main-nav item (no duplicate header CTA); Live pauses/resumes refresh; Back
+  and job restore across reload (design.md D-90).
+- **Dropdowns no longer clip; tooltips no longer stack.** In-page ⋮ / More menus use Popper
+  `strategy: fixed` so `.table-responsive` / cards cannot hide them. Tooltips dispose before each
+  partial refresh, skip `.dropdown-menu` items, and hide when a menu or action opens. Live refresh
+  skips while a menu is open (no more random autoclose). Engine ⋮ uses Operate / Stop submenus.
+- **Stack nav dots reflect running state**, not only `MDB_PROFILES`. Engines nest under By engine.
+  **Status as JSON** opens a slide-in panel. Config group rows use a theme-aware section style
+  (no white `table-light` bars in dark mode). Configuration hosts Switch profiles / Configure
+  subnet / Rename project (`config.set`). Operate adds Clients: connection details, project `.env`,
+  provision, verify, and status JSON.
+- **Dashboard i18n** (en/es/fr/de/pt/ja) for chrome; **Help** and **About** pages with version,
+  licences and engine licence table; page-header **Back/Forward** history. Projects and unmanaged
+  databases use ⋮ action menus (adopt unmanaged via `project.new`). Help links prefer in-app
+  `/help`, `/about` and `/api/v1/actions` over unpublished GitHub doc paths.
+- **Header status chrome and Connect feedback** (design.md D-92). Notifications, language (`EN`)
+  and Instance menus follow Tabler patterns; header service/engine/image counters live in a
+  stats dropdown chip beside Live. Live badge colours Live / Paused / Retrying / Disconnected.
+  Overview “Where to connect” is stacked list rows (no horizontal scroll). Connect explains
+  `MDB_PUBLISH=none` with an alert, equal-height publish cards, and matching Join/TLS cards.
+- **Overview CRM layout.** Welcome lead, eight icon-left KPI cards, stack funnel and needs-attention
+  list, services and connect side by side, projects table with recent jobs — denser Tabler CRM home.
+- **Dashboard demo URL.** Launch line always prints a browser-openable `http://127.0.0.1:…/` (rewrites
+  `0.0.0.0`/`::`); docs stress Host must be localhost. `make demo-dashboard` runs a detached
+  AUTH=none process via `scripts/demo-dashboard` (survives SIGHUP; `demo-dashboard-stop` /
+  `scripts/demo-dashboard status`). Status drawer uses `/api/v1/status`.
+- **Dashboard cold-cache stampede.** Concurrent first page loads no longer each start a full stack
+  reading; `cached` single-flights the in-flight snapshot (design.md D-83).
+- **Services health / image overflow.** Health uses compact badges (`no check` for none) instead of
+  Tabler's fixed-height `.status` pill; image digests truncate via `.mdb-cell-ref` (ellipsis + title).
+- **Page header chrome.** Back/forward history chips sit in the top navbar beside Live; page titles
+  use Tabler breadcrumbs (under the title; every crumb is a real page) and coloured page icons.
+- **Service log viewer.** `/services/{svc}/logs` formats lines into prefix / level / message with
+  colours, filter, level chips, wrap and a follow-hold “new lines” pill.
 - The dashboard, tested end to end against a live stack:
   - Every page took 1 to 3 seconds, the five-second refresh included. Pages are now served at once from the latest reading of the stack, renewed in the background.
   - The footer's "read at" time never moved after the first load; it now follows each refresh.
@@ -680,15 +672,7 @@ waiving them.
 - Check 22 relied on databases check 21 left behind; it seeds its own, and asserts every seeded
   database is dumped and that retention spares non-dump files.
 
-### Removed
-
-- **Cassandra 4.1** (design.md D-57). It vendors snakeyaml 1.x, open to CVE-2022-1471, and
-  cannot load the 2.x line that fixes it. D-57 records when it comes back.
-- PostgreSQL 15 and 16, MySQL 8.0, MariaDB 10.11 and 11.4, MongoDB 8.3 from the
-  maintained menu. Each still runs through `MDB_<ENGINE>_BASE_IMAGE`, unsupported.
-
 ### Security
-
 - **Job control keeps each action's gates** (codebase audit, 2026-11-24). An operate-scope API token could
   restart a finished admin job through `POST /api/v1/jobs/{id}/control`, re-running `secrets rotate`,
   `project drop`, `restore` or a volume delete with its stored typed confirmation. Abort, pause, continue
