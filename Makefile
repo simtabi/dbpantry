@@ -11,8 +11,10 @@ SHELL := bash
 # The instance home (design.md D-84): .env, secrets/, certs/, backups/ and the
 # generated files live there. It is this checkout unless MDB_HOME names
 # another directory, so a checkout behaves as it always has.
-HOME_DIR := $(or $(MDB_HOME),.)
-ENV_FILE ?= $(if $(MDB_HOME),$(MDB_HOME)/.env,.env)
+# make always runs in a checkout, so the home is DBPANTRY_HOME (the binary's
+# own setting, --home's environment twin), else MDB_HOME, else this checkout.
+HOME_DIR := $(or $(DBPANTRY_HOME),$(MDB_HOME),.)
+ENV_FILE ?= $(if $(filter .,$(HOME_DIR)),.env,$(HOME_DIR)/.env)
 
 # One value from the env file, unquoted the way Compose unquotes it
 # (scripts/env-lib.sh): KEY="a b" reads as a b, not "a b".
