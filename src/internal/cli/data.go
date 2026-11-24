@@ -1,6 +1,8 @@
 package cli
 
 import (
+	"path/filepath"
+
 	"github.com/spf13/cobra"
 )
 
@@ -190,7 +192,7 @@ func (a *app) dataCmd() *cobra.Command {
 		Args:  cobra.NoArgs,
 		RunE: func(c *cobra.Command, _ []string) error {
 			argv := []string{"scripts/transfer", "import", "--engine", eng, "--db", db}
-			argv = append(argv, strArg(c, "from", from)...)
+			argv = append(argv, strArg(c, "from", callerPath(from))...)
 			argv = append(argv, strArg(c, "from-host", fromHost)...)
 			argv = append(argv, strArg(c, "from-user", fromUser)...)
 			return a.runSteps(c, script(argv...))
@@ -205,7 +207,7 @@ func (a *app) dataCmd() *cobra.Command {
 		Args:  cobra.NoArgs,
 		RunE: func(c *cobra.Command, _ []string) error {
 			argv := []string{"scripts/transfer", "export", "--engine", eng, "--db", db}
-			return a.runSteps(c, script(append(argv, strArg(c, "to", to)...)...))
+			return a.runSteps(c, script(append(argv, strArg(c, "to", callerPath(to))...)...))
 		},
 	}
 	exp.Flags().StringVar(&to, "to", "", "the file to write")
@@ -236,4 +238,18 @@ func (a *app) upgradeCmd() *cobra.Command {
 	cmd.Flags().StringVar(&to, "to", "", "the target major")
 	cmd.Flags().StringVar(&confirm, "confirm", "", "the typed confirmation the script asks for")
 	return cmd
+}
+
+// callerPath makes a file the user named absolute against the directory the
+// command was run in. Scripts run with the kit as their working directory,
+// so a relative --from in.sql was read from, and --to out.sql written into,
+// the kit (2026-11-24 audit, K6). An empty or absolute path is unchanged.
+func callerPath(p string) string {
+	if p == "" || filepath.IsAbs(p) {
+		return p
+	}
+	if abs, err := filepath.Abs(p); err == nil {
+		return abs
+	}
+	return p
 }
