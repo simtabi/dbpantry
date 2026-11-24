@@ -166,3 +166,52 @@ func TestWebhookChangesAreAudited(t *testing.T) {
 		t.Errorf("audit holds %v, want hook.create and hook.delete", seen)
 	}
 }
+
+// G7: the routes no test touched. Logout ends the session; choices lists the
+// stack's engines; the event list records a job; webhooks are an admin's.
+func TestTheUntestedRoutes(t *testing.T) {
+	m := newMgmt(t, AuthNone, Defaults, false)
+	bus, err := hooks.New("", 50)
+	if err != nil {
+		t.Fatal(err)
+	}
+	h, err := Handler(Sources{Snapshot: fixture, Project: showFixture}, Options{Auth: m.auth, Runner: m.runner, Settings: Defaults, Audit: m.audit, Hooks: bus})
+	if err != nil {
+		t.Fatal(err)
+	}
+	m.h = h
+	c, csrf := m.session(t)
+	var choices Choices
+	if err := json.Unmarshal(m.do(call{method: http.MethodGet, path: "/api/v1/choices", cookie: c}).Body.Bytes(), &choices); err != nil || len(choices.Engines) == 0 {
+		t.Errorf("choices = %+v, %v; want the stack's engines", choices, err)
+	}
+	var j jobs.Job
+	_ = json.Unmarshal(m.post(c, csrf, `{"action":"config.validate"}`).Body.Bytes(), &j)
+	wait(t, m.runner, j.ID)
+	var events []hooks.Event
+	_ = json.Unmarshal(m.do(call{method: http.MethodGet, path: "/api/v1/events?limit=10", cookie: c}).Body.Bytes(), &events)
+	if len(events) == 0 {
+		t.Error("the event list holds nothing after a job")
+	}
+	// Webhooks are listed to an admin only.
+	read, _, err := m.tokens.Create("evreader", ScopeRead, time.Hour, time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r := m.do(call{method: http.MethodGet, path: "/api/v1/hooks", header: map[string]string{"Authorization": "Bearer " + read}}); r.Code != http.StatusForbidden {
+		t.Errorf("a read token listing webhooks = %d, want 403", r.Code)
+	}
+	if r := m.do(call{method: http.MethodGet, path: "/api/v1/hooks", cookie: c}); r.Code != http.StatusOK {
+		t.Errorf("the browser session listing webhooks = %d", r.Code)
+	}
+	// Logout needs CSRF like any change, then the session is gone.
+	if r := m.do(call{method: http.MethodPost, path: "/logout", cookie: c, header: map[string]string{"Sec-Fetch-Site": "same-origin"}}); r.Code != http.StatusForbidden {
+		t.Errorf("a logout with no CSRF token = %d, want 403", r.Code)
+	}
+	if r := m.do(call{method: http.MethodPost, path: "/logout", cookie: c, header: map[string]string{"Sec-Fetch-Site": "same-origin", "X-CSRF-Token": csrf}}); r.Code != http.StatusSeeOther {
+		t.Fatalf("logout = %d", r.Code)
+	}
+	if r := m.post(c, csrf, `{"action":"config.validate"}`); r.Code != http.StatusForbidden && r.Code != http.StatusUnauthorized {
+		t.Errorf("the old session after logout = %d, want it refused", r.Code)
+	}
+}
