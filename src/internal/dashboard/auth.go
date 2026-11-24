@@ -83,6 +83,10 @@ type Principal struct {
 	Session bool
 }
 
+// maxSessions caps the session table: in mode none every cookieless GET
+// starts one, so a local poller would otherwise grow it without bound.
+const maxSessions = 256
+
 type session struct {
 	csrf    string
 	expires time.Time
