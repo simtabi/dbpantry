@@ -14,7 +14,7 @@ import (
 // Settings.Validate refuses what would expose the dashboard: no login
 // beyond loopback, and anything beyond loopback without TLS.
 func TestValidateRefusesAnExposedDashboard(t *testing.T) {
-	ok := func(auth, listen string, tls bool) Settings {
+	ok := func(auth, listen string) Settings {
 		return Settings{Auth: auth, Listen: listen, Confirm: ConfirmAll, SessionHours: 1}
 	}
 	for _, c := range []struct {
@@ -23,14 +23,14 @@ func TestValidateRefusesAnExposedDashboard(t *testing.T) {
 		tls    bool
 		refuse bool
 	}{
-		{"none on loopback", ok(AuthNone, "127.0.0.1:8484", false), false, false},
-		{"none on ::1", ok(AuthNone, "[::1]:8484", false), false, false},
-		{"none on a unix socket", ok(AuthNone, "unix:/tmp/d.sock", false), false, false},
-		{"none beyond loopback", ok(AuthNone, "0.0.0.0:8484", true), true, true},
-		{"token beyond loopback without TLS", ok(AuthToken, "0.0.0.0:8484", false), false, true},
-		{"password beyond loopback without TLS", ok(AuthPassword, "192.168.1.5:8484", false), false, true},
-		{"token beyond loopback with TLS", ok(AuthToken, "0.0.0.0:8484", true), true, false},
-		{"an unknown mode", ok("open", "127.0.0.1:8484", false), false, true},
+		{"none on loopback", ok(AuthNone, "127.0.0.1:8484"), false, false},
+		{"none on ::1", ok(AuthNone, "[::1]:8484"), false, false},
+		{"none on a unix socket", ok(AuthNone, "unix:/tmp/d.sock"), false, false},
+		{"none beyond loopback", ok(AuthNone, "0.0.0.0:8484"), true, true},
+		{"token beyond loopback without TLS", ok(AuthToken, "0.0.0.0:8484"), false, true},
+		{"password beyond loopback without TLS", ok(AuthPassword, "192.168.1.5:8484"), false, true},
+		{"token beyond loopback with TLS", ok(AuthToken, "0.0.0.0:8484"), true, false},
+		{"an unknown mode", ok("open", "127.0.0.1:8484"), false, true},
 		{"an unknown policy", Settings{Auth: AuthToken, Listen: "127.0.0.1:1", Confirm: "never", SessionHours: 1}, false, true},
 		{"no session length", Settings{Auth: AuthToken, Listen: "127.0.0.1:1", Confirm: ConfirmAll}, false, true},
 	} {
