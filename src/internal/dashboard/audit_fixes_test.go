@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/simtabi/dbpantry/src/internal/hooks"
 	"github.com/simtabi/dbpantry/src/internal/jobs"
 )
 
@@ -117,5 +118,51 @@ func TestValuesAreNeverFlags(t *testing.T) {
 	m.mu.Unlock()
 	if got != "config set -- MDB_PROFILES --help" {
 		t.Errorf("config.set ran %q, want the value after --", got)
+	}
+}
+
+// G3: creating and deleting a webhook is audited, as an API token is. The
+// URL is recorded by host only: a webhook URL's path is often the secret
+// (an incoming-webhook URL is its own credential).
+func TestWebhookChangesAreAudited(t *testing.T) {
+	m := newMgmt(t, AuthToken, Settings{Auth: AuthToken, Listen: "127.0.0.1:0", Confirm: ConfirmAll, SessionHours: 1}, false)
+	bus, err := hooks.New("", 50)
+	if err != nil {
+		t.Fatal(err)
+	}
+	h, err := Handler(Sources{Snapshot: fixture, Project: showFixture}, Options{Auth: m.auth, Runner: m.runner, Settings: Settings{Auth: AuthToken, Listen: "127.0.0.1:0", Confirm: ConfirmAll, SessionHours: 1}, Audit: m.audit, Hooks: bus})
+	if err != nil {
+		t.Fatal(err)
+	}
+	m.h = h
+	admin, _, err := m.tokens.Create("hookadmin", ScopeAdmin, time.Hour, time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	hdr := map[string]string{"Authorization": "Bearer " + admin}
+	secretPath := "/services/T000/B000/" + testPassword
+	r := m.do(call{method: http.MethodPost, path: "/api/v1/hooks", body: `{"url":"https://hooks.example.com` + secretPath + `","events":[]}`, header: hdr})
+	if r.Code != http.StatusCreated {
+		t.Fatalf("create = %d %s", r.Code, r.Body)
+	}
+	var ep hooks.Endpoint
+	_ = json.Unmarshal(r.Body.Bytes(), &ep)
+	if r := m.do(call{method: http.MethodDelete, path: "/api/v1/hooks/" + ep.ID, header: hdr}); r.Code != http.StatusNoContent {
+		t.Fatalf("delete = %d %s", r.Code, r.Body)
+	}
+	entries, err := jobs.ReadAudit(m.audit, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	seen := map[string]bool{}
+	for _, e := range entries {
+		seen[e.Action] = true
+		line := strings.Join(e.Args, " ")
+		if strings.HasPrefix(e.Action, "hook.") && (!strings.Contains(line, ep.ID) || !strings.Contains(line, "hooks.example.com") || strings.Contains(line, testPassword)) {
+			t.Errorf("%s audited as %q: want the id and the host, never the path", e.Action, line)
+		}
+	}
+	if !seen["hook.create"] || !seen["hook.delete"] {
+		t.Errorf("audit holds %v, want hook.create and hook.delete", seen)
 	}
 }
