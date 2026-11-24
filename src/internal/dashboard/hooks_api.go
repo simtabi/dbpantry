@@ -7,7 +7,10 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strconv"
+	"strings"
+	"time"
 
 	"github.com/simtabi/dbpantry/src/internal/hooks"
 	"github.com/simtabi/dbpantry/src/internal/jobs"
@@ -209,6 +212,7 @@ func hookRoutes(mux *http.ServeMux, o Options) {
 			apiError(w, http.StatusUnprocessableEntity, err.Error())
 			return
 		}
+		auditHook(o, r, "hook.create", ep.ID, ep.URL)
 		writeJSON(w, http.StatusCreated, ep)
 	})
 	mux.HandleFunc("DELETE /api/v1/hooks/{id}", func(w http.ResponseWriter, r *http.Request) {
@@ -216,13 +220,21 @@ func hookRoutes(mux *http.ServeMux, o Options) {
 			apiError(w, http.StatusForbidden, "deleting webhooks needs the admin scope")
 			return
 		}
-		if err := o.Hooks.DeleteEndpoint(r.PathValue("id")); errors.Is(err, hooks.ErrNotFound) {
+		id := r.PathValue("id")
+		var host string
+		for _, ep := range o.Hooks.ListEndpoints() {
+			if ep.ID == id {
+				host = ep.URL
+			}
+		}
+		if err := o.Hooks.DeleteEndpoint(id); errors.Is(err, hooks.ErrNotFound) {
 			apiError(w, http.StatusNotFound, err.Error())
 			return
 		} else if err != nil {
 			apiError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
+		auditHook(o, r, "hook.delete", id, host)
 		w.WriteHeader(http.StatusNoContent)
 	})
 	mux.HandleFunc("GET /api/v1/events", func(w http.ResponseWriter, r *http.Request) {
@@ -265,4 +277,19 @@ func hookRoutes(mux *http.ServeMux, o Options) {
 			}
 		}
 	})
+}
+
+// auditHook records a webhook change in the audit log, as auditToken does
+// for API tokens. The URL is recorded by scheme and host only: a webhook
+// URL's path or query is often its credential.
+func auditHook(o Options, r *http.Request, action, id, rawURL string) {
+	if o.Audit == "" {
+		return
+	}
+	dest := "?"
+	if u, err := url.Parse(rawURL); err == nil && u.Host != "" {
+		dest = u.Scheme + "://" + u.Host
+	}
+	_ = jobs.Append(o.Audit, jobs.Entry{Time: time.Now().UTC(), Actor: principal(r).Actor, Action: action,
+		Args: []string{"hook", strings.TrimPrefix(action, "hook."), id, dest}, Result: jobs.Succeeded})
 }
