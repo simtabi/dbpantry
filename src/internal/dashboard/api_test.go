@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/simtabi/dbpantry/src/internal/hooks"
 	"github.com/simtabi/dbpantry/src/internal/jobs"
 )
 
@@ -492,6 +493,53 @@ func TestASecretSetIsNeverShown(t *testing.T) {
 	wait(t, m.runner, j.ID)
 	if got, _ := m.runner.Get(j.ID); !strings.Contains(strings.Join(got.Args, " "), "MDB_PROFILES pg") {
 		t.Errorf("a plain key's value was hidden: %v", got.Args)
+	}
+}
+
+// TestAJobEndsOnceForWebhooks: a finished job emits one completion event,
+// whether no page or several watch it. Until 2026-11-24 the event came from
+// each open event stream: none for a job nobody watched, two for two tabs.
+func TestAJobEndsOnceForWebhooks(t *testing.T) {
+	m := newMgmt(t, AuthNone, Defaults, false)
+	bus, err := hooks.New("", 200)
+	if err != nil {
+		t.Fatal(err)
+	}
+	h, err := Handler(Sources{Snapshot: fixture, Project: showFixture}, Options{Auth: m.auth, Runner: m.runner, Settings: Defaults, Audit: m.audit, Hooks: bus})
+	if err != nil {
+		t.Fatal(err)
+	}
+	m.h = h
+	c, csrf := m.session(t)
+	ended := func(id string) int {
+		n := 0
+		for _, e := range bus.Recent(200) {
+			if e.Type == hooks.JobSucceeded && e.Payload["id"] == id {
+				n++
+			}
+		}
+		return n
+	}
+	start := func() jobs.Job {
+		var j jobs.Job
+		_ = json.Unmarshal(m.post(c, csrf, `{"action":"images.build","params":{"engine":"pg"}}`).Body.Bytes(), &j)
+		return wait(t, m.runner, j.ID)
+	}
+	unwatched := start()
+	deadline := time.Now().Add(2 * time.Second)
+	for ended(unwatched.ID) == 0 && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
+	if n := ended(unwatched.ID); n != 1 {
+		t.Errorf("a job nobody watched emitted %d completion event(s), want 1", n)
+	}
+	watched := start()
+	for range 2 {
+		m.do(call{method: http.MethodGet, path: "/api/v1/jobs/" + watched.ID + "/events", cookie: c})
+	}
+	time.Sleep(50 * time.Millisecond)
+	if n := ended(watched.ID); n != 1 {
+		t.Errorf("a job watched by two streams emitted %d completion event(s), want 1", n)
 	}
 }
 
