@@ -108,6 +108,7 @@ type Runner struct {
 	ctx     context.Context
 	cancel  context.CancelFunc
 	wg      sync.WaitGroup
+	onEnd   func(Job) // called once when each job ends (OnEnd)
 }
 
 type job struct {
@@ -141,6 +142,15 @@ func New(exec Exec, audit string, keep int) *Runner {
 		keep = 50
 	}
 	return &Runner{exec: exec, audit: audit, now: time.Now, keep: keep, jobs: map[string]*job{}, ctx: ctx, cancel: cancel}
+}
+
+// OnEnd sets the function called once for every job that ends, with the
+// finished job: the dashboard emits its completion webhook there, so the
+// event does not depend on whether, or how often, a page watches the job.
+func (r *Runner) OnEnd(f func(Job)) {
+	r.mu.Lock()
+	r.onEnd = f
+	r.mu.Unlock()
 }
 
 // Close cancels a running job and waits for it to end.
@@ -497,6 +507,12 @@ type Entry struct {
 // written is reported on stderr and does not fail the job, which has
 // already happened.
 func (r *Runner) record(j Job) {
+	r.mu.Lock()
+	onEnd := r.onEnd
+	r.mu.Unlock()
+	if onEnd != nil {
+		onEnd(j)
+	}
 	if r.audit == "" {
 		return
 	}

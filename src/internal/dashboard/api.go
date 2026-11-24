@@ -328,14 +328,6 @@ func events(o Options) http.HandlerFunc {
 			fl.Flush()
 			return nil
 		}, func(j jobs.Job) error {
-			typ := hooks.JobSucceeded
-			switch j.State {
-			case jobs.Failed:
-				typ = hooks.JobFailed
-			case jobs.Cancelled:
-				typ = hooks.JobCancelled
-			}
-			emitJob(o, typ, j, j.Actor)
 			j.Lines = nil
 			b, _ := json.Marshal(j)
 			_, err := fmt.Fprintf(w, "event: end\ndata: %s\n\n", b)

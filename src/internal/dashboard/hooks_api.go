@@ -55,8 +55,9 @@ func controlJob(o Options) http.HandlerFunc {
 		)
 		switch req.Op {
 		case "abort", "stop":
+			// The cancelled event comes from the runner when the job ends
+			// (endJob), once.
 			j, err = o.Runner.Abort(id)
-			typ = hooks.JobCancelled
 		case "pause":
 			j, err = o.Runner.Pause(id)
 			typ = hooks.JobPaused
@@ -82,7 +83,9 @@ func controlJob(o Options) http.HandlerFunc {
 			apiError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
-		emitJob(o, typ, j, p.Actor)
+		if typ != "" {
+			emitJob(o, typ, j, p.Actor)
+		}
 		if req.Op == "restart" {
 			w.Header().Set("Location", "/api/v1/jobs/"+j.ID)
 			writeJSON(w, http.StatusAccepted, j)
@@ -140,6 +143,19 @@ func flagValue(args []string, flag string) string {
 		}
 	}
 	return ""
+}
+
+// endJob emits a finished job's completion event. The runner calls it once
+// per job (jobs.Runner.OnEnd), whoever watches.
+func endJob(o Options, j jobs.Job) {
+	typ := hooks.JobSucceeded
+	switch j.State {
+	case jobs.Failed:
+		typ = hooks.JobFailed
+	case jobs.Cancelled:
+		typ = hooks.JobCancelled
+	}
+	emitJob(o, typ, j, j.Actor)
 }
 
 func emitJob(o Options, typ string, j jobs.Job, actor string) {

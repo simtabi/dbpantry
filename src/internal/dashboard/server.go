@@ -227,6 +227,8 @@ func Handler(src Sources, o Options) (http.Handler, error) {
 		return nil, err
 	}
 	readStack := cached(src.Snapshot, time.Now)
+	// Completion events come from the runner, once per finished job.
+	o.Runner.OnEnd(func(j jobs.Job) { endJob(o, j) })
 	if o.Choices == nil {
 		o.Choices = func(ctx context.Context) (Choices, error) {
 			s, err := readStack(ctx)
