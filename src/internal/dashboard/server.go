@@ -371,8 +371,9 @@ func Handler(src Sources, o Options) (http.Handler, error) {
 		if !ok {
 			return
 		}
+		// The token list is an admin's, as on /api/v1/tokens.
 		var tokens []Token
-		if o.Auth.tokens != nil {
+		if o.Auth.tokens != nil && principal(r).Scope >= ScopeAdmin {
 			var err error
 			if tokens, err = o.Auth.tokens.List(); err != nil {
 				fail(w, r, s, http.StatusInternalServerError, "The API tokens could not be read: "+err.Error())
@@ -454,6 +455,10 @@ func Handler(src Sources, o Options) (http.Handler, error) {
 			return
 		}
 		svc := r.PathValue("service")
+		if s.ServicesErr != "" {
+			fail(w, r, s, http.StatusServiceUnavailable, "Services are unavailable: "+s.ServicesErr)
+			return
+		}
 		if !contains(ChoicesOf(s).Services, svc) {
 			fail(w, r, s, http.StatusNotFound, "There is no service named "+svc+" in the stack.")
 			return
@@ -503,7 +508,7 @@ func Handler(src Sources, o Options) (http.Handler, error) {
 // (running ones first), the services and fixture services that exist, and its dumps. Volumes come
 // from the backend (the command that serves the dashboard sets Choices).
 func ChoicesOf(s Snapshot) Choices {
-	var c Choices
+	c := Choices{ServicesErr: s.ServicesErr}
 	var stopped []string
 	seen := map[string]bool{}
 	addProfile := func(p string) {

@@ -241,6 +241,10 @@ func startJob(o Options) http.HandlerFunc {
 			}
 		}
 		v, err := a.validate(req.Params, c)
+		if errors.Is(err, ErrServicesUnavailable) {
+			apiError(w, http.StatusServiceUnavailable, err.Error())
+			return
+		}
 		if err != nil {
 			apiError(w, http.StatusUnprocessableEntity, err.Error())
 			return
@@ -477,6 +481,10 @@ func logStream(o Options, logs Logs) http.HandlerFunc {
 			apiError(w, http.StatusServiceUnavailable, err.Error())
 			return
 		}
+		if c.ServicesErr != "" {
+			apiError(w, http.StatusServiceUnavailable, "services are unavailable: "+c.ServicesErr)
+			return
+		}
 		if !patterns[KindService].MatchString(svc) || !contains(c.Services, svc) {
 			apiError(w, http.StatusNotFound, "there is no service "+strconv.Quote(svc)+" in the stack")
 			return
@@ -559,7 +567,7 @@ func login(o Options) http.HandlerFunc {
 			return
 		}
 		next := r.URL.Query().Get("next")
-		if !strings.HasPrefix(next, "/") || strings.HasPrefix(next, "//") {
+		if !sameSitePath(next) {
 			next = "/"
 		}
 		failed := false
@@ -588,6 +596,20 @@ func login(o Options) http.HandlerFunc {
 		}
 		_ = loginTemplate.Execute(w, map[string]any{"Next": next, "Failed": failed})
 	}
+}
+
+// sameSitePath reports whether p is a path on this site to return to after
+// signing in: absolute, not "//host", and with no backslash, raw or encoded,
+// since browsers read "/\host" as "//host".
+func sameSitePath(p string) bool {
+	if !strings.HasPrefix(p, "/") || strings.HasPrefix(p, "//") {
+		return false
+	}
+	if strings.Contains(p, `\`) || strings.Contains(strings.ToLower(p), "%5c") {
+		return false
+	}
+	u, err := url.Parse(p)
+	return err == nil && u.Scheme == "" && u.Host == ""
 }
 
 // logout is POST /logout.

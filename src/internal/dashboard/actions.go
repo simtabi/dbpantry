@@ -1,6 +1,7 @@
 package dashboard
 
 import (
+	"errors"
 	"fmt"
 	"regexp"
 	"sort"
@@ -258,7 +259,8 @@ var Actions = []Action{
 			{Name: "key", Label: "Key (MDB_…)", Kind: KindKey, Required: true},
 			{Name: "value", Label: "Value", Kind: KindText, Required: true},
 		},
-		Command: func(v Values) []string { return []string{"config", "set", v["key"], v["value"]} },
+		// "--" so a value such as -1 or --help is never read as a flag.
+		Command: func(v Values) []string { return []string{"config", "set", "--", v["key"], v["value"]} },
 		// A key the Configuration page masks is masked in the job too.
 		Mask: func(shown []string, v Values) []string {
 			if !config.LooksSecret(v["key"]) {
@@ -329,8 +331,8 @@ var Actions = []Action{
 			{Name: "engine", Label: "Engine", Kind: KindEngine},
 		},
 		Command: func(v Values) []string {
-			args := []string{"addon", "enable", v["id"]}
-			return optional(args, "--engine", v["engine"])
+			args := optional([]string{"addon", "enable"}, "--engine", v["engine"])
+			return append(args, "--", v["id"])
 		},
 	},
 	{
@@ -340,8 +342,8 @@ var Actions = []Action{
 			{Name: "engine", Label: "Engine", Kind: KindEngine},
 		},
 		Command: func(v Values) []string {
-			args := []string{"addon", "disable", v["id"]}
-			return optional(args, "--engine", v["engine"])
+			args := optional([]string{"addon", "disable"}, "--engine", v["engine"])
+			return append(args, "--", v["id"])
 		},
 	},
 
@@ -440,15 +442,22 @@ var patterns = map[string]*regexp.Regexp{
 	KindEnvName:  regexp.MustCompile(`^[a-z][a-z0-9-]{0,47}$`),
 }
 
+// ErrServicesUnavailable is validate's error for a service parameter while
+// the runtime does not answer: an outage, never "no such service".
+var ErrServicesUnavailable = errors.New("services are unavailable")
+
 // Choices are the values the stack has for the kinds that must name
 // something real. Engines lists the running ones first, and Running names
 // them, so a form can default to an engine that is up.
 type Choices struct {
-	Engines  []string `json:"engine"`
-	Running  []string `json:"running"`
-	Services []string `json:"service"`
-	Volumes  []string `json:"volume"`
-	Dumps    []string `json:"dump"`
+	// ServicesErr says why the services could not be read (the runtime did
+	// not answer). A service parameter is then unavailable, not unknown.
+	ServicesErr string   `json:"services_error,omitempty"`
+	Engines     []string `json:"engine"`
+	Running     []string `json:"running"`
+	Services    []string `json:"service"`
+	Volumes     []string `json:"volume"`
+	Dumps       []string `json:"dump"`
 	// Profiles are Compose profile tokens the stack can start (engines,
 	// poolers, ui, ha, backup…). Forms multi-select them into a CSV.
 	Profiles []string `json:"profile"`
@@ -495,6 +504,9 @@ func (a Action) validate(in map[string]string, c Choices) (Values, error) {
 				return nil, fmt.Errorf("there is no engine %q", v)
 			}
 		case KindService:
+			if c.ServicesErr != "" {
+				return nil, fmt.Errorf("%w: %s", ErrServicesUnavailable, c.ServicesErr)
+			}
 			if !contains(c.Services, v) {
 				return nil, fmt.Errorf("there is no service %q in the stack", v)
 			}

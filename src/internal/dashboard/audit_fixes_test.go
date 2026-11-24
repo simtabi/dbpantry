@@ -3,6 +3,7 @@ package dashboard
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/url"
 	"strings"
@@ -81,7 +82,8 @@ func TestAnOutageIsNotANotFound(t *testing.T) {
 		s.Services, s.ServicesErr = nil, "the container runtime did not answer"
 		return s, err
 	}
-	h, err := Handler(Sources{Snapshot: down, Project: showFixture}, Options{Auth: m.auth, Runner: m.runner, Settings: Defaults, Audit: m.audit})
+	logs := func(context.Context, string, string, bool, io.Writer) error { return nil }
+	h, err := Handler(Sources{Snapshot: down, Project: showFixture, Logs: logs}, Options{Auth: m.auth, Runner: m.runner, Settings: Defaults, Audit: m.audit})
 	if err != nil {
 		t.Fatal(err)
 	}

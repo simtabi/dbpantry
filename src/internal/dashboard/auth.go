@@ -187,6 +187,7 @@ func (a *Auth) newSession(w http.ResponseWriter, secure bool) (Principal, error)
 		return Principal{}, err
 	}
 	a.mu.Lock()
+	a.pruneLocked()
 	a.session[id] = session{csrf: csrf, expires: a.now().Add(a.ttl)}
 	a.mu.Unlock()
 	http.SetCookie(w, &http.Cookie{Name: a.cookie, Value: id, Path: "/", HttpOnly: true, Secure: secure,
@@ -196,6 +197,26 @@ func (a *Auth) newSession(w http.ResponseWriter, secure bool) (Principal, error)
 		actor = "local"
 	}
 	return Principal{Actor: actor, Scope: ScopeAdmin, CSRF: csrf, Session: true}, nil
+}
+
+// pruneLocked drops expired sessions and, at maxSessions, the one closest
+// to expiring (the oldest), to make room. Called with a.mu held.
+func (a *Auth) pruneLocked() {
+	now := a.now()
+	for id, s := range a.session {
+		if now.After(s.expires) {
+			delete(a.session, id)
+		}
+	}
+	for len(a.session) >= maxSessions {
+		oldest, at := "", time.Time{}
+		for id, s := range a.session {
+			if oldest == "" || s.expires.Before(at) {
+				oldest, at = id, s.expires
+			}
+		}
+		delete(a.session, oldest)
+	}
 }
 
 // exchange trades the launch token for a session. It works once.

@@ -328,10 +328,12 @@ func (r *Runner) Pause(id string) (Job, error) {
 	if !ok {
 		return Job{}, ErrNoJob
 	}
-	if j.State != Running {
+	if j.State != Running || j.aborted {
 		if j.State == Paused {
 			return j.snapshot(), nil
 		}
+		// An aborted job is ending; pausing it would stall its last writes
+		// and keep it, and the lock, alive.
 		return Job{}, ErrNotActive
 	}
 	j.State = Paused
