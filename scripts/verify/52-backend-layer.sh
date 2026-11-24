@@ -51,7 +51,15 @@ got="$(MDB_RT_ROOT="$t" bash -c 'set -u; . scripts/backend-lib.sh; unset MDB_BAC
 [[ "$got" == compose ]] || vfail "MDB_BACKEND from .env: expected compose, got [$got]"
 got="$(MDB_RT_ROOT="$t" MDB_BACKEND=nosuch bash -c '. scripts/backend-lib.sh; mdb_backend_init' 2>&1 || true)"
 [[ "$got" == *"is not one of"* ]] || vfail "an unknown MDB_BACKEND was not refused: [$got]"
-vinfo "MDB_BACKEND is read from the environment, then .env; unknown names are refused"
+# With the instance in a separate home (design.md D-84), MDB_BACKEND comes
+# from the home's .env, not the kit's: a home set to kubernetes silently ran
+# Compose (2026-11-24 audit, K2).
+h="$(mktemp -d "${TMPDIR:-/tmp}/mdb-be-home.XXXXXX")"
+add_cleanup "rm -rf '$h'"
+printf 'MDB_BACKEND="incus"\n' > "$h/.env"
+got="$(MDB_HOME="$h" bash -c 'set -u; . scripts/backend-lib.sh; unset MDB_BACKEND; mdb_backend_init && echo "$MDB_BACKEND"' 2>&1)"
+[[ "$got" == incus ]] || vfail "MDB_BACKEND from a separate home's .env: expected incus, got [$got]"
+vinfo "MDB_BACKEND is read from the environment, then .env (the home's when it is separate); unknown names are refused"
 
 # Extra backend directories (MDB_BACKEND_DIRS, colon-separated) load, and the
 # library sources cleanly under set -u with the variable unset or set (verify's
