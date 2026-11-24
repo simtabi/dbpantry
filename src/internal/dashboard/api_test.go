@@ -309,6 +309,106 @@ func TestTheJobStreamsItsOutput(t *testing.T) {
 	}
 }
 
+// TestJobControlKeepsTheActionsGates: controlling a job (abort, pause,
+// continue, restart) needs the scope its action needs, and a restart is a
+// new run of the action, so a destructive one needs its typed confirmation
+// again. Until 2026-11-24 any operate token could restart a finished admin
+// job, --confirm included: a read token lists the ids, an operate token
+// re-ran secrets.rotate or destroy.volume.
+func TestJobControlKeepsTheActionsGates(t *testing.T) {
+	m := newMgmt(t, AuthToken, Settings{Auth: AuthToken, Listen: "127.0.0.1:0", Confirm: ConfirmAll, SessionHours: 1}, false)
+	tokens := map[Scope]string{}
+	for _, sc := range []Scope{ScopeOperate, ScopeAdmin} {
+		plain, _, err := m.tokens.Create("c"+sc.String(), sc, time.Hour, time.Now())
+		if err != nil {
+			t.Fatal(err)
+		}
+		tokens[sc] = plain
+	}
+	as := func(sc Scope, method, path, body string) *httptest.ResponseRecorder {
+		return m.do(call{method: method, path: path, body: body, header: map[string]string{"Authorization": "Bearer " + tokens[sc]}})
+	}
+	start := func(body string) jobs.Job {
+		t.Helper()
+		r := as(ScopeAdmin, http.MethodPost, "/api/v1/jobs", body)
+		if r.Code != http.StatusAccepted {
+			t.Fatalf("start %s = %d %s", body, r.Code, r.Body)
+		}
+		var j jobs.Job
+		_ = json.Unmarshal(r.Body.Bytes(), &j)
+		return wait(t, m.runner, j.ID)
+	}
+	ran := func() int { m.mu.Lock(); defer m.mu.Unlock(); return len(m.ran) }
+
+	rotate := start(`{"action":"secrets.rotate","confirm":"ROTATE"}`)
+	before := ran()
+	for _, op := range []string{"restart", "abort", "pause", "continue"} {
+		r := as(ScopeOperate, http.MethodPost, "/api/v1/jobs/"+rotate.ID+"/control", `{"op":"`+op+`"}`)
+		if r.Code != http.StatusForbidden {
+			t.Errorf("an operate token's %s of an admin job = %d, want 403: %s", op, r.Code, r.Body)
+		}
+	}
+	if r := as(ScopeAdmin, http.MethodPost, "/api/v1/jobs/"+rotate.ID+"/control", `{"op":"restart"}`); r.Code != http.StatusUnprocessableEntity {
+		t.Errorf("restarting a destructive job without its confirmation = %d, want 422: %s", r.Code, r.Body)
+	}
+	if r := as(ScopeAdmin, http.MethodPost, "/api/v1/jobs/"+rotate.ID+"/control", `{"op":"restart","confirm":"nope"}`); r.Code != http.StatusUnprocessableEntity {
+		t.Errorf("restarting with a wrong confirmation = %d, want 422", r.Code)
+	}
+	if got := ran(); got != before {
+		t.Fatalf("a refused restart ran %d command(s)", got-before)
+	}
+	r := as(ScopeAdmin, http.MethodPost, "/api/v1/jobs/"+rotate.ID+"/control", `{"op":"restart","confirm":"ROTATE"}`)
+	if r.Code != http.StatusAccepted {
+		t.Fatalf("an admin restart with the confirmation = %d %s", r.Code, r.Body)
+	}
+	var again jobs.Job
+	_ = json.Unmarshal(r.Body.Bytes(), &again)
+	wait(t, m.runner, again.ID)
+
+	// An operate action stays restartable by an operate token.
+	build := start(`{"action":"images.build","params":{"engine":"pg"}}`)
+	r = as(ScopeOperate, http.MethodPost, "/api/v1/jobs/"+build.ID+"/control", `{"op":"restart"}`)
+	if r.Code != http.StatusAccepted {
+		t.Fatalf("an operate restart of an operate job = %d %s", r.Code, r.Body)
+	}
+	_ = json.Unmarshal(r.Body.Bytes(), &again)
+	wait(t, m.runner, again.ID)
+}
+
+// TestRestartingADestroyRespectsAllowDestroy: a volume delete started while
+// allow_destroy was on cannot be restarted once it is off.
+func TestRestartingADestroyRespectsAllowDestroy(t *testing.T) {
+	on := Settings{Auth: AuthToken, Listen: "127.0.0.1:0", Confirm: ConfirmAll, SessionHours: 1, AllowDestroy: true}
+	m := newMgmt(t, AuthToken, on, false)
+	plain, _, err := m.tokens.Create("admin", ScopeAdmin, time.Hour, time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	hdr := map[string]string{"Authorization": "Bearer " + plain}
+	r := m.do(call{method: http.MethodPost, path: "/api/v1/jobs", body: `{"action":"destroy.volume","params":{"volume":"mdb_pg_data"},"confirm":"mdb_pg_data"}`, header: hdr})
+	if r.Code != http.StatusAccepted {
+		t.Fatalf("destroy with allow_destroy on = %d %s", r.Code, r.Body)
+	}
+	var j jobs.Job
+	_ = json.Unmarshal(r.Body.Bytes(), &j)
+	wait(t, m.runner, j.ID)
+
+	// The same runner behind a handler whose settings turn it off.
+	off := on
+	off.AllowDestroy = false
+	h, err := Handler(Sources{Snapshot: fixture, Project: showFixture}, Options{Auth: m.auth, Runner: m.runner, Settings: off, Audit: m.audit, BackupDir: "/srv/backups"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/jobs/"+j.ID+"/control", strings.NewReader(`{"op":"restart","confirm":"mdb_pg_data"}`))
+	req.Header.Set("Authorization", "Bearer "+plain)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusForbidden {
+		t.Errorf("restarting a destroy with allow_destroy off = %d, want 403: %s", rec.Code, rec.Body)
+	}
+}
+
 func TestLaunchTokenWorksOnce(t *testing.T) {
 	m := newMgmt(t, AuthToken, Defaults, false)
 	if r := m.do(call{method: http.MethodGet, path: "/"}); r.Code != http.StatusUnauthorized {
