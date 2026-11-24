@@ -38,7 +38,8 @@ func TestAbortEndsTheWholeJob(t *testing.T) {
 	start := time.Now()
 	cancel()
 	select {
-	case <-done:
+	case err := <-done:
+		t.Logf("the aborted job ended: %v", err)
 		if d := time.Since(start); d > 8*time.Second {
 			t.Errorf("the job ended %s after the abort", d)
 		}

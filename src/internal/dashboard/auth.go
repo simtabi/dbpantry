@@ -190,7 +190,9 @@ func (a *Auth) newSession(w http.ResponseWriter, secure bool) (Principal, error)
 	a.pruneLocked()
 	a.session[id] = session{csrf: csrf, expires: a.now().Add(a.ttl)}
 	a.mu.Unlock()
-	http.SetCookie(w, &http.Cookie{Name: a.cookie, Value: id, Path: "/", HttpOnly: true, Secure: secure,
+	// Secure under TLS only: a loopback dashboard is plain HTTP, where a
+	// Secure cookie would never come back. HttpOnly and SameSite=Strict always.
+	http.SetCookie(w, &http.Cookie{Name: a.cookie, Value: id, Path: "/", HttpOnly: true, Secure: secure, // #nosec G124 -- Secure follows TLS (above)
 		SameSite: http.SameSiteStrictMode, MaxAge: int(a.ttl.Seconds())})
 	actor := "browser"
 	if a.mode == AuthNone {
@@ -246,7 +248,7 @@ func (a *Auth) logout(w http.ResponseWriter, r *http.Request) {
 		delete(a.session, c.Value)
 		a.mu.Unlock()
 	}
-	http.SetCookie(w, &http.Cookie{Name: a.cookie, Value: "", Path: "/", HttpOnly: true, SameSite: http.SameSiteStrictMode, MaxAge: -1})
+	http.SetCookie(w, &http.Cookie{Name: a.cookie, Value: "", Path: "/", HttpOnly: true, SameSite: http.SameSiteStrictMode, MaxAge: -1}) // #nosec G124 -- an expired cookie that clears the session
 }
 
 // sameOrigin is the check every browser POST must pass, in every mode:

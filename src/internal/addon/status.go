@@ -18,6 +18,7 @@ type Status struct {
 // Profiles is the current MDB_PROFILES / COMPOSE_PROFILES list.
 type Profiles []string
 
+// ParseProfiles reads a comma-separated profile list, skipping blanks.
 func ParseProfiles(s string) Profiles {
 	var out Profiles
 	for _, p := range strings.Split(s, ",") {
@@ -29,6 +30,7 @@ func ParseProfiles(s string) Profiles {
 	return out
 }
 
+// Has reports whether the profile list includes name.
 func (p Profiles) Has(name string) bool {
 	return slices.Contains(p, name)
 }

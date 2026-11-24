@@ -13,11 +13,11 @@ func TestLiveStreamsSummaryOffTerminal(t *testing.T) {
 	var buf bytes.Buffer
 	var frame atomic.Int32
 	var saw atomic.Bool
-	live := NewLive(&buf, false, func(f int, now time.Time) []string {
+	live := NewLive(&buf, false, func(int, time.Time) []string {
 		return []string{"full tree line"}
 	})
-	live.SetSummary(func(f int, now time.Time) string {
-		frame.Store(int32(f))
+	live.SetSummary(func(f int, _ time.Time) string {
+		frame.Store(int32(f)) // #nosec G115 -- a frame count in a short test
 		if f < 2 {
 			return ""
 		}
@@ -53,7 +53,7 @@ func TestLiveStreamSkipsSpinnerFrames(t *testing.T) {
 		return []string{"final"}
 	})
 	var n atomic.Int32
-	live.SetSummary(func(f int, now time.Time) string {
+	live.SetSummary(func(f int, _ time.Time) string {
 		n.Add(1)
 		glyphs := []string{"⠋", "⠙", "⠹", "⠸"}
 		return glyphs[f%len(glyphs)] + " Check configuration  " + Duration(time.Duration(f)*100*time.Millisecond)

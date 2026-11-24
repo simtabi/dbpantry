@@ -99,7 +99,7 @@ func gate(next http.Handler, o Options) http.Handler {
 				q.Del("token")
 				u := *r.URL
 				u.RawQuery = q.Encode()
-				http.Redirect(w, r, u.RequestURI(), http.StatusSeeOther)
+				http.Redirect(w, r, u.RequestURI(), http.StatusSeeOther) // #nosec G710 -- the request's own path, minus the token
 				return
 			}
 			if a.Mode() == AuthNone {
@@ -267,7 +267,8 @@ func startJob(o Options) http.HandlerFunc {
 		if a.Mask != nil {
 			shown = a.Mask(shown, v)
 		}
-		j, err := o.Runner.Start(a.Name, p.Actor, a.Scope > ScopeRead, args, shown)
+		j, err := o.Runner.Start(a.Name, p.Actor, a.Scope > ScopeRead, args, shown) //nolint:contextcheck // a job outlives the request that starts it
+
 		var busy jobs.ErrBusy
 		if errors.As(err, &busy) {
 			writeJSON(w, http.StatusConflict, map[string]any{"error": busy.Error(), "job": busy.Job})
@@ -277,7 +278,7 @@ func startJob(o Options) http.HandlerFunc {
 			apiError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
-		emitJob(o, hooks.JobStarted, j, p.Actor)
+		emitJob(o, hooks.JobStarted, j, p.Actor) //nolint:contextcheck // webhook delivery outlives the request
 		w.Header().Set("Location", "/api/v1/jobs/"+j.ID)
 		writeJSON(w, http.StatusAccepted, j)
 	}
@@ -584,7 +585,7 @@ func login(o Options) http.HandlerFunc {
 					http.Error(w, err.Error(), http.StatusInternalServerError)
 					return
 				}
-				http.Redirect(w, r, next, http.StatusSeeOther)
+				http.Redirect(w, r, next, http.StatusSeeOther) // #nosec G710 -- next passed sameSitePath
 				return
 			}
 			failed = true

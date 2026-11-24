@@ -127,7 +127,7 @@ func (s *Settings) Set(key, value string) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return err
 	}
-	return os.WriteFile(path, out, 0o600) // #nosec G306 -- the instance's own env file
+	return os.WriteFile(path, out, 0o600) // #nosec G306 G703 -- the instance's own env file
 }
 
 // documentedKeys reads KEY= lines (and commented # KEY=) from .env.example,

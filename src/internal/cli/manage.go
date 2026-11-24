@@ -251,7 +251,7 @@ func (a *app) newRunner(root string) *jobs.Runner {
 func (a *app) hooksBus(home string) *hooks.Bus {
 	b, err := hooks.New(filepath.Join(home, "webhooks.json"), 200)
 	if err != nil {
-		fmt.Fprintf(a.stderr, "dbpantry: webhooks store: %v\n", err)
+		_, _ = fmt.Fprintf(a.stderr, "dbpantry: webhooks store: %v\n", err)
 		b, _ = hooks.New("", 200)
 	}
 	return b

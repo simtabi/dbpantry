@@ -65,7 +65,7 @@ func controlJob(o Options) http.HandlerFunc {
 			j, err = o.Runner.Continue(id)
 			typ = hooks.JobContinued
 		case "restart":
-			j, err = o.Runner.Restart(id, p.Actor)
+			j, err = o.Runner.Restart(id, p.Actor) //nolint:contextcheck // a job outlives the request that starts it
 			typ = hooks.JobStarted
 		default:
 			apiError(w, http.StatusUnprocessableEntity, "op must be abort, pause, continue or restart")
@@ -84,7 +84,7 @@ func controlJob(o Options) http.HandlerFunc {
 			return
 		}
 		if typ != "" {
-			emitJob(o, typ, j, p.Actor)
+			emitJob(o, typ, j, p.Actor) //nolint:contextcheck // webhook delivery outlives the request
 		}
 		if req.Op == "restart" {
 			w.Header().Set("Location", "/api/v1/jobs/"+j.ID)

@@ -24,7 +24,7 @@ type Lang struct {
 	Name string // endonym shown in the switcher
 }
 
-// Supported languages for the dashboard chrome. English is the default and
+// SupportedLangs are the languages of the dashboard chrome. English is the default and
 // the fallback for any missing key in another catalog (design.md D-91).
 var SupportedLangs = []Lang{
 	{Code: "en", Name: "English"},
@@ -143,7 +143,9 @@ func NegotiateLang(w http.ResponseWriter, r *http.Request, tls bool) string {
 }
 
 func setLangCookie(w http.ResponseWriter, lang string, tls bool) {
-	http.SetCookie(w, &http.Cookie{
+	// A preference, not a credential: the page reads it (not HttpOnly) for
+	// the switcher, and Lax lets a link from elsewhere keep the language.
+	http.SetCookie(w, &http.Cookie{ // #nosec G124 -- a language preference, readable by the page on purpose
 		Name:     langCookie,
 		Value:    lang,
 		Path:     "/",

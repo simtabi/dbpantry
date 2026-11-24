@@ -489,7 +489,7 @@ func TestReadingsAreServedAtOnceAndRenewedInTheBackground(t *testing.T) {
 			defer wg.Done()
 			s, err := cold(context.Background())
 			if err != nil || s.Version != "cold" {
-				errs <- fmt.Errorf("got %+v %v", s, err)
+				errs <- fmt.Errorf("got %+v: %w", s, err)
 			}
 		}()
 	}
@@ -933,8 +933,8 @@ func TestImagesGroupByPrefix(t *testing.T) {
 // The Backups page shows each PITR-capable engine's on/off state and the
 // last backup.verify result from the audit log (audit B8).
 func TestBackupsShowPITRAndLastVerify(t *testing.T) {
-	r := serve(t, func(context.Context) (Snapshot, error) {
-		s, _ := fixture(context.Background())
+	r := serve(t, func(ctx context.Context) (Snapshot, error) {
+		s, _ := fixture(ctx)
 		s.PITR = []PITRStatus{
 			{Engine: "pg", Capable: true, Enabled: true, Summary: "on · archive at /var/lib/pgbackrest"},
 			{Engine: "mysql", Capable: true, Enabled: false, Summary: "off"},
@@ -1001,8 +1001,8 @@ func TestChoicesPutRunningEnginesFirst(t *testing.T) {
 // A container still up after MDB_PROFILES dropped it is orphan ("leftover"),
 // not a green "running" next to a plain off badge (design.md D-95).
 func TestEngineOrphanStatus(t *testing.T) {
-	page := body(t, serve(t, func(context.Context) (Snapshot, error) {
-		s, _ := fixture(context.Background())
+	page := body(t, serve(t, func(ctx context.Context) (Snapshot, error) {
+		s, _ := fixture(ctx)
 		s.Endpoints.Endpoints = []endpoint.Endpoint{
 			{Engine: "pg", Title: "PostgreSQL", Enabled: true, Direct: endpoint.Access{Network: endpoint.Address{Host: "pg", Port: 5432}}},
 			{Engine: "mysql", Title: "MySQL", Enabled: false, Direct: endpoint.Access{Network: endpoint.Address{Host: "mysql", Port: 3306}}},
@@ -1020,8 +1020,8 @@ func TestEngineOrphanStatus(t *testing.T) {
 	if !strings.Contains(page, `bg-azure`) {
 		t.Error("orphan engines use the azure card mark")
 	}
-	nav := body(t, serve(t, func(context.Context) (Snapshot, error) {
-		s, _ := fixture(context.Background())
+	nav := body(t, serve(t, func(ctx context.Context) (Snapshot, error) {
+		s, _ := fixture(ctx)
 		s.Endpoints.Endpoints = []endpoint.Endpoint{
 			{Engine: "mysql", Title: "MySQL", Enabled: false, Direct: endpoint.Access{Network: endpoint.Address{Host: "mysql", Port: 3306}}},
 		}
@@ -1034,8 +1034,9 @@ func TestEngineOrphanStatus(t *testing.T) {
 	if !strings.Contains(nav, "leftover engine") || !strings.Contains(nav, `href="/engines"`) {
 		t.Error(`Overview Needs attention must list leftover engines with a link to /engines`)
 	}
-	if !strings.Contains(nav, `status-muted`) && strings.Contains(nav, `>off<`) {
-		// redis-style off (no container) is only asserted when present; muted class is the off mark.
+	// An engine shown off (no container) carries the muted class, the off mark.
+	if strings.Contains(nav, `>off<`) && !strings.Contains(nav, `status-muted`) {
+		t.Error("an engine marked off is not muted")
 	}
 }
 

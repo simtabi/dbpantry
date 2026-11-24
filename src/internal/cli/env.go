@@ -47,7 +47,7 @@ func (a *app) envTypesCmd() *cobra.Command {
 		Use:   "types",
 		Short: "List environment types and aliases",
 		Args:  cobra.NoArgs,
-		RunE: func(c *cobra.Command, _ []string) error {
+		RunE: func(_ *cobra.Command, _ []string) error {
 			for _, s := range envtype.Catalog() {
 				alias := ""
 				if len(s.Aliases) > 0 {
@@ -73,7 +73,7 @@ func (a *app) envLsCmd() *cobra.Command {
 		Use:   "ls",
 		Short: "List registered environments",
 		Args:  cobra.NoArgs,
-		RunE: func(c *cobra.Command, _ []string) error {
+		RunE: func(_ *cobra.Command, _ []string) error {
 			path, err := a.envRegistryPath()
 			if err != nil {
 				return err
@@ -174,7 +174,7 @@ func (a *app) envUseCmd() *cobra.Command {
 		Use:   "use NAME",
 		Short: "Print export lines to point a shell at a registered environment",
 		Args:  cobra.ExactArgs(1),
-		RunE: func(c *cobra.Command, args []string) error {
+		RunE: func(_ *cobra.Command, args []string) error {
 			reg, err := a.envRegistryPath()
 			if err != nil {
 				return err
@@ -277,7 +277,7 @@ func (a *app) envRemoveCmd() *cobra.Command {
 		Use:   "remove NAME",
 		Short: "Unregister an environment (optionally delete its home)",
 		Args:  cobra.ExactArgs(1),
-		RunE: func(c *cobra.Command, args []string) error {
+		RunE: func(_ *cobra.Command, args []string) error {
 			reg, err := a.envRegistryPath()
 			if err != nil {
 				return err
@@ -341,7 +341,7 @@ func patchEnvFile(path string, kv map[string]string) error {
 			lines = append(lines, line)
 		}
 	}
-	return os.WriteFile(path, []byte(strings.Join(lines, "\n")+"\n"), 0o600)
+	return os.WriteFile(path, []byte(strings.Join(lines, "\n")+"\n"), 0o600) // #nosec G703 -- an instance home's own .env
 }
 
 func quoteEnv(v string) string {
