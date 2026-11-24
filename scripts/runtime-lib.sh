@@ -350,10 +350,20 @@ mdb_project_name() {
 }
 
 # Volumes of the Compose project. Every implementation names them
-# <project>_<volume>.
+# <project>_<volume>, but that prefix is shared by a project whose name
+# extends this one (mdb and mdb_dev), so a volume Compose labelled with
+# another project is left out; one with no label (created by hand, or by
+# an implementation that does not label) is kept, as before. The name is
+# matched as text, never as a pattern.
 mdb_project_volumes() {
-    local project="${1:-$(mdb_project_name)}"
-    mdb_ctr volume ls --format '{{.Name}}' 2>/dev/null | grep -E "^${project}_" | sort || true
+    local project="${1:-$(mdb_project_name)}" v owner
+    mdb_ctr volume ls --format '{{.Name}}' 2>/dev/null \
+        | awk -v p="${project}_" 'index($0, p) == 1' | sort \
+        | while IFS= read -r v; do
+            owner="$(mdb_ctr volume inspect -f '{{index .Labels "com.docker.compose.project"}}' "$v" 2>/dev/null || true)"
+            [[ -z "$owner" || "$owner" == "$project" ]] && printf '%s\n' "$v"
+        done
+    return 0
 }
 
 # `compose up -d --wait` where the implementation has --wait, otherwise up -d
