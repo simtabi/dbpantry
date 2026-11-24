@@ -13,7 +13,11 @@ import (
 	"github.com/simtabi/dbpantry/src/internal/jobs"
 )
 
-// controlJob is POST /api/v1/jobs/{id}/control: abort, pause, continue or restart.
+// controlJob is POST /api/v1/jobs/{id}/control: abort, pause, continue or
+// restart. Each keeps the gates of the job's action (startJob): the
+// principal needs the action's scope for any of them, and a restart is a new
+// run, so it is refused while allow_destroy is off for a volume delete and
+// needs the action's typed confirmation again, sent as "confirm".
 func controlJob(o Options) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		p := principal(r)
@@ -22,18 +26,31 @@ func controlJob(o Options) http.HandlerFunc {
 			return
 		}
 		var req struct {
-			Op string `json:"op"`
+			Op      string `json:"op"`
+			Confirm string `json:"confirm"`
 		}
 		dec := json.NewDecoder(io.LimitReader(r.Body, 4*1024))
 		dec.DisallowUnknownFields()
 		if err := dec.Decode(&req); err != nil {
-			apiError(w, http.StatusBadRequest, `body must be {"op":"abort"|"pause"|"continue"|"restart"}`)
+			apiError(w, http.StatusBadRequest, `body must be {"op":"abort"|"pause"|"continue"|"restart", "confirm"?}`)
 			return
 		}
 		id := r.PathValue("id")
+		cur, err := o.Runner.Get(id)
+		if errors.Is(err, jobs.ErrNoJob) {
+			apiError(w, http.StatusNotFound, err.Error())
+			return
+		}
+		if err != nil {
+			apiError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		if code, msg := controlAllowed(o, p, cur, req.Op, req.Confirm); code != 0 {
+			apiError(w, code, msg)
+			return
+		}
 		var (
 			j   jobs.Job
-			err error
 			typ string
 		)
 		switch req.Op {
@@ -73,6 +90,45 @@ func controlJob(o Options) http.HandlerFunc {
 		}
 		writeJSON(w, http.StatusOK, j)
 	}
+}
+
+// controlAllowed applies the job's action's gates to a control operation:
+// 0 when it may proceed, else the status and why. A job whose action is not
+// in the registry (none today) needs the admin scope.
+func controlAllowed(o Options, p Principal, cur jobs.Job, op, confirm string) (int, string) {
+	a, ok := actionByName(cur.Action)
+	if !ok {
+		if p.Scope < ScopeAdmin {
+			return http.StatusForbidden, "controlling job " + cur.ID + " needs the admin scope"
+		}
+		return 0, ""
+	}
+	if p.Scope < a.Scope {
+		return http.StatusForbidden, op + " of " + a.Name + " needs the " + a.Scope.String() + " scope; this request has " + p.Scope.String()
+	}
+	if op != "restart" {
+		return 0, ""
+	}
+	if a.Destroy && !o.Settings.AllowDestroy {
+		return http.StatusForbidden, "deleting data volumes is off: set allow_destroy in dashboard.json (or MDB_DASHBOARD_ALLOW_DESTROY=true) to enable it"
+	}
+	if a.Destructive {
+		want := flagValue(cur.Args, "--confirm")
+		if want == "" || confirm != want {
+			return http.StatusUnprocessableEntity, "restarting " + a.Name + " needs its typed confirmation again: " + a.ConfirmHint
+		}
+	}
+	return 0, ""
+}
+
+// flagValue is the value after flag in args, or "".
+func flagValue(args []string, flag string) string {
+	for i := 0; i+1 < len(args); i++ {
+		if args[i] == flag {
+			return args[i+1]
+		}
+	}
+	return ""
 }
 
 func emitJob(o Options, typ string, j jobs.Job, actor string) {
