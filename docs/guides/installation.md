@@ -73,7 +73,15 @@ See [Configuration](configuration.md).
 
 ## Run from the binary alone
 
-`make kit && make dbpantry` builds `build/<os>/dbpantry` with the kit inside it:
+Download the binary for your platform from the
+[GitHub release](https://github.com/simtabi/dbpantry/releases) and check it
+against the release's `checksums.txt`:
+
+```bash
+shasum -a 256 -c checksums.txt --ignore-missing
+```
+
+Or build it: `make kit && make dbpantry` builds `build/<os>/dbpantry` with the kit inside it:
 the scripts, compose files, engines and image sources. Copied anywhere and run
 where there is no checkout, it extracts the kit to
 `~/.config/dbpantry/kit/<version>` and keeps the instance (`.env`, `secrets/`,

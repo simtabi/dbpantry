@@ -14,13 +14,18 @@ How a version of dbpantry ships, and what a consumer gets.
 ## What ships
 
 A release is one git tag, `vX.Y.Z`, pushed to GitHub (see [Publishing](#publishing)).
-It produces the GitHub release, and nothing else:
+A pre-release tag, `vX.Y.Z-rc.N` (or `-beta.N`, `-alpha.N`), builds the same
+artefacts as a GitHub pre-release, which never becomes Latest. A release produces
+the GitHub release, and nothing else:
 
 | Artefact | Where |
 |---|---|
-| Release notes, from the version's `CHANGELOG.md` section | GitHub release |
-| Source tarball, `dbpantry-X.Y.Z.tar.gz`, and its `.sha256` | GitHub release |
-| Build provenance attestation for the tarball | GitHub attestations |
+| Release notes, from the version's `CHANGELOG.md` section, with the contributors | GitHub release |
+| The `dbpantry` binary for Linux, macOS (and a universal build), Windows and FreeBSD on amd64 and arm64, bare (`dbpantry_<os>_<arch>`) and archived (`.tar.gz`, `.zip` on Windows). Each carries the kit, so it runs with no checkout ([installation](installation.md#run-from-the-binary-alone)) | GitHub release |
+| Source archive, `dbpantry_X.Y.Z_source.tar.gz` | GitHub release |
+| `checksums.txt` (SHA-256 of every file above) and an SBOM per archive | GitHub release |
+| Build provenance attestation for everything checksummed | GitHub attestations |
+| The Go module alias tag `src/vX.Y.Z` on the same commit | git |
 
 The images are the toolkit's product, but they are built where they run:
 `make build` builds every engine image, the `cli` image and the derived
@@ -42,10 +47,10 @@ can be read. `make build` tags local images `<major>` (engines) and `dev` (cli).
 
 | Tag | Example | Moves |
 |---|---|---|
-| `<major>-<release>` | `dbpantry-pg:17-0.1.1` | never |
+| `<major>-<release>` | `dbpantry-pg:17-X.Y.Z` | never |
 | `<major>` | `dbpantry-pg:17` | to each new release |
-| `<release>`, cli only | `dbpantry-cli:0.1.1` | never |
-| `<tag>-amd64`, `<tag>-arm64` | `dbpantry-pg:17-0.1.1-arm64` | never |
+| `<release>`, cli only | `dbpantry-cli:X.Y.Z` | never |
+| `<tag>-amd64`, `<tag>-arm64` | `dbpantry-pg:17-X.Y.Z-arm64` | never |
 
 The per-architecture tags were the two halves of each multi-architecture
 manifest. `latest` was never published.
@@ -110,24 +115,28 @@ early as it can:
 
 | Job | What it does | Refuses when |
 |---|---|---|
-| resolve release | refuses first unless the tag is a `vX.Y.Z` tag on GitHub, then checks it out, reads the version from it and the images to scan from the engine descriptors | the tag is not a version tag on GitHub, the tag is not on `main`, `CHANGELOG.md` has no section for it, or MongoDB is in the matrix |
+| resolve release | refuses first unless the tag is a `vX.Y.Z` (or `vX.Y.Z-rc.N`) tag on GitHub, then checks it out, reads the version from it and the images to scan from the engine descriptors | the tag is not a version tag on GitHub, the tag is not on `main`, a final version has no `CHANGELOG.md` section, or MongoDB is in the matrix |
 | scan | builds every image on both architectures and runs the Trivy gate | any image fails to build or has a fixable HIGH or CRITICAL finding |
 | verify | runs `make verify` on amd64 and arm64 | any check fails |
-| GitHub release | once scan and verify have passed, creates the release with the notes and the source tarball, its checksum and provenance | the release already exists |
+| GitHub release | once scan and verify have passed, `simtabi/.github`'s shared `go-release.yml` runs GoReleaser on [`src/.goreleaser.yaml`](../../src/.goreleaser.yaml): `make kit`, the binaries for every target, the archives, the source archive, checksums and SBOMs, the `src/vX.Y.Z` alias tag and the provenance; the contributors are then appended to the notes | the release already exists, or the GoReleaser config holds a publisher block (Homebrew, Scoop, an image, ...) |
 
 Nothing is published until scan and verify have passed for every image. The
 images are built on native runners for each architecture, never under QEMU.
-The workflow uses no third-party action: trivy is a binary checked against its
-published checksums, and GitHub's own `actions/checkout` and `actions/attest`
-float on their major tag, per the Simtabi action rule.
+The gate jobs use no third-party action: trivy is a binary checked against its
+published checksums, and GitHub's own `actions/checkout` floats on its major tag,
+per the Simtabi action rule. The publishing job is the shared workflow, pinned to
+the commit of its release with the version as the comment, as every Go release in
+the org is (owner, 2026-11-18: "v0.2.0, shared workflow").
+`src/internal/release`'s `TestReleaseShipsTheBinaryThroughTheSharedWorkflow` fails
+if the release stops calling it behind the gates, stops building on a pre-release
+tag, or the GoReleaser config stops running `make kit` or gains a publisher block.
 
-dbpantry builds no release binaries, so it keeps its own jobs rather than
-calling `simtabi/.github`'s shared `go-release.yml`, which runs GoReleaser.
-
-Verify the source tarball's provenance with:
+The shared workflow signs the provenance, so a downloaded file verifies with it
+named as the signer:
 
 ```bash
-gh attestation verify dbpantry-X.Y.Z.tar.gz --repo simtabi/dbpantry
+gh attestation verify dbpantry_linux_amd64 --repo simtabi/dbpantry \
+  --signer-workflow simtabi/.github/.github/workflows/go-release.yml
 ```
 
 ## Release notes

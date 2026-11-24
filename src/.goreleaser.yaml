@@ -1,0 +1,85 @@
+# GoReleaser for dbpantry, run by simtabi/.github's shared go-release.yml from the repository root
+# with --config src/.goreleaser.yaml (release.yml calls it). It builds the dbpantry binary for every
+# target and attaches it to the GitHub release, and publishes nowhere else: no Go module proxy path,
+# Homebrew, Scoop, Winget, image or any other channel (~/.claude/rules/go.md). The shared workflow
+# refuses a config holding any publisher block, and src/internal/release's tests do too.
+#
+# The binary carries the kit (design.md D-85): `make kit` copies the scripts, compose files, engines
+# and image sources into src/internal/kit/files before the build, or the release would ship a binary
+# that needs a checkout.
+version: 2
+
+project_name: dbpantry
+
+# Outside the module and gitignored, so a release never leaves a dirty tree behind.
+dist: .goreleaser-dist
+
+before:
+  hooks:
+    - make kit
+
+builds:
+  - id: dbpantry
+    dir: src
+    main: ./cmd/dbpantry
+    binary: dbpantry
+    env:
+      - CGO_ENABLED=0
+    flags:
+      - -trimpath
+    goos:
+      - linux
+      - darwin
+      - windows
+      - freebsd
+    goarch:
+      - amd64
+      - arm64
+    mod_timestamp: "{{ .CommitTimestamp }}"
+    ldflags:
+      - -s -w
+      - -X github.com/simtabi/dbpantry/src/internal/cli.version=v{{ .Version }}
+      - -X github.com/simtabi/dbpantry/src/internal/cli.commit={{ .ShortCommit }}
+
+universal_binaries:
+  - id: dbpantry
+    ids: [dbpantry]
+    name_template: dbpantry
+    replace: false
+
+archives:
+  # The bare, ready-to-run binaries: dbpantry_<os>_<arch>[.exe], macos rather than darwin.
+  - id: binary
+    ids: [dbpantry]
+    formats: [binary]
+    name_template: &name >-
+      dbpantry_{{- if eq .Os "darwin" }}macos{{ else }}{{ .Os }}{{ end }}_
+      {{- if eq .Arch "all" }}universal{{ else }}{{ .Arch }}{{ end }}
+  # The same binaries with the licence and the docs, .zip on Windows.
+  - id: archive
+    ids: [dbpantry]
+    name_template: *name
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    files:
+      - LICENSE
+      - README.md
+      - CHANGELOG.md
+
+checksum:
+  name_template: "checksums.txt"
+  algorithm: sha256
+
+# The tagged source as an archive of its own, checksummed and attested with the binaries.
+source:
+  enabled: true
+  name_template: "{{ .ProjectName }}_{{ .Version }}_source"
+
+sboms:
+  - id: archive
+    artifacts: archive
+
+release:
+  # Any -suffix (rc.N, beta.N) is a pre-release and never becomes Latest (releases.md).
+  prerelease: auto

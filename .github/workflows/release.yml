@@ -6,19 +6,25 @@ name: Release
 #   gh workflow run release.yml --repo simtabi/dbpantry -f tag=vX.Y.Z     the same, for a tag already pushed
 #
 # Push a version tag only for final code: tags are final, and a pushed tag releases.
-# A release publishes the GitHub release only: the notes and the source tarball, with
-# its checksum and provenance. Container images are no longer published (owner,
+# A pre-release tag (vX.Y.Z-rc.N, -beta.N, -alpha.N) builds a GitHub pre-release,
+# never Latest, for testing.
+#
+# A release publishes the GitHub release only: the dbpantry binary for every
+# target, with the kit inside it (design.md D-85), the source archive, checksums,
+# SBOMs and build provenance. Container images are no longer published (owner,
 # 2026-11-13: GitHub release only); the images on ghcr.io/simtabi are frozen. Every
 # image is still built and scanned, and `make verify` still runs, before the release.
-# src/internal/release's TestReleaseRunsOnAVersionTagOrOnRequest fails if this gains
-# any other trigger, stops gating or checking out the tag, or publishes an image.
 #
-# dbpantry builds no release binaries, so it keeps its own jobs rather than calling
-# simtabi/.github's shared go-release.yml, which runs GoReleaser.
+# The publishing is simtabi/.github's shared go-release.yml (owner, 2026-11-18:
+# "v0.2.0, shared workflow"), driven by src/.goreleaser.yaml, which runs
+# `make kit` before the build. src/internal/release's tests fail if this gains any
+# other trigger, stops gating or checking out the tag, publishes an image, or stops
+# releasing through the shared workflow behind the gates.
 on:
   push:
     tags:
       - 'v[0-9]+.[0-9]+.[0-9]+'
+      - 'v[0-9]+.[0-9]+.[0-9]+-*'
   workflow_dispatch:
     inputs:
       tag:
@@ -94,10 +100,10 @@ jobs:
         name: Resolve the version from the tag
         run: |
           set -euo pipefail
-          # The gate admits a pre-release suffix; a dbpantry release is a final
-          # version only, so this is the real test.
-          [[ "$TAG" =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+)$ ]] \
-            || { echo "::error::tag $TAG is not vX.Y.Z"; exit 1; }
+          # A final vX.Y.Z, or a pre-release of one: -alpha.N, -beta.N or
+          # -rc.N, dotted (releases.md). Nothing else.
+          [[ "$TAG" =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+)(-(alpha|beta|rc)\.[0-9]+)?$ ]] \
+            || { echo "::error::tag $TAG is not vX.Y.Z or vX.Y.Z-(alpha|beta|rc).N"; exit 1; }
           echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
           echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
 
@@ -113,10 +119,14 @@ jobs:
 
       # The release body is that version's CHANGELOG section. Checked here, so a
       # missing section fails in seconds rather than after an hour of builds.
+      # A pre-release is a test build: its notes ship with the final, as the
+      # shared workflow says, so only a final version needs its section.
       - name: Require a CHANGELOG section for the version
         env:
           VERSION: ${{ steps.release.outputs.version }}
-        run: scripts/release-notes "$VERSION" > /dev/null
+        run: |
+          set -euo pipefail
+          [[ "$VERSION" == *-* ]] || scripts/release-notes "$VERSION" > /dev/null
 
       # The same descriptor-derived matrix ci.yml builds, plus the cli image, for
       # the scan gate. MongoDB is referenced, never derived (docs/guides/licensing.md),
@@ -280,58 +290,30 @@ jobs:
           done
 
   # ---------------------------------------------------------------------------
-  # The GitHub release, last: only once every image has built and passed the
-  # scan, and `make verify` has passed on both architectures.
-  #
-  # The body is the version's CHANGELOG section with the contributors since
-  # the previous tag appended (docs/guides/release.md), and the source tarball is
-  # attached with its checksum and provenance.
+  # The release, once the tag passed the gate and every image built, scanned
+  # and verified. simtabi/.github's shared go-release.yml publishes it: the
+  # notes from the version's CHANGELOG section, the module alias tag
+  # src/vX.Y.Z, GoReleaser's binaries, archives, source archive, checksums and
+  # SBOMs (src/.goreleaser.yaml, which runs make kit first), then provenance
+  # for everything checksummed. post-release adds the contributors since the
+  # previous tag to the notes, as this job did before it moved there.
   # ---------------------------------------------------------------------------
   release:
     name: GitHub release
     needs: [prepare, scan, verify]
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
     permissions:
-      contents: write          # create the release
-      id-token: write
-      attestations: write
-      artifact-metadata: write
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          ref: refs/tags/${{ needs.prepare.outputs.tag }}
-          fetch-depth: 0
-          persist-credentials: false
-
-      - name: Write the release notes and the source tarball
-        env:
-          VERSION: ${{ needs.prepare.outputs.version }}
-          TAG: ${{ needs.prepare.outputs.tag }}
-        run: |
-          set -euo pipefail
-          scripts/release-notes "$VERSION" > notes.md
-          prev="$(git describe --tags --abbrev=0 "${TAG}^" 2>/dev/null || true)"
-          range="${prev:+${prev}..}${TAG}"
-          {
-            printf '\n### Contributors\n\n'
-            git log --format='%aN' "$range" | grep -v '\[bot\]$' | sort -fu | sed 's/^/- /'
-          } >> notes.md
-          git archive --format=tar.gz --prefix="dbpantry-${VERSION}/" \
-            -o "dbpantry-${VERSION}.tar.gz" "$TAG"
-          sha256sum "dbpantry-${VERSION}.tar.gz" > "dbpantry-${VERSION}.tar.gz.sha256"
-          cat notes.md
-
-      - name: Attach the build provenance to the tarball
-        uses: actions/attest@v4
-        with:
-          subject-path: dbpantry-${{ needs.prepare.outputs.version }}.tar.gz
-
-      - name: Create the release
-        env:
-          VERSION: ${{ needs.prepare.outputs.version }}
-          TAG: ${{ needs.prepare.outputs.tag }}
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          gh release create "$TAG" --verify-tag --title "$TAG" --notes-file notes.md \
-            "dbpantry-${VERSION}.tar.gz" "dbpantry-${VERSION}.tar.gz.sha256"
+      contents: write          # create the release, push src/vX.Y.Z
+      id-token: write          # Sigstore identity for the attestation
+      attestations: write      # store the provenance
+    uses: simtabi/.github/.github/workflows/go-release.yml@077bf8bd15249c940a6af2dd6a2572d259e4a0f8 # v1.0.1
+    with:
+      tag: ${{ needs.prepare.outputs.tag }}
+      post-release: |
+        prev="$(git describe --tags --abbrev=0 --exclude 'src/*' "${TAG}^" 2>/dev/null || true)"
+        range="${prev:+${prev}..}${TAG}"
+        {
+          gh release view "$TAG" --json body --jq .body
+          printf '\n### Contributors\n\n'
+          git log --format='%aN' "$range" | grep -v '\[bot\]$' | sort -fu | sed 's/^/- /'
+        } > "$RUNNER_TEMP/notes-with-contributors.md"
+        gh release edit "$TAG" --notes-file "$RUNNER_TEMP/notes-with-contributors.md"
