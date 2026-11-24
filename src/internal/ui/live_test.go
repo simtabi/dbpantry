@@ -3,6 +3,7 @@ package ui
 import (
 	"bytes"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -94,7 +95,9 @@ func TestLiveTerminalOnlyFinalIsNotEnough(t *testing.T) {
 func TestLiveStreamsTreeLinesOffTerminal(t *testing.T) {
 	// Nested ├─ / └─ rows must stream mid-flight so the job drawer shows
 	// under-the-hood compose work before Stop.
-	var buf bytes.Buffer
+	// Live writes from its own goroutine while the test polls the output, so
+	// the buffer is read and written under one lock (go test -race).
+	var buf syncBuffer
 	var phase atomic.Int32
 	live := NewLive(&buf, false, func(int, time.Time) []string {
 		if phase.Load() == 0 {
@@ -147,4 +150,22 @@ func TestStreamStableBucketsElapsedEveryThreeSeconds(t *testing.T) {
 	if treeStreamKey("├─ ✔ mdblive-pg-1  1.0s") != "tree:mdblive-pg-1" {
 		t.Fatalf("treeStreamKey = %q", treeStreamKey("├─ ✔ mdblive-pg-1  1.0s"))
 	}
+}
+
+// syncBuffer is a bytes.Buffer safe for one writer and one reader at once.
+type syncBuffer struct {
+	mu sync.Mutex
+	b  bytes.Buffer
+}
+
+func (s *syncBuffer) Write(p []byte) (int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.b.Write(p)
+}
+
+func (s *syncBuffer) String() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.b.String()
 }
