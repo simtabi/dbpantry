@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -58,8 +57,12 @@ func (a *app) dashboardSettings(root string, s *config.Settings, f dashboardFlag
 		return ds, err
 	}
 	if changed("listen") {
-		if _, _, err := net.SplitHostPort(f.listen); err != nil {
-			return ds, fmt.Errorf("--listen %q: %w", f.listen, err)
+		// The same parser the server binds with: host:port, or a unix socket
+		// (unix:/path, unix:///path, /path.sock). A host:port check here
+		// refused /path.sock and passed unix:/path only by splitting it at
+		// its colon.
+		if _, err := dashboard.ParseListen(f.listen); err != nil {
+			return ds, fmt.Errorf("--listen: %w", err)
 		}
 		ds.Listen = f.listen
 	}

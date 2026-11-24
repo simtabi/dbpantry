@@ -15,7 +15,9 @@ func TestListenAcceptsAUnixSocket(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	a := &app{environ: func() []string { return []string{"DBPANTRY_DIR=" + root, "MDB_ENV_FILE=" + filepath.Join(root, ".env.example")} }}
+	a := &app{environ: func() []string {
+		return []string{"DBPANTRY_DIR=" + root, "MDB_ENV_FILE=" + filepath.Join(root, ".env.example")}
+	}}
 	s, err := config.Load(root, a.environ)
 	if err != nil {
 		t.Fatal(err)
