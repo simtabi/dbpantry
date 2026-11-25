@@ -258,6 +258,13 @@ var Actions = []Action{
 		Command: func(Values) []string { return []string{"config", "render"} },
 	},
 	{
+		// Puts compose.prod.yml into the instance's COMPOSE_FILE (design.md
+		// D-73), which check-env asks for before a prod boot. Idempotent, and
+		// only the instance's own .env: no parameter names a file.
+		Name: "config.prod-overlay", Title: "Add the prod overlay", Area: "config", Scope: ScopeAdmin,
+		Command: func(Values) []string { return []string{"config", "prod-overlay"} },
+	},
+	{
 		Name: "config.set", Title: "Set a configuration key", Area: "config", Scope: ScopeAdmin,
 		Params: []Param{
 			{Name: "key", Label: "Key (MDB_…)", Kind: KindKey, Required: true},
