@@ -18,7 +18,8 @@ cd "$MDB_ROOT" || exit 1
 files=(scripts/verify/*.sh)
 (( ${#files[@]} >= 80 )) || vfail "found only ${#files[@]} checks to inspect"
 
-# psql conninfo strings: "host=... port=..." handed to psql.
+# psql conninfo strings: "... host=... port=..." handed to psql, wherever
+# connect_timeout sits in them.
 n=0 bad=0
 while IFS= read -r hit; do
     n=$(( n + 1 ))
@@ -26,7 +27,7 @@ while IFS= read -r hit; do
         printf '      %s\n' "${hit:0:160}" >&2
         bad=$(( bad + 1 ))
     fi
-done < <(grep -nE '"host=[^"]*port=' "${files[@]}" | grep -v '^scripts/verify/87-')
+done < <(grep -nE '"[^"]*host=[^"]*port=' "${files[@]}" | grep -v '^scripts/verify/87-')
 (( n >= 6 )) || vfail "found only $n psql conninfo strings; the scan inspected too little"
 (( bad == 0 )) || vfail "$bad of $n psql conninfo strings have no connect_timeout, so a probe can hang the run"
 vinfo "all $n psql conninfo strings carry a connect_timeout"
