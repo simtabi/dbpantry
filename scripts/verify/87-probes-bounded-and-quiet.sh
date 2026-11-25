@@ -10,8 +10,8 @@ cd "$MDB_ROOT" || exit 1
 # The full make verify of 2026-11-25 hung for 40 minutes in check 27: after the
 # leader was killed, a psql probe through HAProxy connected to a backend that
 # would never answer, and libpq waits for ever without connect_timeout. The
-# same probe passed the operator's PostgreSQL superuser password as
-# `-e PGPASSWORD=<value>`, which any process can read in the process list.
+# same probe passed the operator's PostgreSQL superuser password through -e
+# with its value written out, which any process can read in the process list.
 # A conninfo names connect_timeout; a secret from secrets/ reaches a container
 # as `-e NAME` with the value in the environment, never on the command line.
 
