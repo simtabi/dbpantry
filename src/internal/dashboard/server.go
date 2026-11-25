@@ -21,6 +21,7 @@ import (
 	"github.com/simtabi/dbpantry/src/internal/addon"
 	"github.com/simtabi/dbpantry/src/internal/endpoint"
 	"github.com/simtabi/dbpantry/src/internal/envtype"
+	"github.com/simtabi/dbpantry/src/internal/hooks"
 	"github.com/simtabi/dbpantry/src/internal/jobs"
 	"github.com/simtabi/dbpantry/src/internal/project"
 )
@@ -94,6 +95,10 @@ type page struct {
 	Running *jobs.Job
 	// Tokens fill the Operations page's API tokens card.
 	Tokens []Token
+	// Hooks fill its webhooks card, for an admin; HooksOn says whether the
+	// instance has an event bus at all.
+	Hooks   []hooks.Endpoint
+	HooksOn bool
 	// Lang is the negotiated UI language (design.md D-91).
 	Lang string
 	// LangLinks are switcher entries for the current request URL.
@@ -380,7 +385,12 @@ func Handler(src Sources, o Options) (http.Handler, error) {
 				return
 			}
 		}
-		render(w, r, page{Page: "operations", Title: "Operations", S: s, Tokens: tokens, Refresh: true})
+		// Webhooks too, as on /api/v1/hooks; a list carries no secret.
+		var endpoints []hooks.Endpoint
+		if o.Hooks != nil && principal(r).Scope >= ScopeAdmin {
+			endpoints = o.Hooks.ListEndpoints()
+		}
+		render(w, r, page{Page: "operations", Title: "Operations", S: s, Tokens: tokens, Hooks: endpoints, HooksOn: o.Hooks != nil, Refresh: true})
 	})
 	mux.HandleFunc("GET /engines/{engine}", func(w http.ResponseWriter, r *http.Request) {
 		s, ok := snap(w, r)
