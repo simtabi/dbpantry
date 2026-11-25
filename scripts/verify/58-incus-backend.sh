@@ -22,6 +22,7 @@ for t in incus incus-compose; do
 #!/usr/bin/env bash
 printf '$t %s\n' "\$*" >> "\$STUB_LOG"
 [[ "$t" == incus-compose ]] && printf 'gateway %s\n' "\${MDB_NETWORK_GATEWAY:-}" >> "\$STUB_LOG"
+[[ "$t" == incus-compose ]] && printf 'backupdir %s\n' "\${MDB_BACKUP_DIR:-}" >> "\$STUB_LOG"
 case "\$*" in
     "exec pg-1 --project proj -- id -u postgres") echo 999 ;;
     "exec pg-1 --project proj -- id -u nobody-here") exit 1 ;;
@@ -49,6 +50,12 @@ inc() {
         bash -c '. "$1"; mdb_backend_init || exit; '"$snippet" _ "$MDB_ROOT/scripts/backend-lib.sh" 2>&1 || true
 }
 P="$stubs:/usr/bin:/bin"
+# What every incus-compose call starts with: the instance's env file, the OS
+# environment for interpolation (MDB_HOME, the gateway), and the project. Without
+# them incus-compose reads .env beside the first compose file (the kit), so a
+# separate home booted as project "mdb" on the default subnet, with secrets/ and
+# certs/ from the kit (live, Incus 7.0.2 + incus-compose 1.3.5, 2026-11-24).
+ICP="--env-file $tmp/root/.env --os-env -p proj"
 
 for v in $MDB_BACKEND_REQUIRED_VERBS exec_tty status logs cp volume_rm image_load secrets_sync info; do
     got="$(inc "$P" "declare -F _mdb_be_incus_$v >/dev/null && echo yes")"
@@ -76,7 +83,7 @@ grep -qx "incus exec pg-1 --project proj -- id -u postgres" "$log" \
     || vfail "exec -u NAME does not resolve the name inside the instance: $(cat "$log")"
 grep '^incus ' "$log" | grep -q -- ' -- .*--project' \
     && vfail "--project follows --, so it reaches the command in the instance: $(grep '^incus ' "$log")"
-grep -qx "incus-compose -f $tmp/root/compose.yml --profile pg exec -T -u 999 pg psql -c select 1" "$log" \
+grep -qx "incus-compose $ICP -f $tmp/root/compose.yml --profile pg exec -T -u 999 pg psql -c select 1" "$log" \
     || vfail "exec -u is not incus-compose exec -T -u UID, with the stack's files and profiles: $(cat "$log")"
 inc "$P" 'mdb_svc_exec -u 70 pg true' >/dev/null
 grep -q 'exec -T -u 70 pg true$' "$log" || vfail "a numeric -u is not passed through as it is: $(cat "$log")"
@@ -87,10 +94,19 @@ got="$(inc "$P" 'mdb_svc_exec -u nobody-here pg true; echo rc=$?')"
     || vfail "an unknown user was not refused: [$got]"
 grep -q '^incus-compose ' "$log" && vfail "exec ran although the user could not be resolved"
 
+mkdir -p "$tmp/home"
+printf 'COMPOSE_PROJECT_NAME=homeproj\nCOMPOSE_FILE=compose.yml\nCOMPOSE_PROFILES=pg\n' > "$tmp/home/.env"
+inc "$P" 'mdb_svc_exec pg true' MDB_HOME="$tmp/home" >/dev/null
+grep -qx "incus-compose --env-file $tmp/home/.env --os-env -p homeproj -f $tmp/root/compose.yml --profile pg exec -T pg true" "$log" \
+    || vfail "a separate home's env file and project do not reach incus-compose: $(cat "$log")"
+grep -qx "backupdir $tmp/home/backups" "$log" \
+    || vfail "the dump directory is not handed to incus-compose absolute, in the home: $(cat "$log")"
+rm -rf "${tmp:?}/home"
+
 # The network needs a gateway on Incus: compose.incus.yml names it, last.
 cp "$MDB_ROOT/compose.incus.yml" "$tmp/root/compose.incus.yml"
 inc "$P" 'mdb_svc_exec pg true' >/dev/null
-grep -qx "incus-compose -f $tmp/root/compose.yml -f $tmp/root/compose.incus.yml --profile pg exec -T pg true" "$log" \
+grep -qx "incus-compose $ICP -f $tmp/root/compose.yml -f $tmp/root/compose.incus.yml --profile pg exec -T pg true" "$log" \
     || vfail "compose.incus.yml is not passed after the stack's files: $(cat "$log")"
 grep -qx 'gateway 172.28.0.1' "$log" || vfail "the default gateway is not the default subnet's first host: $(cat "$log")"
 inc "$P" 'mdb_svc_exec pg true' MDB_NETWORK_SUBNET=10.20.0.0/16 >/dev/null
@@ -126,19 +142,19 @@ bash -c "$recovery"$'\n''is_recovery_volume "$1"' _ vol-pg-data && vfail "destro
 # `-f --tail=100`, which failed on the live host on 2026-11-16. Follow is sent as
 # --follow, because a bare -f reads as --file and drops the stack's files.
 got="$(inc "$P" 'mdb_be_logs -f --tail=100')"
-grep -qx "incus-compose -f $tmp/root/compose.yml --profile \* logs --follow" "$log" \
+grep -qx "incus-compose $ICP -f $tmp/root/compose.yml --profile \* logs --follow" "$log" \
     || vfail "logs -f --tail=100 does not reach incus-compose as logs --follow with the stack's files: $(cat "$log")"
 [[ "$got" == *"has no --tail=100"* ]] || vfail "dropping --tail=100 is not reported: [$got]"
 inc "$P" 'mdb_be_logs --tail 50 --since 1h -t pg' >/dev/null
-grep -qx "incus-compose -f $tmp/root/compose.yml --profile \* logs pg" "$log" \
+grep -qx "incus-compose $ICP -f $tmp/root/compose.yml --profile \* logs pg" "$log" \
     || vfail "a Compose-only option or its value reached incus-compose logs: $(cat "$log")"
 got="$(inc "$P" 'mdb_be_logs --follow pg')"
-grep -qx "incus-compose -f $tmp/root/compose.yml --profile \* logs --follow pg" "$log" \
+grep -qx "incus-compose $ICP -f $tmp/root/compose.yml --profile \* logs --follow pg" "$log" \
     || vfail "logs --follow SERVICE is not passed as it is: $(cat "$log")"
 [[ -z "$got" ]] || vfail "a supported logs call printed a note: [$got]"
 
 inc "$P" 'mdb_be_down' >/dev/null
-grep -q "^incus-compose -f $tmp/root/compose.yml --profile \* down$" "$log" || vfail "down is not incus-compose down over every profile: $(cat "$log")"
+grep -q "^incus-compose $ICP -f $tmp/root/compose.yml --profile \* down$" "$log" || vfail "down is not incus-compose down over every profile: $(cat "$log")"
 
 # shellcheck disable=SC2016  # expanded by the inner bash
 got="$(inc "$P" 'mdb_be_up; echo rc=$?' MDB_WAIT_TIMEOUT=4)"

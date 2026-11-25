@@ -45,8 +45,19 @@ _mdb_incus_compose() {
     if (( ! has_p )); then
         for p in $(_mdb_rt_compose_var COMPOSE_PROFILES | tr ',' ' '); do pre+=(--profile "$p"); done
     fi
+    # The instance's env file, the OS environment and the project, as the Compose
+    # backend passes them (_mdb_compose_home). incus-compose otherwise reads .env
+    # beside the first compose file, the kit's, and interpolates nothing from the
+    # environment: a separate home booted as project "mdb" on the default subnet,
+    # with secrets/ and certs/ from the kit (live, incus-compose 1.3.5, 2026-11-24).
+    local envf; envf="$(mdb_env_default_file)"
+    local -a glob=()
+    [[ -f "$envf" ]] && glob+=(--env-file "$envf")
+    glob+=(--os-env -p "$(_mdb_incus_project)")
     (cd "$MDB_RT_ROOT" && COMPOSE_PROJECT_NAME="$(_mdb_incus_project)" \
-        MDB_NETWORK_GATEWAY="$(_mdb_incus_gateway)" "${ic[@]}" ${pre[@]+"${pre[@]}"} "$@")
+        MDB_NETWORK_GATEWAY="$(_mdb_incus_gateway)" \
+        MDB_BACKUP_DIR="$(mdb_backup_dir "$MDB_HOME" "$envf")" \
+        "${ic[@]}" "${glob[@]}" ${pre[@]+"${pre[@]}"} "$@")
 }
 
 # incus-compose refuses a network whose ipam names a subnet and no gateway
