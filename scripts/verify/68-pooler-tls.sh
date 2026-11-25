@@ -143,7 +143,7 @@ psql_to() {
     attempts=$(( attempts + 1 ))
     out="$(mdb_ctr run --rm --network "$net" -e PGPASSWORD="${TW_APP}" \
         -v "$MDB_ROOT/certs/ca.crt:/ca.crt:ro" --entrypoint psql "$img" \
-        "host=$host port=6432 user=poolapp dbname=poolapp sslmode=$sslmode sslrootcert=/ca.crt" \
+        "connect_timeout=5 host=$host port=6432 user=poolapp dbname=poolapp sslmode=$sslmode sslrootcert=/ca.crt" \
         -qtAX -c "$sql" 2>&1)"
 }
 
@@ -160,7 +160,7 @@ fi
 
 wait_ready 60 "the enforcing pooler to accept TLS connections" \
     mdb_ctr run --rm --network "$net" -e PGPASSWORD="${TW_APP}" --entrypoint psql "$img" \
-        "host=$prod port=6432 user=poolapp dbname=poolapp sslmode=require" -qtAX -c 'SELECT 1'
+        "connect_timeout=5 host=$prod port=6432 user=poolapp dbname=poolapp sslmode=require" -qtAX -c 'SELECT 1'
 
 conf="$(mdb_ctr exec "$prod" cat /etc/pgbouncer/pgbouncer.ini 2>/dev/null)" \
     || vfail "could not read the enforcing pooler's generated config"
@@ -209,7 +209,7 @@ sleep 3
 running "$dev" || { mdb_ctr logs "$dev" 2>&1 | tail -15 >&2; vfail "the dev pooler is not running"; }
 wait_ready 60 "the dev pooler to accept connections" \
     mdb_ctr run --rm --network "$net" -e PGPASSWORD="${TW_APP}" --entrypoint psql "$img" \
-        "host=$dev port=6432 user=poolapp dbname=poolapp sslmode=disable" -qtAX -c 'SELECT 1'
+        "connect_timeout=5 host=$dev port=6432 user=poolapp dbname=poolapp sslmode=disable" -qtAX -c 'SELECT 1'
 
 # 5. Plaintext still works in dev, and TLS is offered to a client that asks.
 psql_to "$dev" disable 'SELECT 44' || true; got="$out"
@@ -305,14 +305,14 @@ mtls_psql() {
                 install -m 0600 /in/client.key /tmp/k
                 extra="sslcert=/in/client.crt sslkey=/tmp/k"
             fi
-            exec psql "host=$1 port=$2 user=$3 dbname=poolapp sslmode=verify-full sslrootcert=/ca.crt $extra" -qtAX -c "$4"
+            exec psql "connect_timeout=5 host=$1 port=$2 user=$3 dbname=poolapp sslmode=verify-full sslrootcert=/ca.crt $extra" -qtAX -c "$4"
         ' sh "$host" "$port" "$user" "$sql" 2>&1)"
 }
 
 wait_ready 60 "the mTLS pooler to accept a certified client" \
     mdb_ctr run --rm --network "$mnet" -e PGPASSWORD="${TW_APP}" \
         -v "$MDB_ROOT/certs/ca.crt:/ca.crt:ro" -v "$certs_tmp/poolapp:/in:ro" \
-        --entrypoint sh "$img" -c 'install -m 0600 /in/client.key /tmp/k; exec psql "host=pg-pooler port=6432 user=poolapp dbname=poolapp sslmode=verify-full sslrootcert=/ca.crt sslcert=/in/client.crt sslkey=/tmp/k" -qtAX -c "SELECT 1"'
+        --entrypoint sh "$img" -c 'install -m 0600 /in/client.key /tmp/k; exec psql "connect_timeout=5 host=pg-pooler port=6432 user=poolapp dbname=poolapp sslmode=verify-full sslrootcert=/ca.crt sslcert=/in/client.crt sslkey=/tmp/k" -qtAX -c "SELECT 1"'
 
 # 6a. No client certificate: refused at the pooler.
 if mtls_psql pg-pooler 6432 poolapp - 'SELECT 1'; then
