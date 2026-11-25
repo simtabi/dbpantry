@@ -124,6 +124,23 @@ mdb_network_ensure_subnet() {
             ;;
     esac
 
+    # Only the env file's own project gets the move written. A project named in
+    # the environment (check 27's throwaway mdbverifyNNNN, started from the
+    # operator's checkout) uses the move for this run and leaves the file alone.
+    local fileproj
+    fileproj="$(mdb_env_get COMPOSE_PROJECT_NAME "$envf")"
+    if [[ "$(mdb_project_name)" != "${fileproj:-mdb}" ]]; then
+        export MDB_NETWORK_SUBNET="$pick"
+        gw="$(mdb_env_get MDB_NETWORK_GATEWAY "$envf")"
+        if [[ -n "$gw" ]] && ! python3 -c "import ipaddress,sys; sys.exit(0 if ipaddress.ip_address('$gw') in ipaddress.ip_network('$pick') else 1)"; then
+            MDB_NETWORK_GATEWAY="$(python3 -c "import ipaddress; print(next(ipaddress.ip_network('$pick').hosts()))")"
+            export MDB_NETWORK_GATEWAY
+        fi
+        printf 'dbpantry: MDB_NETWORK_SUBNET %s overlapped an existing pool; project %s uses %s for this run (%s belongs to project %s, left unchanged)\n' \
+            "$want" "$(mdb_project_name)" "$pick" "$envf" "${fileproj:-mdb}" >&2
+        return 0
+    fi
+
     mdb_network_env_set MDB_NETWORK_SUBNET "$pick" "$envf"
     export MDB_NETWORK_SUBNET="$pick"
 
