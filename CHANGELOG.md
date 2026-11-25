@@ -391,6 +391,9 @@ waiving them.
 - **`make demo-dashboard` drives the demo's own stack.** It passed the checkout's `COMPOSE_PROJECT_NAME`
   and profiles to the demo, where they outrank the demo home's `.env`, so a Start in the demo would have
   booted your own project on its data volumes.
+- **The status JSON no longer says the runtime is unreachable when nobody measured it.** The dashboard's
+  `Doctor` report has no `runtime` field unless it was measured (`dbpantry doctor` does);
+  `"reachable": false` there was a default, not a reading.
 - **The dashboard's Images page lists your images.** It asked `docker images` for a label field it has never
   had, which Docker 29 refuses, and read the failure as "No images built yet". A runtime that does not
   answer now shows as unavailable.

@@ -41,6 +41,11 @@ stored as SHA-256, expiry required. Scopes nest: `admin` ⊃ `operate` ⊃ `read
 The stack snapshot as JSON: services, engines, projects, backups, images, PITR
 status, configuration entries. No passwords. Scope: any authenticated principal.
 
+`Doctor` holds host and binary facts. The dashboard does not measure the
+container runtime on each refresh, so `Doctor` has no `runtime` there: a
+runtime that fails to answer shows as `ServicesErr` and `ImagesErr` instead.
+`dbpantry doctor --json` measures it and includes `runtime` with `reachable`.
+
 ## Actions and choices
 
 ### `GET /api/v1/actions`
