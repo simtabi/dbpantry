@@ -212,6 +212,10 @@ services:
   pgbouncer:
     profiles: [ha-pooler]
     image: ${MDB_IMAGE_PREFIX:-localhost}/dbpantry-pgbouncer:dev
+    # Built on up when it is missing, as pg-pooler is (check 84).
+    build:
+      context: ./images
+      dockerfile: pgbouncer/Dockerfile
     restart: unless-stopped
     depends_on:
       haproxy: {condition: service_healthy}

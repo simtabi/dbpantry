@@ -54,7 +54,7 @@ base_override_for() {
 # Captured BEFORE the list is filled in, because by then it is never empty.
 EXPLICIT_ENGINES=$#
 
-# Derived images (pgbouncer, patroni) may be NAMED explicitly. They are not
+# Derived images (pgbouncer, patroni) and caddy may be NAMED explicitly. They are not
 # engines, so the engine loop below cannot build them -- and before this split
 # `scripts/build pgbouncer` matched nothing, built zero images and exited 0,
 # which reads exactly like success. An image name you typed either builds or
@@ -63,7 +63,7 @@ engines=()
 explicit_derived=""
 for a in "$@"; do
     case "$a" in
-        pgbouncer|patroni) explicit_derived="$explicit_derived $a" ;;
+        pgbouncer|patroni|caddy) explicit_derived="$explicit_derived $a" ;;
         *) engines+=("$a") ;;
     esac
 done
@@ -157,11 +157,22 @@ else
 fi
 case " $explicit_derived " in *" pgbouncer "*) build_pgbouncer=1 ;; *) build_pgbouncer=$build_derived ;; esac
 case " $explicit_derived " in *" patroni "*)   build_patroni=1   ;; *) build_patroni=$build_derived   ;; esac
+case " $explicit_derived " in *" caddy "*)     build_caddy=1     ;; *) build_caddy=$build_derived     ;; esac
 
 if (( build_pgbouncer )) && [[ -f "$ROOT/images/pgbouncer/Dockerfile" ]]; then
     tag="$PREFIX/dbpantry-pgbouncer:dev"
     printf 'building %s\n  from docker.io/library/debian:12-slim + PGDG\n' "$tag"
     mdb_build -f "$ROOT/images/pgbouncer/Dockerfile" -t "$tag" "$ROOT/images"
+    derived=$(( derived + 1 ))
+fi
+
+# Caddy pins its own bases in its Dockerfile and takes no build arguments, the
+# way Compose builds it for `up`. A full build includes it, so an edited
+# Dockerfile is rebuilt by `make build` (check 86).
+if (( build_caddy )) && [[ -f "$ROOT/images/caddy/Dockerfile" ]]; then
+    tag="$PREFIX/dbpantry-caddy:dev"
+    printf 'building %s\n  from the bases pinned in images/caddy/Dockerfile\n' "$tag"
+    mdb_build -f "$ROOT/images/caddy/Dockerfile" -t "$tag" "$ROOT/images"
     derived=$(( derived + 1 ))
 fi
 

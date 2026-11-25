@@ -62,6 +62,9 @@ func (a *app) up(c *cobra.Command) error {
 		script("scripts/check-env", "--quiet"),
 		script("scripts/render-config"),
 		step{Args: []string{"scripts/gen-compose"}, Quiet: true},
+		// Re-issues a certificate whose SANs no longer cover the stack (the
+		// pg-pooler SAN of D-69), with a live reload; silent otherwise.
+		script("scripts/certs", "--heal"),
 		// up -d --wait on Compose v2; podman-compose and nerdctl
 		// compose have no --wait, so scripts/runtime polls health.
 		script("scripts/runtime", "up"),

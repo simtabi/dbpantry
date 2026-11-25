@@ -140,7 +140,7 @@ certs: $(DBPANTRY) ## Create the toolkit CA and per-engine server certificates
 	@$(DBPANTRY) certs init
 
 .PHONY: build
-build: $(DBPANTRY) ## Build every engine image for this architecture
+build: $(DBPANTRY) ## Build every image for this architecture (engines, cli, caddy, pgbouncer, patroni)
 	@$(DBPANTRY) images build
 
 .PHONY: certs-renew

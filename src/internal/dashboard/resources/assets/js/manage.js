@@ -498,7 +498,7 @@
 
   // --- Actions -------------------------------------------------------------
 
-  var choiceKinds = { engine: true, service: true, volume: true, dump: true, 'env-type': true, 'env-name': true };
+  var choiceKinds = { engine: true, image: true, service: true, volume: true, dump: true, 'env-type': true, 'env-name': true };
   var fixedOptions = { 'pitr-type': ['full', 'diff', 'incr'] };
 
   // stoppedLabels marks the engines that are not running; the API lists

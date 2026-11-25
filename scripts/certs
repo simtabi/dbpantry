@@ -29,11 +29,13 @@ ENV_FILE="${MDB_ENV_FILE:-$MDB_HOME/.env}"
 [[ -f "$ENV_FILE" ]] || ENV_FILE="$ROOT/.env.example"
 
 RENEW=0
+HEAL=0
 CLIENT=""
 OUT=""
 while (( $# )); do
     case "$1" in
         --renew) RENEW=1; shift ;;
+        --heal) HEAL=1; shift ;;
         --client) CLIENT="${2:?--client needs a name}"; shift 2 ;;
         --out) OUT="${2:?--out needs a directory}"; shift 2 ;;
         *) printf 'certs: unknown argument %s\n' "$1" >&2; exit 2 ;;
@@ -65,23 +67,17 @@ if [[ ! -s "$CERT_DIR/ca.crt" ]]; then
         -out "$CERT_DIR/ca.crt" 2>/dev/null
     chmod 0600 "$CERT_DIR/ca.key"
     chmod 0644 "$CERT_DIR/ca.crt"
-else
+elif (( ! HEAL )); then
     printf 'reusing the existing toolkit CA\n'
 fi
 
 # -----------------------------------------------------------------------------
 # Per-engine server certificates.
 # -----------------------------------------------------------------------------
-issue() {
-    engine="$1"
-    dir="$CERT_DIR/$engine"
-    mkdir -p "$dir"
 
-    if [[ -s "$dir/server.crt" ]] && (( ! RENEW )); then
-        printf '  %s: certificate already present\n' "$engine"
-        return 0
-    fi
-
+# wanted_sans ENGINE -- the subjectAltName a certificate issued now carries.
+wanted_sans() {
+    local engine="$1" sans s old_ifs
     # SANs cover the compose service name, the container hostname, and
     # localhost, so sslmode=verify-full works from inside the network and from
     # a published port without a second certificate.
@@ -106,6 +102,34 @@ issue() {
         done
         IFS="$old_ifs"
     fi
+    printf '%s' "$sans"
+}
+
+# missing_sans ENGINE -- the DNS names an existing certificate lacks, one per
+# line. Only DNS entries are compared: LibreSSL and OpenSSL print IP SANs in
+# different forms, every SAN added since the first release was a DNS name, and
+# an address in MDB_EXTRA_SANS carries a DNS entry too.
+missing_sans() {
+    local engine="$1" have want
+    have="$(openssl x509 -in "$CERT_DIR/$engine/server.crt" -noout -text 2>/dev/null \
+        | awk '/Subject Alternative Name/{getline; print}' | tr ',' '\n' | sed 's/^ *//')"
+    for want in $(wanted_sans "$engine" | tr ',' ' '); do
+        [[ "$want" == DNS:* ]] || continue
+        grep -qxF "$want" <<< "$have" || printf '%s\n' "$want"
+    done
+}
+
+issue() {
+    engine="$1"
+    dir="$CERT_DIR/$engine"
+    mkdir -p "$dir"
+
+    if [[ -s "$dir/server.crt" ]] && (( ! RENEW )); then
+        printf '  %s: certificate already present\n' "$engine"
+        return 0
+    fi
+
+    sans="$(wanted_sans "$engine")"
 
     openssl req -newkey rsa:2048 -nodes \
         -subj "/O=Simtabi LLC/OU=dbpantry/CN=${engine}" \
@@ -157,6 +181,28 @@ issue_client() {
 if [[ -n "$CLIENT" ]]; then
     issue_client "$CLIENT" "${OUT:-$CERT_DIR/clients/$CLIENT}"
     exit 0
+fi
+
+# --heal (dbpantry up): silent when every certificate covers what one issued
+# now would. A certificate missing a SAN, such as the pg-pooler name added in
+# D-69, has every certificate re-issued by certs-renew, from the same CA, with
+# the running engines reloaded live (design.md D-111).
+if (( HEAL )); then
+    stale=""
+    for engine in pg mysql mariadb; do
+        [[ -s "$CERT_DIR/$engine/server.crt" ]] || continue
+        m="$(missing_sans "$engine" | tr '\n' ' ')"
+        [[ -n "${m// /}" ]] && stale="$stale  $engine: lacks ${m% }\n"
+    done
+    if [[ -n "$stale" ]]; then
+        printf 'certificates issued before their SANs changed:\n%b' "$stale"
+        printf 're-issuing them from the same CA (scripts/certs-renew)\n'
+        exec "$ROOT/scripts/certs-renew"
+    fi
+    missing=0
+    for engine in pg mysql mariadb; do [[ -s "$CERT_DIR/$engine/server.crt" ]] || missing=1; done
+    [[ -s "$CERT_DIR/pooler/client.crt" ]] || missing=1
+    (( missing )) || exit 0
 fi
 
 for engine in pg mysql mariadb; do

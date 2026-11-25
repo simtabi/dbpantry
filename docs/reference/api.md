@@ -70,12 +70,16 @@ Scope: any authenticated principal.
 ### `GET /api/v1/choices`
 
 Values an action's parameters may name right now. Engines list the running ones
-first; `running` names them. `profile` lists Compose profile tokens for the
-multi-select on Start / Manage profiles. Scope: any authenticated principal.
+first; `running` names them. `image` lists every image the kit builds (each
+`images/<name>/Dockerfile`), which `images.build` takes in its `engine`
+parameter, kept under that name so existing callers work. `profile` lists
+Compose profile tokens for the multi-select on Start / Manage profiles. Scope:
+any authenticated principal.
 
 ```json
 {
   "engine": ["pg", "mysql"],
+  "image": ["caddy", "cassandra", "cli", "mariadb", "mysql", "patroni", "pg", "pgbouncer"],
   "running": ["pg"],
   "service": ["pg", "caddy"],
   "volume": ["mdb_pg_data"],

@@ -20,6 +20,7 @@ type Values map[string]string
 // line; an engine or a service must also be one the stack has.
 const (
 	KindEngine   = "engine"
+	KindImage    = "image" // an image the kit builds: images/<name>/Dockerfile
 	KindService  = "service"
 	KindName     = "name"     // a database or project name
 	KindKey      = "key"      // an MDB_ configuration key
@@ -140,7 +141,10 @@ var Actions = []Action{
 	// --- Images --------------------------------------------------------------
 	{
 		Name: "images.build", Title: "Build images", Area: "images", Scope: ScopeOperate,
-		Params: []Param{{Name: "engine", Label: "Engine (empty: every engine)", Kind: KindEngine}},
+		// "engine" stays the parameter's name, so API callers posting an
+		// engine keep working; any image the kit builds is accepted, the
+		// pooler, HA, proxy and tools images included.
+		Params: []Param{{Name: "engine", Label: "Image (empty: every image)", Kind: KindImage}},
 		Command: func(v Values) []string {
 			if v["engine"] == "" {
 				return []string{"images", "build"}
@@ -437,6 +441,7 @@ var patterns = map[string]*regexp.Regexp{
 	KindNode:     regexp.MustCompile(`^[a-z0-9][a-z0-9_-]{0,62}$`),
 	KindPITRType: regexp.MustCompile(`^(full|diff|incr)$`),
 	KindEngine:   regexp.MustCompile(`^[a-z][a-z0-9-]{0,31}$`),
+	KindImage:    regexp.MustCompile(`^[a-z][a-z0-9-]{0,31}$`),
 	KindService:  regexp.MustCompile(`^[a-z][a-z0-9_-]{0,62}$`),
 	KindEnvType:  regexp.MustCompile(`^[a-z][a-z0-9-]{0,31}$`),
 	KindEnvName:  regexp.MustCompile(`^[a-z][a-z0-9-]{0,47}$`),
@@ -454,10 +459,13 @@ type Choices struct {
 	// not answer). A service parameter is then unavailable, not unknown.
 	ServicesErr string   `json:"services_error,omitempty"`
 	Engines     []string `json:"engine"`
-	Running     []string `json:"running"`
-	Services    []string `json:"service"`
-	Volumes     []string `json:"volume"`
-	Dumps       []string `json:"dump"`
+	// Buildable are the images the kit builds, by name: every
+	// images/<name>/Dockerfile, which scripts/build takes as an argument.
+	Buildable []string `json:"image"`
+	Running   []string `json:"running"`
+	Services  []string `json:"service"`
+	Volumes   []string `json:"volume"`
+	Dumps     []string `json:"dump"`
 	// Profiles are Compose profile tokens the stack can start (engines,
 	// poolers, ui, ha, backup…). Forms multi-select them into a CSV.
 	Profiles []string `json:"profile"`
@@ -502,6 +510,10 @@ func (a Action) validate(in map[string]string, c Choices) (Values, error) {
 		case KindEngine:
 			if !contains(c.Engines, v) {
 				return nil, fmt.Errorf("there is no engine %q", v)
+			}
+		case KindImage:
+			if !contains(c.Buildable, v) {
+				return nil, fmt.Errorf("the kit builds no image %q", v)
 			}
 		case KindService:
 			if c.ServicesErr != "" {

@@ -117,7 +117,7 @@ These follow the table dbpantry shares with mesobia (refactor plan §7). Codes 2
 | `pooler sync ENGINE` | restarts the engine's pooler when it mirrors credentials at start | none |
 | `certs init\|renew` | `scripts/certs`, `scripts/certs-renew` | `certs`, `certs-renew` |
 | `secrets rotate [--yes] [--confirm ROTATE] [--engine pg\|mysql\|mariadb]` | `scripts/rotate-secrets [--engine E]`, then `pooler sync` (only E's pooler with `--engine`) | `rotate-secrets` |
-| `images build [ENGINE…]`, `images scan [ENGINE]` | `scripts/build`, `scripts/scan` | `build`, `scan` |
+| `images build [IMAGE…]`, `images scan [ENGINE]` | `scripts/build`, `scripts/scan` | `build`, `scan` |
 | `verify [--checks …] [--tags …] [--fast] [--structure]` | `scripts/verify/run.sh` | `verify`, `verify-fast`, `verify-structure` |
 | `dev lint`, `dev release-notes VERSION` | `scripts/lint.sh`, `scripts/release-notes` | `lint` |
 

@@ -64,7 +64,7 @@ func newMgmt(t *testing.T, mode string, s Settings, block bool) *mgmt {
 		Auth: m.auth, Runner: m.runner, Settings: s, Audit: m.audit, BackupDir: "/srv/backups",
 		Env: func(string) string { return "" },
 		Choices: func(context.Context) (Choices, error) {
-			return Choices{Engines: []string{"pg"}, Services: []string{"pg", "caddy"}, Volumes: []string{"mdb_pg_data"}, Dumps: []string{"pg_settings_1.dump"}}, nil
+			return Choices{Engines: []string{"pg"}, Buildable: []string{"pg"}, Services: []string{"pg", "caddy"}, Volumes: []string{"mdb_pg_data"}, Dumps: []string{"pg_settings_1.dump"}}, nil
 		},
 	})
 	if err != nil {
@@ -505,7 +505,10 @@ func TestAJobEndsOnceForWebhooks(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	h, err := Handler(Sources{Snapshot: fixture, Project: showFixture}, Options{Auth: m.auth, Runner: m.runner, Settings: Defaults, Audit: m.audit, Hooks: bus})
+	h, err := Handler(Sources{Snapshot: fixture, Project: showFixture}, Options{Auth: m.auth, Runner: m.runner, Settings: Defaults, Audit: m.audit, Hooks: bus,
+		Choices: func(context.Context) (Choices, error) {
+			return Choices{Engines: []string{"pg"}, Buildable: []string{"pg"}}, nil
+		}})
 	if err != nil {
 		t.Fatal(err)
 	}

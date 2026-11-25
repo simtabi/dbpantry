@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -58,6 +59,9 @@ type app struct {
 
 // Execute runs the command line and returns the process exit code.
 func Execute(ctx context.Context, args []string, stdout, stderr io.Writer, environ func() []string) int {
+	if wslWanted(runtime.GOOS, args, environ()) {
+		return runInWSL(ctx, args, os.Stdin, stdout, stderr)
+	}
 	a := &app{stdin: os.Stdin, stdout: stdout, stderr: stderr, environ: environ}
 	a.log = slog.New(slog.NewTextHandler(stderr, &slog.HandlerOptions{Level: slog.LevelInfo}))
 	cmd := a.rootCmd() //nolint:contextcheck // cobra hands ctx to every command through ExecuteContext

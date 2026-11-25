@@ -93,7 +93,7 @@ the prod profile that would also bypass the pooler the profile requires.
 ```
 MDB_PUBLISH=direct
 MDB_BIND_ADDR=10.0.1.5        # private address, never 0.0.0.0
-MDB_EXTRA_SANS="10.0.1.5"     # verify-full by address; make certs-renew after changing it
+MDB_EXTRA_SANS="10.0.1.5"     # verify-full by address; the next make up re-issues the certificates
 MDB_TLS_ENFORCE=true          # required by the prod profile anyway
 ```
 
