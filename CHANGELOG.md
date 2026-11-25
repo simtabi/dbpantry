@@ -34,6 +34,8 @@ waiving them.
   at once.
 
 ### Added
+- **`make cross`** builds the binary for every release target (Linux, macOS, Windows and FreeBSD, amd64
+  and arm64) into `build/<os>/`, with a `build/checksums.txt` that verifies as it is.
 - **The dashboard manages webhooks**: the Operations page lists them to an admin, creates one (showing its
   signing secret once) and deletes one, where only the API could before.
 - **Add the prod overlay from the dashboard**: an admin button on Configuration runs `config prod-overlay`

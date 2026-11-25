@@ -81,7 +81,10 @@ against the release's `checksums.txt`:
 shasum -a 256 -c checksums.txt --ignore-missing
 ```
 
-Or build it: `make kit && make dbpantry` builds `build/<os>/dbpantry` with the kit inside it:
+Or build it: `make cross` builds every release target into
+`build/<os>/dbpantry_<os>_<arch>` (`.exe` on Windows) with `build/checksums.txt`
+(`cd build && shasum -a 256 -c checksums.txt`), and `make kit && make dbpantry`
+builds `build/<os>/dbpantry` for this machine, with the kit inside it:
 the scripts, compose files, engines and image sources. Copied anywhere and run
 where there is no checkout, it extracts the kit to
 `~/.config/dbpantry/kit/<version>` and keeps the instance (`.env`, `secrets/`,
