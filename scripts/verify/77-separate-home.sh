@@ -89,6 +89,10 @@ out="$(scratch_run "$DBPANTRY_BIN" project new --name "$proj" --engine pg --plai
     || vfail "dbpantry project new failed: $(printf '%s\n' "$out" | tail -10)"
 [[ -s "$SCRATCH_HOME/secrets/pg_${proj}_user_password.txt" ]] \
     || vfail "new-project did not write the project's password into the home"
+# The network an application joins is the home's project's, named in its .env
+# only: new-project printed mdb_net (live on Incus, 2026-11-24).
+grep -q "name: ${SCRATCH_PROJECT}_net\$" <<< "$out" \
+    || vfail "new-project names a network other than ${SCRATCH_PROJECT}_net: $(grep 'name: ' <<< "$out" | head -1)"
 out="$(scratch_run "$DBPANTRY_BIN" backup run --engine pg --db "$proj" --plain 2>&1)" \
     || vfail "dbpantry backup run failed: $(printf '%s\n' "$out" | tail -10)"
 dumps="$(find "$SCRATCH_HOME/backups" -maxdepth 1 -type f -name "pg_${proj}_*" ! -name '*.sha256' | grep -c . || true)"
