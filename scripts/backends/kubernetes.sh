@@ -145,7 +145,8 @@ _mdb_be_kubernetes_health() {
     line="$(_mdb_k8s_pods "$1")" || return
     line="$(printf '%s\n' "$line" | awk 'NF' | head -1)"
     if [[ -z "$line" ]]; then printf 'absent\n'; return 0; fi
-    read -r _ _ phase ready <<<"$line"
+    # The role column is the fifth; without the last _, ready read "True -".
+    read -r _ _ phase ready _ <<<"$line"
     case "$phase/${ready:-}" in
         Running/True) printf 'healthy\n' ;;
         */Terminating) printf 'absent\n' ;;
