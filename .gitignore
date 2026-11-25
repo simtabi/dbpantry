@@ -11,6 +11,16 @@ secrets/*
 certs/*
 !certs/.gitkeep
 
+# What the dashboard keeps in the instance home, which is the checkout by
+# default (design.md D-84): token hashes, webhook signing secrets, settings,
+# the audit log, and the environment registry when the operator home is here
+# too. Check 89 reads these names from the Go source.
+/api-tokens.json
+/webhooks.json
+/dashboard.json
+/envs.json
+/audit/
+
 # Local environment files.
 .env
 .env.prod

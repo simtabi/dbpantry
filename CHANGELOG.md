@@ -385,6 +385,9 @@ waiving them.
   offered engines only, including MongoDB, which has no image to build.
 - **`up` re-issues a server certificate whose SANs are out of date**, from the same CA, and reloads the
   running engines live; it was a manual `make certs-renew` after an upgrade.
+- **The dashboard's instance files are gitignored.** `api-tokens.json`, `webhooks.json` (webhook signing
+  secrets), `dashboard.json`, `envs.json` and `audit/` were written into a checkout used as its own home
+  and could be committed with `git add -A`.
 - **A verify run no longer rewrites your `.env`.** When the network pool overlapped, the subnet move
   (D-103) was written to the env file even for a throwaway project started from the checkout, so check
   27 changed the operator's `MDB_NETWORK_SUBNET`. The move is now written only for the env file's own
