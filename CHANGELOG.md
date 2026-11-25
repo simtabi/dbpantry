@@ -361,6 +361,10 @@ waiving them.
 - **Off-site backups find their credentials** in the instance home, or `/run/secrets` in the backup
   sidecar, which died after its first dump with S3 configured.
 - **A separate home's `MDB_BACKEND` is honoured**; it silently ran Compose.
+- **Incus reads a separate home's `.env`.** With `MDB_HOME` apart from the kit, incus-compose read the
+  kit's, so the stack booted as project `mdb` on the default subnet with `secrets/` and `certs/` from the kit.
+- **`project new` names the stack's own network** (`<project>_net`), not `mdb_net`, when the project
+  name is set only in `.env`.
 - **`env copy` and `env migrate` reach each home's own stack.** The caller's `COMPOSE_PROJECT_NAME`,
   `MDB_ENV_FILE` and profiles no longer outrank each home's `.env`, which pointed both steps at one stack
   while the copy reported success.
