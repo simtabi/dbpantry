@@ -36,10 +36,13 @@ psql_via_haproxy() {
     # as "the write port does not route to a primary" when the routing was
     # fine all along.
     pw="$(tr -d '\n' < "$MDB_ROOT/secrets/pg_superuser_password.txt" 2>/dev/null)"
-    mdb_ctr run --rm --network "$net" \
-        -e PGPASSWORD="$pw" \
+    # The value reaches the container from the environment (-e NAME), never
+    # the command line, where the process list would show the operator's
+    # superuser password (check 87).
+    PGPASSWORD="$pw" mdb_ctr run --rm --network "$net" \
+        -e PGPASSWORD \
         --entrypoint psql "$(image_name pg)" \
-        "host=haproxy port=${port} user=postgres dbname=postgres sslmode=require" \
+        "connect_timeout=5 host=haproxy port=${port} user=postgres dbname=postgres sslmode=require" \
         -tAc "$sql" 2>/dev/null | tr -d ' \r' || true
 }
 
@@ -52,7 +55,7 @@ psql_via_pooler() {
     mdb_ctr run --rm --network "$net" \
         -e PGPASSWORD="${TW_APP}" \
         --entrypoint psql "$(image_name pg)" \
-        "host=pgbouncer port=6432 user=poolha dbname=postgres sslmode=prefer" \
+        "connect_timeout=5 host=pgbouncer port=6432 user=poolha dbname=postgres sslmode=prefer" \
         -tAc "$sql" 2>/dev/null | tr -d ' \r' || true
 }
 
