@@ -3,6 +3,28 @@
 The toolkit runs on Windows through WSL2. This page is the parts that are
 genuinely different, not a second copy of the documentation.
 
+## Run `dbpantry.exe`
+
+The Windows binary is a launcher for WSL 2. Every command that runs the
+scripts (`up`, `dashboard`, `status`, `images build`, ...) is handed to the
+Linux `dbpantry` inside WSL, in the directory you ran it from; `version`,
+`help` and `completion` run natively. Install the Linux binary in WSL once:
+
+```bash
+# inside WSL, with dbpantry_linux_amd64 (or _arm64) and checksums.txt from the release
+sha256sum --ignore-missing -c checksums.txt
+install -m 0755 dbpantry_linux_amd64 ~/.local/bin/dbpantry
+```
+
+`dbpantry.exe` runs it through a login shell, so `~/.local/bin` is on the path.
+Without WSL, or without dbpantry inside it, `dbpantry.exe` says what to install
+instead of failing on its first script. `dbpantry.exe dashboard` serves inside
+WSL; WSL 2 forwards the port, so the launch URL opens in a Windows browser.
+`DBPANTRY_NO_WSL=1` keeps a command native, where only those three work.
+
+The instance still belongs on the Linux filesystem: run `dbpantry.exe` from a
+directory WSL reaches quickly, or work inside WSL directly.
+
 ## Use WSL2, and keep files inside it
 
 Install Docker Desktop with the WSL2 backend, then clone **into the Linux

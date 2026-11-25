@@ -29,10 +29,16 @@ waiving them.
   `sslmode=verify-full` and `sslrootcert` set to a copy of `certs/ca.crt` (docs/guides/pooling.md). An env
   file made before this needs `make prod-overlay ENV_FILE=...` once; `check-env` refuses the prod boot until
   then. `MDB_PUBLISH_ENGINES=true` keeps the engine ports, deprecated for prod.
-- **Certificates:** run `make certs-renew` to add the `pg-pooler` SAN and IP SANs for addresses in
-  `MDB_EXTRA_SANS`, then restart `pg-pooler`.
+- **Certificates:** the next `make up` re-issues certificates that lack the `pg-pooler` SAN or the
+  names in `MDB_EXTRA_SANS`, from the same CA; restart `pg-pooler` afterwards. `make certs-renew` does it
+  at once.
 
 ### Added
+- **The Windows binary runs through WSL 2.** `dbpantry.exe` hands every command that runs the scripts to
+  the Linux `dbpantry` inside WSL (a login shell, so `~/.local/bin` is found), and keeps `version`,
+  `help` and `completion` native. Without WSL, or without dbpantry in it, it says what to install.
+  `dbpantry.exe dashboard` serves inside WSL and opens in a Windows browser at
+  `http://127.0.0.1:8484`. `DBPANTRY_NO_WSL=1` keeps a command native.
 - **Environment types and cross-env data move (D-100).** Catalog of `localdev`, `dev`, `test`
   (`tst`), `qa`, `uat`, `trn`, `spt`, `stg`, `preprod`, `demo`, `sandbox`, `prod` (`prd`) with
   aliases; registry of named `MDB_HOME`s; `dbpantry env types|ls|init|use|copy|migrate|remove`;
@@ -361,6 +367,15 @@ waiving them.
 - **Off-site backups find their credentials** in the instance home, or `/run/secrets` in the backup
   sidecar, which died after its first dump with S3 configured.
 - **A separate home's `MDB_BACKEND` is honoured**; it silently ran Compose.
+- **`up` builds every missing image.** The pgBouncer pooler had no `build:` key, so `up` with the
+  pooler or HA profile pulled an image no registry holds and failed; it now builds it, as the engines
+  do. The verify harness also builds an image it needs and lacks, saying which and how, where it only
+  named `make build` before.
+- **`make build` builds caddy too**, and `dbpantry images build` takes any image by name: the engines,
+  `cli`, `caddy`, `pgbouncer` and `patroni`. The dashboard's Build images offers the same list; it
+  offered engines only, including MongoDB, which has no image to build.
+- **`up` re-issues a server certificate whose SANs are out of date**, from the same CA, and reloads the
+  running engines live; it was a manual `make certs-renew` after an upgrade.
 - **A verify run no longer rewrites your `.env`.** When the network pool overlapped, the subnet move
   (D-103) was written to the env file even for a throwaway project started from the checkout, so check
   27 changed the operator's `MDB_NETWORK_SUBNET`. The move is now written only for the env file's own

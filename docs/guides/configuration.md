@@ -195,8 +195,9 @@ MDB_EXTRA_SANS="db.internal,10.0.1.5"
 
 Extra names on the generated server certificates, for clients that connect with
 `sslmode=verify-full` by a name or address other than the service name. An IP
-address is written as both a `DNS:` and an `IP:` SAN. Run `make certs-renew`
-after changing it; existing certificates are not re-issued otherwise.
+address is written as both a `DNS:` and an `IP:` SAN. The next `make up`
+notices a certificate that lacks a name and re-issues the set from the same CA,
+reloading the running engines; `make certs-renew` does the same at once.
 
 ### Resource budget
 
