@@ -37,12 +37,13 @@ func TestWindowsHandsScriptCommandsToWSL(t *testing.T) {
 	}
 }
 
-// The command line WSL runs: no shell (-e), the caller's directory as the
-// working directory (--cd takes an absolute Windows path), and the arguments
-// as they were.
+// The command line WSL runs: the caller's directory as the working directory
+// (--cd takes an absolute Windows path), a login bash so ~/.local/bin is on
+// PATH (wsl -e alone reads no profile), and the arguments as positional
+// parameters, so none is ever re-parsed by a shell.
 func TestWSLCommandLine(t *testing.T) {
-	got := wslArgs(`C:\Users\me\proj`, []string{"up", "--profiles", "pg,ui"})
-	want := []string{"--cd", `C:\Users\me\proj`, "-e", "dbpantry", "up", "--profiles", "pg,ui"}
+	got := wslArgs(`C:\Users\me\proj`, []string{"up", "--profiles", "pg,ui", "it's"})
+	want := []string{"--cd", `C:\Users\me\proj`, "-e", "bash", "-lc", `exec dbpantry "$@"`, "dbpantry", "up", "--profiles", "pg,ui", "it's"}
 	if strings.Join(got, "|") != strings.Join(want, "|") {
 		t.Fatalf("wsl args = %q, want %q", got, want)
 	}
