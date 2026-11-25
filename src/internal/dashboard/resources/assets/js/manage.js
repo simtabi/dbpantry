@@ -386,6 +386,10 @@
       softText.textContent = d.softMessage || 'This changes the running stack. Review the command, then confirm.';
     }
     modalEl.querySelector('[data-action-danger]').classList.toggle('d-none', !d.danger);
+    // "Type the value" only when there is a value to type (a revoke or a
+    // webhook delete has none).
+    modalEl.querySelector('[data-action-danger-typed]').classList.toggle('d-none', !d.confirmHint);
+    modalEl.querySelector('[data-action-danger-untyped]').classList.toggle('d-none', !!d.confirmHint);
     var fields = modalEl.querySelector('[data-action-fields]');
     fields.textContent = '';
     var fixed = Object.keys(d.fixed || {});
@@ -1953,7 +1957,7 @@
   function createHook() {
     openForm({
       title: 'New webhook',
-      command: 'POST /api/v1/hooks {"url": URL, "events": [...]}',
+      command: 'curl -X POST -H "Authorization: Bearer $TOKEN" -d \'{"url": URL, "events": [...]}\' ' + location.origin + '/api/v1/hooks',
       submitLabel: 'Create',
       fields: [
         { name: 'url', label: 'URL (https; http only for localhost)', required: true },
@@ -1976,7 +1980,7 @@
   function deleteHook(id, url) {
     openForm({
       title: 'Delete the webhook to ' + url,
-      command: 'DELETE /api/v1/hooks/' + id,
+      command: 'curl -X DELETE -H "Authorization: Bearer $TOKEN" ' + location.origin + '/api/v1/hooks/' + id,
       danger: true,
       submitLabel: 'Delete',
       fields: [],

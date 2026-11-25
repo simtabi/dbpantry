@@ -527,7 +527,7 @@
           <div class="d-flex"><div>{{icon "alert"}}</div><div class="ms-2" data-action-soft-text>This changes the running stack. Review the command, then confirm.</div></div>
         </div>
         <div class="alert alert-danger d-none" role="alert" data-action-danger>
-          <div class="d-flex"><div>{{icon "alert"}}</div><div class="ms-2"><strong>Destructive.</strong> Type the confirmation value exactly; the same check the CLI uses.</div></div>
+          <div class="d-flex"><div>{{icon "alert"}}</div><div class="ms-2"><strong>Destructive.</strong> <span data-action-danger-typed>Type the confirmation value exactly; the same check the CLI uses.</span><span data-action-danger-untyped>This cannot be undone.</span></div></div>
         </div>
         <p class="text-secondary small mb-3">Runs <code class="mdb-mono" data-action-command>dbpantry</code>, the same command as on the command line.</p>
         <div data-action-fields></div>
