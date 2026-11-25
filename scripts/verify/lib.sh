@@ -160,6 +160,29 @@ engine_version() {
 need_image() {
     local img="$1"
     image_exists "$img" && return 0
+    _need_image_missing "$img"
+}
+
+# An image that was never built is built here, aloud, through scripts/build
+# (owner, 2026-11-25: "should be able to run automatically"); design.md D-111.
+# This reverses the rule below that only a reclaimed image is rebuilt: the
+# message names the image and the command, so "you forgot make build" is
+# still said, and then done.
+_need_image_built_now() {
+    local img="$1" name out
+    name="${img##*/}"; name="${name%%:*}"; name="${name#dbpantry-}"
+    [[ -f "$MDB_ROOT/images/$name/Dockerfile" ]] || return 1
+    printf '      image %s is not built; building it (scripts/build %s)\n' "$img" "$name" >&2
+    if out="$(cd "$MDB_ROOT" && ./scripts/build "$name" 2>&1)" && image_exists "$img"; then
+        printf '      built %s\n' "$img" >&2
+        return 0
+    fi
+    vfail "could not build $img with scripts/build $name:
+$(printf '%s\n' "$out" | tail -15 | sed 's/^/       /')"
+}
+
+_need_image_missing() {
+    local img="$1"
 
     # A check run on its own has no snapshot from the runner, so take one at
     # first use. It cannot see images reclaimed before the check started, but
@@ -235,7 +258,8 @@ need_image() {
        $base for $engine $want."
     fi
 
-    vfail "image not built yet: $img (run: make build)"
+    _need_image_built_now "$img" && return 0
+    vfail "image not built yet: $img, and images/ has no Dockerfile for it (run: make build)"
 }
 
 # `make up`, keeping the output for the failure path.
