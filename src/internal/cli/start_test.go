@@ -33,7 +33,7 @@ func TestStartRunsUpProjectsThenDashboard(t *testing.T) {
 	if code != ExitUsage || !strings.Contains(errs, "--listen") {
 		t.Errorf("the dashboard step was not reached last: exit %d: %s", code, errs)
 	}
-	if n := len(calls); n != 6 || !strings.HasPrefix(calls[n-1], "scripts/new-project --name shop --engine pg") {
+	if n := len(calls); n != 7 || !strings.HasPrefix(calls[n-1], "scripts/new-project --name shop --engine pg") {
 		t.Errorf("up and the project run before the dashboard: %v", calls)
 	}
 }

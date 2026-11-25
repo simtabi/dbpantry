@@ -48,6 +48,7 @@ func (a *app) upFormatted(c *cobra.Command) error {
 	check := sc.add("Check configuration", "🔍")
 	render := sc.add("Render config files", "📝")
 	gen := sc.add("Generate engine services", "🧩")
+	certs := sc.add("Check certificates", "🔐")
 	stack := sc.add("Start the stack", "🚀")
 	sc.start()
 
@@ -62,6 +63,9 @@ func (a *app) upFormatted(c *cobra.Command) error {
 	sc.update(func() { renderedFiles(render, out) })
 	if out, err := sc.run(ctx, root, env, gen, step{Args: []string{"scripts/gen-compose"}, Quiet: true}, nil); err != nil {
 		return sc.fail("scripts/gen-compose", out, err)
+	}
+	if out, err := sc.run(ctx, root, env, certs, script("scripts/certs", "--heal"), nil); err != nil {
+		return sc.fail("scripts/certs --heal", out, err)
 	}
 
 	view := stackview.New()
