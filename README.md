@@ -144,6 +144,7 @@ Looked up to check the contract, the evidence, or a fact.
 - [Engine manifest](docs/reference/manifest.md) — the `dbpantry` binary: manifest, endpoints, fixtures
 - [Embedded kit](docs/reference/kit.md) — running the binary with no checkout
 - [Image provenance](docs/reference/image-provenance.md) — every image, its publisher, and why
+- [Open follow-ups](docs/reference/follow-ups.md) — what is not verified yet, how to close it, and what is left out on purpose
 - [Design](design.md) — pinned versions, capacity table, decision log
 - [Row-level security kit](rls/README.md) — database-enforced multi-tenancy
 - [Repository layout](docs/reorganization-plan.md) — where each file lives, and why
