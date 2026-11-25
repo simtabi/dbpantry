@@ -85,6 +85,26 @@ kit: $(KIT_MANIFEST) ## Copy the kit into src/internal/kit/files for the binary 
 $(DBPANTRY): $(DBPANTRY_SOURCES) $(KIT_MANIFEST)
 	$(build_dbpantry)
 
+# The release targets of src/.goreleaser.yaml, built locally into the org's
+# layout: build/<os>/dbpantry_<os>_<arch>[.exe] (macos, not darwin) and one
+# build/checksums.txt with build/-relative paths, so
+# `cd build && shasum -a 256 -c checksums.txt` verifies as it is.
+CROSS_TARGETS := linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64 windows/arm64 freebsd/amd64 freebsd/arm64
+
+.PHONY: cross
+cross: $(KIT_MANIFEST) ## Build the binary for every release target into build/<os>/, with build/checksums.txt
+	@set -e; for t in $(CROSS_TARGETS); do \
+		goos=$${t%/*}; arch=$${t#*/}; os=$$goos; ext=; \
+		[ "$$goos" = darwin ] && os=macos; [ "$$goos" = windows ] && ext=.exe; \
+		mkdir -p build/$$os; \
+		CGO_ENABLED=0 GOOS=$$goos GOARCH=$$arch $(GO) -C src build -trimpath \
+			-ldflags "-s -w -X github.com/simtabi/dbpantry/src/internal/cli.version=$(GO_VERSION_STAMP) -X github.com/simtabi/dbpantry/src/internal/cli.commit=$(GO_COMMIT_STAMP)" \
+			-o ../build/$$os/dbpantry_$${os}_$$arch$$ext ./cmd/dbpantry; \
+		printf 'built build/%s/dbpantry_%s_%s%s\n' "$$os" "$$os" "$$arch" "$$ext"; \
+	done; \
+	cd build && find . -mindepth 2 -type f -name 'dbpantry_*' | sed 's|^\./||' | sort | xargs shasum -a 256 > checksums.txt; \
+	printf 'wrote build/checksums.txt (%s files)\n' "$$(grep -c . checksums.txt)"
+
 # Profile selection, in precedence order: PROFILES= on the command line for a
 # single run, then MDB_PROFILES in .env permanently, then the documented
 # default (SPEC section 7).

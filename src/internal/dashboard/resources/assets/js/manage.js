@@ -1948,6 +1948,47 @@
     });
   }
 
+  // --- Webhooks ------------------------------------------------------------
+
+  function createHook() {
+    openForm({
+      title: 'New webhook',
+      command: 'POST /api/v1/hooks {"url": URL, "events": [...]}',
+      submitLabel: 'Create',
+      fields: [
+        { name: 'url', label: 'URL (https; http only for localhost)', required: true },
+        { name: 'events', label: 'Events, comma-separated (empty: all), e.g. job.failed,job.succeeded' }
+      ],
+      submit: function (v) {
+        var events = (v.events || '').split(',').map(function (s) { return s.trim(); }).filter(Boolean);
+        return api('POST', '/api/v1/hooks', { url: v.url, events: events }).then(function (r) {
+          var box = document.querySelector('[data-hook-created]');
+          if (box) {
+            box.classList.remove('d-none');
+            box.querySelector('#mdb-new-hook-secret').value = r.secret;
+          }
+          toast('Webhook created — copy its secret now', 'success');
+        });
+      }
+    });
+  }
+
+  function deleteHook(id, url) {
+    openForm({
+      title: 'Delete the webhook to ' + url,
+      command: 'DELETE /api/v1/hooks/' + id,
+      danger: true,
+      submitLabel: 'Delete',
+      fields: [],
+      submit: function () {
+        return api('DELETE', '/api/v1/hooks/' + encodeURIComponent(id)).then(function () {
+          toast('Webhook deleted', 'success');
+          refreshPage();
+        });
+      }
+    });
+  }
+
   // --- Wiring --------------------------------------------------------------
 
   // Re-open a job the previous page load left running (refresh / navigation).
@@ -1991,7 +2032,10 @@
     }
     if (e.target.closest('[data-token-create]')) { e.preventDefault(); createToken(); return; }
     var r = e.target.closest('[data-token-revoke]');
-    if (r) { e.preventDefault(); revokeToken(r.getAttribute('data-token-revoke'), r.getAttribute('data-token-name')); }
+    if (r) { e.preventDefault(); revokeToken(r.getAttribute('data-token-revoke'), r.getAttribute('data-token-name')); return; }
+    if (e.target.closest('[data-hook-create]')) { e.preventDefault(); createHook(); return; }
+    var hd = e.target.closest('[data-hook-delete]');
+    if (hd) { e.preventDefault(); deleteHook(hd.getAttribute('data-hook-delete'), hd.getAttribute('data-hook-url')); }
   });
 
   startLogs();

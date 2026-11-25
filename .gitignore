@@ -23,6 +23,7 @@ build/macos/
 build/linux/
 build/windows/
 build/freebsd/
+build/checksums.txt
 
 # OS noise.
 .DS_Store

@@ -154,7 +154,9 @@ var Actions = []Action{
 	},
 	{
 		Name: "images.scan", Title: "Scan images", Area: "images", Scope: ScopeOperate,
-		Params: []Param{{Name: "engine", Label: "Engine (empty: every engine)", Kind: KindEngine}},
+		// Every image scripts/build builds (check 88); "engine" stays the
+		// parameter's name for API callers.
+		Params: []Param{{Name: "engine", Label: "Image (empty: every image)", Kind: KindImage}},
 		Command: func(v Values) []string {
 			if v["engine"] == "" {
 				return []string{"images", "scan"}
@@ -256,6 +258,13 @@ var Actions = []Action{
 	{
 		Name: "config.render", Title: "Render the configuration", Area: "config", Scope: ScopeOperate,
 		Command: func(Values) []string { return []string{"config", "render"} },
+	},
+	{
+		// Puts compose.prod.yml into the instance's COMPOSE_FILE (design.md
+		// D-73), which check-env asks for before a prod boot. Idempotent, and
+		// only the instance's own .env: no parameter names a file.
+		Name: "config.prod-overlay", Title: "Add the prod overlay", Area: "config", Scope: ScopeAdmin,
+		Command: func(Values) []string { return []string{"config", "prod-overlay"} },
 	},
 	{
 		Name: "config.set", Title: "Set a configuration key", Area: "config", Scope: ScopeAdmin,

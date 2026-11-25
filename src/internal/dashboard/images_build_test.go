@@ -51,3 +51,23 @@ func TestBuildImagesOffersEveryImageTheKitBuilds(t *testing.T) {
 		t.Errorf("images.build with no image did not build every image: %v", err)
 	}
 }
+
+// "Scan images" takes the same list: scripts/scan scans every image the kit
+// builds (check 88), the derived ones included.
+func TestScanImagesOffersEveryImageTheKitBuilds(t *testing.T) {
+	c := Choices{Buildable: []string{"caddy", "patroni", "pg", "pgbouncer"}}
+	a, ok := actionByName("images.scan")
+	if !ok {
+		t.Fatal("no images.scan action")
+	}
+	for _, name := range c.Buildable {
+		v, err := a.validate(map[string]string{"engine": name}, c)
+		if err != nil {
+			t.Errorf("images.scan refused %s: %v", name, err)
+			continue
+		}
+		if got := strings.Join(a.Command(v), " "); got != "images scan "+name {
+			t.Errorf("images.scan %s runs %q", name, got)
+		}
+	}
+}
