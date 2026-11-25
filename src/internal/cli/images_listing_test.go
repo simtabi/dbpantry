@@ -70,8 +70,12 @@ func TestTheImagesPageListsOurImagesOnDocker29(t *testing.T) {
 	if err != nil {
 		t.Fatalf("the image listing failed: %v", err)
 	}
+	// Read as the snapshot reads them: a row may stop before an empty label.
 	var got []string
 	for _, r := range rows {
+		for len(r) < 4 {
+			r = append(r, "")
+		}
 		got = append(got, strings.Join(r, "|"))
 	}
 	want := []string{"localhost/dbpantry-pg:17|1.2GB|2 hours ago|unsupported", "localhost/dbpantry-caddy:dev|165MB|1 hour ago|"}
