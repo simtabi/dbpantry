@@ -186,6 +186,7 @@ of the same. Event types include `job.started`, `job.succeeded`, `job.failed`,
 ### `GET /api/v1/hooks` · `POST /api/v1/hooks` · `DELETE /api/v1/hooks/{id}`
 
 Admin-only webhook subscriptions. Create returns the signing secret **once**.
+The Operations page manages the same list for an admin: New webhook shows the signing secret once, and each row has Delete.
 Endpoints live in `$MDB_HOME/webhooks.json` (0600).
 
 ```json

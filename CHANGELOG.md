@@ -34,6 +34,10 @@ waiving them.
   at once.
 
 ### Added
+- **The dashboard manages webhooks**: the Operations page lists them to an admin, creates one (showing its
+  signing secret once) and deletes one, where only the API could before.
+- **Add the prod overlay from the dashboard**: an admin button on Configuration runs `config prod-overlay`
+  on the instance's own `.env`.
 - **The Windows binary runs through WSL 2.** `dbpantry.exe` hands every command that runs the scripts to
   the Linux `dbpantry` inside WSL (a login shell, so `~/.local/bin` is found), and keeps `version`,
   `help` and `completion` native. Without WSL, or without dbpantry in it, it says what to install.
@@ -371,6 +375,9 @@ waiving them.
   pooler or HA profile pulled an image no registry holds and failed; it now builds it, as the engines
   do. The verify harness also builds an image it needs and lacks, saying which and how, where it only
   named `make build` before.
+- **`make scan` scans every image `make build` builds**, under the same tag: pgbouncer, patroni and caddy
+  had never been scanned, and `scan pg pgbouncer` dropped pgbouncer without a word. An unknown image name
+  now fails. The dashboard's Scan images offers the same list.
 - **`make build` builds caddy too**, and `dbpantry images build` takes any image by name: the engines,
   `cli`, `caddy`, `pgbouncer` and `patroni`. The dashboard's Build images offers the same list; it
   offered engines only, including MongoDB, which has no image to build.
