@@ -213,8 +213,8 @@ func (a *app) imagesCmd() *cobra.Command {
 		Short: "Build and scan the engine images",
 	}
 	build := &cobra.Command{
-		Use:   "build [ENGINE...]",
-		Short: "Build the engine images for this architecture (default: every engine)",
+		Use:   "build [IMAGE...]",
+		Short: "Build images for this architecture: engines, cli, caddy, pgbouncer, patroni (default: all)",
 		RunE: func(c *cobra.Command, args []string) error {
 			return a.runSteps(c, script(append([]string{"scripts/build"}, args...)...))
 		},
