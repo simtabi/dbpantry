@@ -115,6 +115,15 @@ got="$(kube ctx 'mdb_svc_health pg' STUB_PODS='pg proj-pg-0 Running True\n')"
 [[ "$got" == healthy ]] || vfail "a Ready pod is not healthy: [$got]"
 got="$(kube ctx 'mdb_svc_health pg' STUB_PODS='pg proj-pg-0 Running Terminating\n')"
 [[ "$got" == absent ]] || vfail "a terminating pod is not absent: [$got]"
+# The template prints a fifth column, the pod's role ("-" when it has none).
+# Health read four fields, so "True -" was never "True" and a Ready pod stayed
+# "starting" for good: found live on OrbStack by check 91 (2026-11-25).
+for role in - primary replica; do
+    got="$(kube ctx 'mdb_svc_health pg' STUB_PODS="pg proj-pg-0 Running True $role\n")"
+    [[ "$got" == healthy ]] || vfail "a Ready pod with role column '$role' is not healthy: [$got]"
+done
+got="$(kube ctx 'mdb_svc_health pg' STUB_PODS='pg proj-pg-0 Running Terminating -\n')"
+[[ "$got" == absent ]] || vfail "a terminating pod with a role column is not absent: [$got]"
 got="$(kube ctx 'mdb_svc_health pg')"
 [[ "$got" == absent ]] || vfail "no pod is not absent: [$got]"
 
