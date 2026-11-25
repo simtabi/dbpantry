@@ -235,7 +235,7 @@ DB_SSLKEY=/path/to/dbpantry/certs/clients/${USER_NAME}/client.key
     fi
 fi
 
-NETWORK="${COMPOSE_PROJECT_NAME:-mdb}_net"
+NETWORK="$(mdb_project_name)_net"
 
 if [[ "$FORMAT" == json ]]; then
     exts="" sep=""
