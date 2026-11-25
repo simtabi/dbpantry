@@ -25,7 +25,7 @@ printf 'COMPOSE_PROJECT_NAME=mdb\nMDB_NETWORK_SUBNET=172.28.0.0/16\n' > "$tmp/ro
 ensure() {
     # shellcheck disable=SC2016  # expanded by the inner bash
     env -i PATH="$PATH" HOME="$HOME" TMPDIR="$tmp" MDB_RT_ROOT="$tmp/root" "$@" bash -c '
-        . "$1/scripts/network-lib.sh"
+        . "$1/scripts/runtime-lib.sh"; . "$1/scripts/network-lib.sh"
         mdb_runtime_init() { return 0; }
         mdb_ctr() {
             case "$1 $2" in
