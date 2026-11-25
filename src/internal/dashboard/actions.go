@@ -154,7 +154,9 @@ var Actions = []Action{
 	},
 	{
 		Name: "images.scan", Title: "Scan images", Area: "images", Scope: ScopeOperate,
-		Params: []Param{{Name: "engine", Label: "Engine (empty: every engine)", Kind: KindEngine}},
+		// Every image scripts/build builds (check 88); "engine" stays the
+		// parameter's name for API callers.
+		Params: []Param{{Name: "engine", Label: "Image (empty: every image)", Kind: KindImage}},
 		Command: func(v Values) []string {
 			if v["engine"] == "" {
 				return []string{"images", "scan"}
