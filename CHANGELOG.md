@@ -34,6 +34,9 @@ waiving them.
   at once.
 
 ### Added
+- **Check 91 runs the separate instance home on a live Kubernetes cluster**: with
+  `MDB_VERIFY_K8S_CONTEXT` naming a local context, it deploys from `MDB_HOME` into its own namespace, checks
+  the published Secret, provisions and backs up into the home, and confirms the kit is unchanged.
 - **`make cross`** builds the binary for every release target (Linux, macOS, Windows and FreeBSD, amd64
   and arm64) into `build/<os>/`, with a `build/checksums.txt` that verifies as it is.
 - **The dashboard manages webhooks**: the Operations page lists them to an admin, creates one (showing its
@@ -361,6 +364,9 @@ waiving them.
   maintained menu. Each still runs through `MDB_<ENGINE>_BASE_IMAGE`, unsupported.
 
 ### Fixed
+- **A Ready pod on Kubernetes was never healthy.** The pod listing gained a role column, and the health
+  probe still read four fields, so every wait for a healthy service (scripts and `make verify`) timed out on
+  a pod that was serving. Check 54 now uses rows as the listing prints them.
 - **One failed convergence left MySQL, MariaDB and PostgreSQL unhealthy for good (D-109).**
   The converge-failed marker survived restarts, and nothing removed it, so the healthcheck kept refusing
   after a later start converged. Each convergence stage now clears it first; check 80 guards it. Rebuild
