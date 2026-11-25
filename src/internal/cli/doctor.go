@@ -61,10 +61,11 @@ func (a *app) runDoctor(ctx context.Context, asJSON bool) error {
 			rep.Notes = append(rep.Notes, "runtime info: "+err.Error())
 		}
 		if buf.Len() > 0 {
-			rep.Runtime = doctor.ParseRuntimeInfo(buf.String())
+			rt := doctor.ParseRuntimeInfo(buf.String())
+			rep.Runtime = &rt
 		}
 	}
-	if !rep.Runtime.Reachable {
+	if rep.Runtime == nil || !rep.Runtime.Reachable {
 		rep.Notes = append(rep.Notes, "No reachable container engine. Install Docker Desktop, OrbStack, Colima, Rancher Desktop, Podman, or nerdctl; see docs/guides/runtimes.md.")
 	}
 
