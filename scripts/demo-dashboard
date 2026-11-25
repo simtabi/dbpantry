@@ -170,6 +170,11 @@ for extra in ("/usr/local/bin", "/opt/homebrew/bin", str(Path.home() / ".local/b
     if extra not in path.split(":") and os.path.isdir(extra):
         path = f"{path}:{extra}"
 env = os.environ.copy()
+# The demo's own home decides its stack. `make demo-dashboard` exports the
+# checkout's project and profiles, which outrank a home's .env, so the demo
+# drove the operator's project (check 90).
+for key in ("COMPOSE_PROJECT_NAME", "COMPOSE_PROFILES", "COMPOSE_FILE", "MDB_ENV_FILE", "ENV_FILE", "PROFILES"):
+    env.pop(key, None)
 env["MDB_HOME"] = home
 env["PATH"] = path
 log = open(logfile, "a")

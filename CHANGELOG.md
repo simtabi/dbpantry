@@ -388,6 +388,9 @@ waiving them.
 - **The dashboard's instance files are gitignored.** `api-tokens.json`, `webhooks.json` (webhook signing
   secrets), `dashboard.json`, `envs.json` and `audit/` were written into a checkout used as its own home
   and could be committed with `git add -A`.
+- **`make demo-dashboard` drives the demo's own stack.** It passed the checkout's `COMPOSE_PROJECT_NAME`
+  and profiles to the demo, where they outrank the demo home's `.env`, so a Start in the demo would have
+  booted your own project on its data volumes.
 - **A verify run no longer rewrites your `.env`.** When the network pool overlapped, the subnet move
   (D-103) was written to the env file even for a throwaway project started from the checkout, so check
   27 changed the operator's `MDB_NETWORK_SUBNET`. The move is now written only for the env file's own
