@@ -530,6 +530,13 @@ func ChoicesOf(s Snapshot) Choices {
 		}
 	}
 	c.Engines = append(append(c.Engines, c.Running...), stopped...)
+	if s.Root != "" {
+		files, _ := filepath.Glob(filepath.Join(s.Root, "images", "*", "Dockerfile"))
+		for _, f := range files {
+			c.Buildable = append(c.Buildable, filepath.Base(filepath.Dir(f)))
+		}
+		slices.Sort(c.Buildable)
+	}
 	for _, svc := range s.Services {
 		c.Services = append(c.Services, svc.Name)
 	}
