@@ -378,6 +378,7 @@ func (a *app) snapshot(ctx context.Context, root string, env []string, backupDir
 	rep.Backend = snap.Backend
 	// Runtime details stay on `dbpantry doctor`; the page links there and
 	// shows host facts without a second runtime-info storm on every refresh.
+	// rep.Runtime stays nil, so the status JSON makes no runtime claim.
 	snap.Doctor = &rep
 	if envs, err := envtype.Load(envtype.RegistryPath(envtype.OperatorHome())); err == nil {
 		for _, e := range envs {
