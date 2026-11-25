@@ -6,7 +6,6 @@ What has not been verified yet, what is left for later, and how to close each it
 
 | Item | State | How to close it |
 |---|---|---|
-| Kubernetes with a separate home (`MDB_HOME` apart from the kit) | Never run. The backend finds compose files home-first and publishes the home's `secrets/`, `certs/` and `.env` (design.md D-84), but no cluster has run it with a separate home | On a local cluster (kind on OrbStack is enough), run check 77's steps with `MDB_BACKEND=kubernetes`: init into the home, `up`, a query, `project new`, `backup run`, `down`, and the kit unchanged |
 | Windows (`dbpantry.exe`) | The hand-off to the Linux `dbpantry` inside WSL 2 is covered by unit tests and a cross-build only; no Windows machine ran it | On Windows 11 with WSL 2 and the Linux binary in `~/.local/bin`: `dbpantry.exe version`, `dbpantry.exe up`, and `dbpantry.exe dashboard` opening in a Windows browser ([windows](../runbooks/windows.md)) |
 | FreeBSD | The binary builds for amd64 and arm64; it has never been run | Run it with bash and Podman on FreeBSD |
 | Incus beyond PostgreSQL | With a separate home, the `pg` profile was run once (2026-11-24/25); `make status` and `make logs` were not repeated in that run. Other engines, HA and PITR have never run on Incus | Repeat the separate-home run with `status`, `logs` and the other profiles ([Incus](../guides/incus.md)) |
