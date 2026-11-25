@@ -17,7 +17,7 @@ func TestStartRunsUpProjectsThenDashboard(t *testing.T) {
 	}
 	want := []string{
 		"scripts/check-env --quiet" + p, "scripts/render-config " + p, "scripts/gen-compose " + p,
-		"scripts/runtime up" + p, "scripts/exposure-notice " + p,
+		"scripts/certs --heal" + p, "scripts/runtime up" + p, "scripts/exposure-notice " + p,
 		"scripts/new-project --name shop --engine mysql" + p, "scripts/runtime compose restart mysql-pooler" + p,
 		"scripts/new-project --name shop --engine pg" + p,
 		"scripts/new-project --name billing --engine pg" + p,
