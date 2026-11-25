@@ -361,6 +361,10 @@ waiving them.
 - **Off-site backups find their credentials** in the instance home, or `/run/secrets` in the backup
   sidecar, which died after its first dump with S3 configured.
 - **A separate home's `MDB_BACKEND` is honoured**; it silently ran Compose.
+- **A verify run no longer rewrites your `.env`.** When the network pool overlapped, the subnet move
+  (D-103) was written to the env file even for a throwaway project started from the checkout, so check
+  27 changed the operator's `MDB_NETWORK_SUBNET`. The move is now written only for the env file's own
+  project; any other project uses it for that run.
 - **Incus reads a separate home's `.env`.** With `MDB_HOME` apart from the kit, incus-compose read the
   kit's, so the stack booted as project `mdb` on the default subnet with `secrets/` and `certs/` from the kit.
 - **`project new` names the stack's own network** (`<project>_net`), not `mdb_net`, when the project
