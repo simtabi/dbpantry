@@ -10,6 +10,7 @@ _mdb_be_compose_up() {
     # shellcheck source=../network-lib.sh
     . "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/network-lib.sh"
     mdb_network_ensure_subnet || return 1
+    mdb_export_caddy_config_hash
     mdb_compose_up_wait "$@"
 }
 _mdb_be_compose_down()   { mdb_compose --profile '*' "$@" down --remove-orphans; }

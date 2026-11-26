@@ -132,6 +132,11 @@ services:
     # dropped.
     cap_add:
       - NET_BIND_SERVICE
+    # A checksum of the files below that Caddy reads only at start (exported
+    # by `up`, scripts/runtime-lib.sh): when one changes, so does the label,
+    # and Compose recreates Caddy with its new configuration.
+    labels:
+      dbpantry.config-hash: "${MDB_CADDY_CONFIG_HASH:-}"
     volumes:
       # Generated from the engine descriptors by scripts/gen-compose; empty
       # unless MDB_PUBLISH=proxy.

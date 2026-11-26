@@ -366,6 +366,28 @@ mdb_project_volumes() {
     return 0
 }
 
+# MDB_CADDY_CONFIG_HASH: a checksum of every file Caddy reads once, at start
+# -- its Caddyfile, the layer-4 routes and the web CA (design.md D-112) --
+# which docker-compose.yml puts on the caddy service as a label. Compose
+# recreates a container when its definition changes, never when a
+# bind-mounted file does, and Caddy runs with its admin API off, so without
+# this a re-rendered Caddyfile or a renewed web CA was never served. Exported
+# by each Compose backend's up; cksum is in every POSIX system.
+mdb_export_caddy_config_hash() {
+    local home f files=()
+    home="$(mdb_instance_dir)"
+    for f in config/caddy/Caddyfile config/caddy/layer4.caddy \
+             certs/web/root.crt certs/web/intermediate.crt certs/web/intermediate.key; do
+        [[ -f "$home/$f" ]] && files+=("$home/$f")
+    done
+    if (( ${#files[@]} )); then
+        MDB_CADDY_CONFIG_HASH="$(cat "${files[@]}" | cksum | awk '{print $1 "-" $2}')"
+    else
+        MDB_CADDY_CONFIG_HASH=""
+    fi
+    export MDB_CADDY_CONFIG_HASH
+}
+
 # `compose up -d --wait` where the implementation has --wait, otherwise up -d
 # and poll every started container's health the same way --wait does: until
 # all are healthy (or running, when they have no healthcheck), or one is

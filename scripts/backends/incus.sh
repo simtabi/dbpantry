@@ -145,6 +145,7 @@ _mdb_be_incus_health() {
 # up -d, then wait like `compose up --wait`: every started service healthy (or
 # running without a healthcheck), until MDB_WAIT_TIMEOUT.
 _mdb_be_incus_up() {
+    mdb_export_caddy_config_hash
     _mdb_incus_compose "$@" up -d || return
     local budget="${MDB_WAIT_TIMEOUT:-300}" i svcs s pending
     for (( i = 0; i < budget; i += 2 )); do
