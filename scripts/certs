@@ -9,6 +9,7 @@
 #
 # Usage: scripts/certs [--renew]
 #        scripts/certs --client NAME [--out DIR] [--renew]
+#        scripts/certs --trust | --untrust   (the web CA, in this OS's trust store)
 #
 # Client certificates (design.md D-74), for mutual TLS (MDB_MTLS=true):
 #   - the pooler's own, certs/pooler/client.{crt,key}, CN=pgbouncer, which
@@ -32,12 +33,15 @@ RENEW=0
 HEAL=0
 CLIENT=""
 OUT=""
+TRUST=""
 while (( $# )); do
     case "$1" in
         --renew) RENEW=1; shift ;;
         --heal) HEAL=1; shift ;;
         --client) CLIENT="${2:?--client needs a name}"; shift 2 ;;
         --out) OUT="${2:?--out needs a directory}"; shift 2 ;;
+        --trust) TRUST=add; shift ;;
+        --untrust) TRUST=remove; shift ;;
         *) printf 'certs: unknown argument %s\n' "$1" >&2; exit 2 ;;
     esac
 done
@@ -69,6 +73,158 @@ if [[ ! -s "$CERT_DIR/ca.crt" ]]; then
     chmod 0644 "$CERT_DIR/ca.crt"
 elif (( ! HEAL )); then
     printf 'reusing the existing toolkit CA\n'
+fi
+
+# -----------------------------------------------------------------------------
+# The web CA (design.md D-112): Caddy's local certificate authority for the
+# browser UIs. Caddy used to generate its own inside its data volume, which no
+# host trust store knew and which changed whenever the volume was recreated, so
+# every browser refused the UIs. Generated here instead, it lives in the home,
+# `dbpantry certs trust` installs its root once, and Caddy issues the UIs'
+# certificates from its intermediate.
+#
+# It is separate from the toolkit CA above (engines never share the web certs,
+# SPEC section 9.1) and name-constrained: it can sign for localhost names (and
+# MDB_UI_DOMAIN) only, so trusting it cannot vouch for any other site even if
+# its key leaked. The root key never leaves certs/web/; Caddy gets the root
+# certificate and the intermediate pair.
+# -----------------------------------------------------------------------------
+WEB_DIR="$CERT_DIR/web"
+web_project() { local p; p="$(get COMPOSE_PROJECT_NAME)"; printf '%s' "${p:-mdb}"; }
+web_issue_intermediate() {
+    openssl ecparam -name prime256v1 -genkey -noout -out "$WEB_DIR/intermediate.key" 2>/dev/null
+    openssl req -new -key "$WEB_DIR/intermediate.key" \
+        -subj "/O=Simtabi LLC/OU=dbpantry/CN=dbpantry local web CA intermediate" \
+        -out "$WEB_DIR/intermediate.csr" 2>/dev/null
+    openssl x509 -req -in "$WEB_DIR/intermediate.csr" \
+        -CA "$WEB_DIR/root.crt" -CAkey "$WEB_DIR/root.key" -CAcreateserial \
+        -days 1095 \
+        -extfile <(printf 'basicConstraints=critical,CA:TRUE,pathlen:0\nkeyUsage=critical,keyCertSign,cRLSign,digitalSignature\nsubjectKeyIdentifier=hash\nauthorityKeyIdentifier=keyid\n') \
+        -out "$WEB_DIR/intermediate.crt" 2>/dev/null
+    rm -f "$WEB_DIR/intermediate.csr"
+    # Read by Caddy as root WITHOUT CAP_DAC_OVERRIDE, through a file bind
+    # mount: the 0700 directory is the guard on the host (the same arrangement
+    # as pgAdmin's password, docker-compose.yml).
+    chmod 0644 "$WEB_DIR/intermediate.key" "$WEB_DIR/intermediate.crt"
+}
+web_ca() {
+    local domain permitted
+    mkdir -p "$WEB_DIR"
+    chmod 0700 "$WEB_DIR"
+    if [[ ! -s "$WEB_DIR/root.crt" ]]; then
+        domain="$(get MDB_UI_DOMAIN)"; domain="${domain:-db.localhost}"
+        permitted="permitted;DNS:localhost,permitted;DNS:.localhost"
+        case "$domain" in
+            localhost|*.localhost) ;;
+            *) permitted="$permitted,permitted;DNS:$domain,permitted;DNS:.$domain" ;;
+        esac
+        printf 'creating the web CA (browser UIs, names: localhost%s)\n' \
+            "$([[ "$domain" == *localhost ]] || printf ', %s' "$domain")"
+        openssl ecparam -name prime256v1 -genkey -noout -out "$WEB_DIR/root.key" 2>/dev/null
+        chmod 0600 "$WEB_DIR/root.key"
+        openssl req -new -key "$WEB_DIR/root.key" \
+            -subj "/O=Simtabi LLC/OU=dbpantry/CN=dbpantry local web CA ($(web_project))" \
+            -out "$WEB_DIR/root.csr" 2>/dev/null
+        openssl x509 -req -in "$WEB_DIR/root.csr" -signkey "$WEB_DIR/root.key" \
+            -days 3650 \
+            -extfile <(printf 'basicConstraints=critical,CA:TRUE,pathlen:1\nkeyUsage=critical,keyCertSign,cRLSign\nsubjectKeyIdentifier=hash\nnameConstraints=critical,%s\n' "$permitted") \
+            -out "$WEB_DIR/root.crt" 2>/dev/null
+        rm -f "$WEB_DIR/root.csr"
+        chmod 0644 "$WEB_DIR/root.crt"
+        rm -f "$WEB_DIR/intermediate.crt"
+    fi
+    # The intermediate is re-issued from the same root when missing or within
+    # 30 days of expiry; the trusted root does not change.
+    if [[ ! -s "$WEB_DIR/intermediate.crt" ]] \
+       || ! openssl x509 -in "$WEB_DIR/intermediate.crt" -noout -checkend 2592000 >/dev/null 2>&1; then
+        web_issue_intermediate
+        (( HEAL )) && printf 'issued a new web CA intermediate (certs/web/intermediate.crt)\n'
+    fi
+    return 0
+}
+if [[ -z "$CLIENT" ]]; then
+    web_ca
+fi
+
+# -----------------------------------------------------------------------------
+# --trust / --untrust: the web CA's root in this machine's trust store, so
+# browsers accept the UIs (dbpantry certs trust, design.md D-112). Only the
+# certificate is installed, never a key; it is found again by its SHA-1
+# fingerprint, so nothing else in a store is touched, and a second run is a
+# no-op. Each platform asks for its own authorization (macOS a password
+# dialog, Linux sudo) -- this script never sees a password.
+# -----------------------------------------------------------------------------
+web_fp() { openssl x509 -in "$WEB_DIR/root.crt" -noout -fingerprint -sha1 | sed 's/.*=//; s/://g'; }
+web_platform() {
+    case "$(uname -s)" in
+        Darwin) printf macos ;;
+        Linux) case "$(uname -r)" in *[Mm]icrosoft*) printf wsl ;; *) printf linux ;; esac ;;
+        *) printf other ;;
+    esac
+}
+trust_macos() {
+    local kc="$HOME/Library/Keychains/login.keychain-db" fp
+    fp="$(web_fp)"
+    if [[ "$TRUST" == add ]]; then
+        if security find-certificate -a -Z "$kc" 2>/dev/null | grep -qi "SHA-1 hash: $fp"; then
+            printf 'already in the login keychain (%s)\n' "$fp"
+        else
+            printf 'adding the web CA to the login keychain; macOS asks for your password\n'
+            security add-trusted-cert -r trustRoot -p ssl -k "$kc" "$WEB_DIR/root.crt"
+        fi
+    else
+        security delete-certificate -Z "$fp" "$kc" 2>/dev/null \
+            && printf 'removed from the login keychain\n' || printf 'not in the login keychain\n'
+    fi
+}
+trust_linux() {
+    # MDB_TRUST_SYSROOT prefixes the store directories: empty on a real
+    # system, a scratch tree in check 92 (or a chroot).
+    local name dst="" sys="${MDB_TRUST_SYSROOT:-}"
+    name="dbpantry-$(web_project)-web-ca"
+    if [[ -d "$sys/usr/local/share/ca-certificates" ]]; then
+        dst="$sys/usr/local/share/ca-certificates/$name.crt"
+        if [[ "$TRUST" == add ]]; then sudo cp "$WEB_DIR/root.crt" "$dst"; else sudo rm -f "$dst"; fi
+        sudo update-ca-certificates >/dev/null
+    elif [[ -d "$sys/etc/pki/ca-trust/source/anchors" ]]; then
+        dst="$sys/etc/pki/ca-trust/source/anchors/$name.crt"
+        if [[ "$TRUST" == add ]]; then sudo cp "$WEB_DIR/root.crt" "$dst"; else sudo rm -f "$dst"; fi
+        sudo update-ca-trust
+    else
+        printf 'no system trust store found (no update-ca-certificates or update-ca-trust); add %s by hand\n' "$WEB_DIR/root.crt" >&2
+        return 1
+    fi
+    printf 'system store: %s %s\n' "$([[ "$TRUST" == add ]] && printf added || printf removed)" "$dst"
+    # Chrome and Firefox on Linux read their own NSS database, not the system store.
+    if command -v certutil >/dev/null 2>&1 && [[ -d "$HOME/.pki/nssdb" ]]; then
+        if [[ "$TRUST" == add ]]; then
+            certutil -d "sql:$HOME/.pki/nssdb" -A -t "C,," -n "$name" -i "$WEB_DIR/root.crt"
+        else
+            certutil -d "sql:$HOME/.pki/nssdb" -D -n "$name" 2>/dev/null || true
+        fi
+        printf 'browser store (~/.pki/nssdb): updated\n'
+    fi
+}
+trust_wsl() {
+    # The browsers are Windows': the current user's Root store, which asks for
+    # confirmation in a Windows dialog and needs no administrator.
+    local win
+    win="$(wslpath -w "$WEB_DIR/root.crt")"
+    if [[ "$TRUST" == add ]]; then
+        certutil.exe -user -addstore Root "$win" >/dev/null && printf 'added to the Windows user Root store\n'
+    else
+        certutil.exe -user -delstore Root "$(web_fp)" >/dev/null && printf 'removed from the Windows user Root store\n'
+    fi
+}
+if [[ -n "$TRUST" ]]; then
+    printf 'web CA: %s\n' "${WEB_DIR#"$MDB_HOME"/}/root.crt"
+    case "$(web_platform)" in
+        macos) trust_macos ;;
+        linux) trust_linux ;;
+        wsl) trust_wsl ;;
+        *) printf 'this system has no supported trust store; import %s into your browser\n' "$WEB_DIR/root.crt" >&2; exit 1 ;;
+    esac
+    exit $?
 fi
 
 # -----------------------------------------------------------------------------
@@ -222,3 +378,4 @@ fi
 
 printf '✓ certificates ready in %s\n' "${CERT_DIR#"$ROOT"/}"
 printf '  clients trust %s and connect with sslmode=verify-full\n' "certs/ca.crt"
+printf '  browsers trust the UIs once you run: dbpantry certs trust (certs/web/root.crt)\n'

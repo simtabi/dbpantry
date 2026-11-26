@@ -32,6 +32,8 @@ var wantTree = []string{
 	"certs",
 	"certs init",
 	"certs renew",
+	"certs trust",
+	"certs untrust",
 	"completion",
 	"config",
 	"config prod-overlay",

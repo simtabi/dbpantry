@@ -34,6 +34,11 @@ waiving them.
   at once.
 
 ### Added
+- **The tool generates its own web CA, and `dbpantry certs trust` makes browsers accept the UIs** (D-112).
+  `scripts/certs` writes `certs/web/`, a root name-constrained to localhost names plus an intermediate that
+  Caddy issues every UI's certificate from; `certs trust` (`make certs-trust`) installs the root once in the
+  macOS login keychain, the Linux system and NSS stores, or the Windows user store under WSL, and
+  `certs untrust` removes it.
 - **Check 91 runs the separate instance home on a live Kubernetes cluster**: with
   `MDB_VERIFY_K8S_CONTEXT` naming a local context, it deploys from `MDB_HOME` into its own namespace, checks
   the published Secret, provisions and backs up into the home, and confirms the kit is unchanged.
@@ -364,6 +369,10 @@ waiving them.
   maintained menu. Each still runs through `MDB_<ENGINE>_BASE_IMAGE`, unsupported.
 
 ### Fixed
+- **The web UIs failed in a browser** (D-112): every certificate was untrusted (Caddy's CA lived in its volume),
+  phpMyAdmin said "Failed to read configuration file" (its capabilities), pgAdmin said "Failed to load
+  preferences" (`Referrer-Policy: no-referrer`), and `http://` redirected to port 443 instead of the published
+  HTTPS port. Caddy is now recreated when its Caddyfile or the web CA changes, which it never was.
 - **A Ready pod on Kubernetes was never healthy.** The pod listing gained a role column, and the health
   probe still read four fields, so every wait for a healthy service (scripts and `make verify`) timed out on
   a pod that was serving. Check 54 now uses rows as the listing prints them.

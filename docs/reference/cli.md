@@ -115,7 +115,7 @@ These follow the table dbpantry shares with mesobia (refactor plan §7). Codes 2
 | `upgrade --engine --from --to [--confirm]` | `scripts/upgrade` | `upgrade` |
 | `ha status\|failover\|reinit` | `scripts/ha` | `ha-status`, `ha-failover`, `ha-reinit` |
 | `pooler sync ENGINE` | restarts the engine's pooler when it mirrors credentials at start | none |
-| `certs init\|renew` | `scripts/certs`, `scripts/certs-renew` | `certs`, `certs-renew` |
+| `certs init\|renew\|trust\|untrust` | `scripts/certs`, `scripts/certs-renew`, `scripts/certs --trust\|--untrust` | `certs`, `certs-renew`, `certs-trust`, `certs-untrust` |
 | `secrets rotate [--yes] [--confirm ROTATE] [--engine pg\|mysql\|mariadb]` | `scripts/rotate-secrets [--engine E]`, then `pooler sync` (only E's pooler with `--engine`) | `rotate-secrets` |
 | `images build [IMAGE…]`, `images scan [IMAGE]` | `scripts/build`, `scripts/scan` | `build`, `scan` |
 | `verify [--checks …] [--tags …] [--fast] [--structure]` | `scripts/verify/run.sh` | `verify`, `verify-fast`, `verify-structure` |

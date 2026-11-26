@@ -20,6 +20,8 @@ render	config render	47	3
 -	config set	go:TestShowOriginAndSet,50	3	new: write one MDB_ key into the instance .env, quoted
 certs	certs init	12,20	3
 certs-renew	certs renew	12,68	3
+certs-trust	certs trust	18,92	3
+certs-untrust	certs untrust	92	3
 rotate-secrets	secrets rotate	57	3	then pooler sync for mirroring poolers (N8)
 build	images build	07,43,45	4
 scan	images scan	38	4

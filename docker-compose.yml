@@ -39,6 +39,12 @@ services:
       PMA_HOSTS: ${MDB_PMA_HOSTS:-mysql,mariadb}
       PMA_PORTS: ${MDB_PMA_PORTS:-3306,3306}
       UPLOAD_LIMIT: ${MDB_PMA_UPLOAD_LIMIT:-256M}
+    # Back from cap_drop ALL, the least that works (measured 2026-11-25 on
+    # 5.2.3): the entrypoint writes /etc/phpmyadmin/config.secret.inc.php into
+    # a www-data directory (DAC_OVERRIDE) and chgrps it (CHOWN), and Apache
+    # drops to www-data (SETUID, SETGID). Without them the login page said
+    # "Failed to read configuration file" (check 18).
+    cap_add: [CHOWN, DAC_OVERRIDE, SETUID, SETGID]
     ports:
       - "${MDB_BIND_ADDR:-127.0.0.1}:${MDB_PMA_HOST_PORT:-8081}:80"
     networks: [mdb]
@@ -126,12 +132,25 @@ services:
     # dropped.
     cap_add:
       - NET_BIND_SERVICE
+    # A checksum of the files below that Caddy reads only at start (exported
+    # by `up`, scripts/runtime-lib.sh): when one changes, so does the label,
+    # and Compose recreates Caddy with its new configuration.
+    labels:
+      dbpantry.config-hash: "${MDB_CADDY_CONFIG_HASH:-}"
     volumes:
       # Generated from the engine descriptors by scripts/gen-compose; empty
       # unless MDB_PUBLISH=proxy.
       - ${MDB_HOME:-.}/config/caddy/layer4.caddy:/etc/caddy/layer4.caddy:ro
       # Rendered from config/caddy/Caddyfile.tmpl (dev) or Caddyfile.prod.tmpl (prod).
       - ${MDB_HOME:-.}/config/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      # The home's web CA (scripts/certs, design.md D-112): the root
+      # certificate and the intermediate pair, as FILES -- certs/web/ is 0700,
+      # which Caddy (root without CAP_DAC_OVERRIDE) cannot traverse -- and
+      # never the root key. `dbpantry up` runs `certs --heal` first, so they
+      # exist before Compose would otherwise create directories in their place.
+      - ${MDB_HOME:-.}/certs/web/root.crt:/etc/caddy/web-ca/root.crt:ro
+      - ${MDB_HOME:-.}/certs/web/intermediate.crt:/etc/caddy/web-ca/intermediate.crt:ro
+      - ${MDB_HOME:-.}/certs/web/intermediate.key:/etc/caddy/web-ca/intermediate.key:ro
       # Persisted so the internal CA and any issued certificates survive a
       # restart; without this every `make up` would mint a new local CA and
       # browsers would warn again each time.

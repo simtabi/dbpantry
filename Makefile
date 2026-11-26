@@ -167,6 +167,14 @@ build: $(DBPANTRY) ## Build every image for this architecture (engines, cli, cad
 certs-renew: $(DBPANTRY) ## Rotate server certs with live reload (no downtime)
 	@$(DBPANTRY) certs renew
 
+.PHONY: certs-trust
+certs-trust: $(DBPANTRY) ## Trust the web CA in this machine's store so browsers accept the UIs
+	@$(DBPANTRY) certs trust
+
+.PHONY: certs-untrust
+certs-untrust: $(DBPANTRY) ## Remove the web CA from this machine's trust store
+	@$(DBPANTRY) certs untrust
+
 .PHONY: rotate-secrets
 rotate-secrets: $(DBPANTRY) ## Rotate every database password and secret file, applied live
 	@$(DBPANTRY) secrets rotate $(if $(YES),--yes,)
