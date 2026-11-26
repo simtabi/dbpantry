@@ -14,6 +14,7 @@ import (
 // Kind classifies an add-on for the wizard filters and Status card.
 type Kind string
 
+// The kinds of add-on.
 const (
 	KindPooler    Kind = "pooler"
 	KindExtension Kind = "extension"

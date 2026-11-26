@@ -429,7 +429,6 @@ func (s Snapshot) Engine(name string) *endpoint.Endpoint {
 	return nil
 }
 
-// ProjectsOn are the projects provisioned on one engine.
 // Orphaned are the projects whose engine answers and has no such database.
 func (s Snapshot) Orphaned() []Project {
 	var out []Project
@@ -441,6 +440,7 @@ func (s Snapshot) Orphaned() []Project {
 	return out
 }
 
+// ProjectsOn are the projects provisioned on one engine.
 func (s Snapshot) ProjectsOn(engine string) []Project {
 	var out []Project
 	for _, p := range s.Projects {

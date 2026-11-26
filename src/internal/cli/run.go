@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"github.com/spf13/cobra"
@@ -125,6 +126,13 @@ func (a *app) runStepTo(ctx context.Context, root string, env []string, s step, 
 	if !s.Interruptible && !jobKillOnCancel(ctx) {
 		cmd.Cancel = func() error { return nil }
 	}
+	// A dashboard job, or the page's log stream, ends with everything the
+	// script started, and never waits more than WaitDelay for a child still
+	// holding the output pipe once the script has gone.
+	if jobKillOnCancel(ctx) {
+		killGroupOnCancel(cmd)
+		cmd.WaitDelay = 5 * time.Second
+	}
 	cmd.Dir = root
 	cmd.Env = append(append([]string{}, env...), s.Env...)
 	cmd.Stdout, cmd.Stderr = stdout, stderr
@@ -189,6 +197,38 @@ func (a *app) scriptEnv(ctx context.Context, root string) ([]string, error) {
 		return nil, usagef("profiles %q: %v", raw, err)
 	}
 	return append(env, "COMPOSE_PROFILES="+strings.TrimSpace(out.String())), nil
+}
+
+// runInHome runs one step in another instance home (env copy, env migrate)
+// with the environment scriptEnv would give it were that home this one. The
+// caller's COMPOSE_PROJECT_NAME, MDB_ENV_FILE, COMPOSE_PROFILES and PROFILES
+// are dropped, since each outranks the home's .env, so the step reaches that
+// home's own stack: its project from its .env, its profiles from its
+// MDB_PROFILES (2026-11-24 audit, K3).
+func (a *app) runInHome(c *cobra.Command, home string, s step) error {
+	root, err := a.root()
+	if err != nil {
+		return err
+	}
+	base := a.environ
+	b := *a
+	b.profiles = ""
+	b.environ = func() []string {
+		out := make([]string, 0, len(base())+1)
+		for _, kv := range base() {
+			switch k, _, _ := strings.Cut(kv, "="); k {
+			case "MDB_HOME", "MDB_ENV_FILE", "COMPOSE_PROJECT_NAME", "COMPOSE_PROFILES", "PROFILES":
+				continue
+			}
+			out = append(out, kv)
+		}
+		return append(out, "MDB_HOME="+home)
+	}
+	env, err := b.scriptEnv(c.Context(), root)
+	if err != nil {
+		return err
+	}
+	return a.runStep(c.Context(), root, env, s)
 }
 
 // confirmed returns a step's standard input for a typed confirmation: the

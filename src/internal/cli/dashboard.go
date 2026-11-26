@@ -45,8 +45,12 @@ const (
 	// rendered from other compose files than the stack.
 	fixtureScript = `. scripts/runtime-lib.sh && ids="$(mdb_ctr ps -a -q --filter "label=com.docker.compose.project=$1")" && { [ -z "$ids" ] || mdb_ctr inspect -f '{{index .Config.Labels "com.docker.compose.service"}}{{"\t"}}{{.State.Status}}{{"\t"}}{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}{{"\t"}}{{.Config.Image}}{{"\t"}}{{.State.StartedAt}}' $ids; }`
 	// imagesScript lists every locally built dbpantry image under any
-	// prefix (audit B7): ref, size, age, support label.
-	imagesScript = `. scripts/runtime-lib.sh && mdb_ctr images --format '{{.Repository}}:{{.Tag}}{{"\t"}}{{.Size}}{{"\t"}}{{.CreatedSince}}{{"\t"}}{{.Label "io.simtabi.dbpantry.support"}}' | awk -F'\t' 'index($1, "/dbpantry-")' || true`
+	// prefix (audit B7): ref, size, age, support label. `images --format` has
+	// no label field (Docker 29.8 refuses {{.Label}} there; `ps` has it), so
+	// the label comes from one `image inspect` of our images. A failing
+	// runtime is an error, never an empty list (the page said "No images
+	// built yet" beside eight built images, 2026-11-25).
+	imagesScript = `. scripts/runtime-lib.sh && list="$(mdb_ctr images --format '{{.Repository}}:{{.Tag}}{{"\t"}}{{.Size}}{{"\t"}}{{.CreatedSince}}')" && ours="$(printf '%s\n' "$list" | awk -F'\t' 'index($1, "/dbpantry-")')" && { [ -z "$ours" ] || { labels="$(mdb_ctr image inspect --format '{{index .Config.Labels "io.simtabi.dbpantry.support"}}' $(printf '%s\n' "$ours" | cut -f1))" && paste <(printf '%s\n' "$ours") <(printf '%s\n' "$labels" | sed 's/<no value>//'); }; }`
 )
 
 func (a *app) dashboardCmd() *cobra.Command {
@@ -374,6 +378,7 @@ func (a *app) snapshot(ctx context.Context, root string, env []string, backupDir
 	rep.Backend = snap.Backend
 	// Runtime details stay on `dbpantry doctor`; the page links there and
 	// shows host facts without a second runtime-info storm on every refresh.
+	// rep.Runtime stays nil, so the status JSON makes no runtime claim.
 	snap.Doctor = &rep
 	if envs, err := envtype.Load(envtype.RegistryPath(envtype.OperatorHome())); err == nil {
 		for _, e := range envs {

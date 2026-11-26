@@ -276,8 +276,17 @@ for engine in $(engine_list); do
             # `pooler` into the ones that match the selected engines.
             printf '    profiles: [%s-pooler]\n' "$MDB_ENGINE_NAME"
             # Our own pooler image follows MDB_IMAGE_PREFIX as the engines do.
+            # It also carries the build: key the engines carry, so `up` builds it
+            # when it is missing instead of pulling an image no registry holds
+            # (check 84).
             case "$MDB_ENGINE_POOLER_IMAGE" in
-                "$MDB_IMAGE_PREFIX_DEFAULT"/dbpantry-*) printf '    image: ${MDB_IMAGE_PREFIX:-%s}/%s\n' "$MDB_IMAGE_PREFIX_DEFAULT" "${MDB_ENGINE_POOLER_IMAGE#"$MDB_IMAGE_PREFIX_DEFAULT"/}" ;;
+                "$MDB_IMAGE_PREFIX_DEFAULT"/dbpantry-*)
+                    printf '    image: ${MDB_IMAGE_PREFIX:-%s}/%s\n' "$MDB_IMAGE_PREFIX_DEFAULT" "${MDB_ENGINE_POOLER_IMAGE#"$MDB_IMAGE_PREFIX_DEFAULT"/}"
+                    pooler_dir="${MDB_ENGINE_POOLER_IMAGE##*/dbpantry-}"; pooler_dir="${pooler_dir%%:*}"
+                    if [ -f "$ROOT/images/$pooler_dir/Dockerfile" ]; then
+                        printf '    build:\n      context: ./images\n      dockerfile: %s/Dockerfile\n' "$pooler_dir"
+                    fi
+                    ;;
                 *) printf '    image: %s\n' "$MDB_ENGINE_POOLER_IMAGE" ;;
             esac
             printf '    restart: unless-stopped\n'

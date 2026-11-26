@@ -167,8 +167,7 @@ MDB_EXTRA_SANS="10.0.1.5"      # so verify-full by address matches the certifica
 ```
 
 ```bash
-make certs-renew               # re-issue certs/pg with the new SANs
-make up PROFILES=pg,pooler,backup,prod
+make up PROFILES=pg,pooler,backup,prod   # re-issues certs/pg with the new SANs first
 ```
 
 With `PROFILES=...,prod` and the prod overlay in `COMPOSE_FILE` (`make

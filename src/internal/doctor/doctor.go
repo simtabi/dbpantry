@@ -25,8 +25,11 @@ type Report struct {
 	Root      string    `json:"root,omitempty"`
 	Home      string    `json:"home,omitempty"`
 	Backend   string    `json:"backend,omitempty"`
-	Runtime   Runtime   `json:"runtime"`
-	Notes     []string  `json:"notes,omitempty"`
+	// Runtime is nil until it is measured (`dbpantry doctor` runs
+	// scripts/runtime info; the dashboard does not), so a report never
+	// claims "reachable": false for a runtime nobody asked.
+	Runtime *Runtime `json:"runtime,omitempty"`
+	Notes   []string `json:"notes,omitempty"`
 }
 
 // Runtime is what scripts/runtime info reports (D-60 adapters).
@@ -108,6 +111,12 @@ func firstToken(s string) string {
 
 // WriteText prints a human report.
 func WriteText(w io.Writer, r Report) error {
+	rt, engine, rootless := Runtime{}, "not measured", "-"
+	if r.Runtime != nil {
+		rt = *r.Runtime
+		engine = map[bool]string{true: "reachable", false: "NOT reachable"}[rt.Reachable]
+		rootless = map[bool]string{true: "yes", false: "no"}[rt.Rootless]
+	}
 	_, err := fmt.Fprintf(w, `dbpantry doctor
   generated:  %s
   version:    %s
@@ -129,10 +138,9 @@ func WriteText(w io.Writer, r Report) error {
 		r.GoVersion, r.GOOS, r.GOARCH, r.NumCPU,
 		orDash(r.Hostname), orDash(r.Root), orDash(r.Home),
 		orDash(r.Backend),
-		orDash(r.Runtime.Name), orDash(r.Runtime.Provider),
-		orDash(r.Runtime.CLI), orDash(r.Runtime.Compose), orDash(r.Runtime.Flavor),
-		map[bool]string{true: "reachable", false: "NOT reachable"}[r.Runtime.Reachable],
-		map[bool]string{true: "yes", false: "no"}[r.Runtime.Rootless],
+		orDash(rt.Name), orDash(rt.Provider),
+		orDash(rt.CLI), orDash(rt.Compose), orDash(rt.Flavor),
+		engine, rootless,
 	)
 	if err != nil {
 		return err
@@ -142,8 +150,8 @@ func WriteText(w io.Writer, r Report) error {
 			return err
 		}
 	}
-	if r.Runtime.Raw != "" {
-		if _, err := fmt.Fprintf(w, "\n--- scripts/runtime info ---\n%s\n", r.Runtime.Raw); err != nil {
+	if rt.Raw != "" {
+		if _, err := fmt.Fprintf(w, "\n--- scripts/runtime info ---\n%s\n", rt.Raw); err != nil {
 			return err
 		}
 	}

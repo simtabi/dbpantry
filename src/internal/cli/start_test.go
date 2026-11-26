@@ -17,7 +17,7 @@ func TestStartRunsUpProjectsThenDashboard(t *testing.T) {
 	}
 	want := []string{
 		"scripts/check-env --quiet" + p, "scripts/render-config " + p, "scripts/gen-compose " + p,
-		"scripts/runtime up" + p, "scripts/exposure-notice " + p,
+		"scripts/certs --heal" + p, "scripts/runtime up" + p, "scripts/exposure-notice " + p,
 		"scripts/new-project --name shop --engine mysql" + p, "scripts/runtime compose restart mysql-pooler" + p,
 		"scripts/new-project --name shop --engine pg" + p,
 		"scripts/new-project --name billing --engine pg" + p,
@@ -33,7 +33,7 @@ func TestStartRunsUpProjectsThenDashboard(t *testing.T) {
 	if code != ExitUsage || !strings.Contains(errs, "--listen") {
 		t.Errorf("the dashboard step was not reached last: exit %d: %s", code, errs)
 	}
-	if n := len(calls); n != 6 || !strings.HasPrefix(calls[n-1], "scripts/new-project --name shop --engine pg") {
+	if n := len(calls); n != 7 || !strings.HasPrefix(calls[n-1], "scripts/new-project --name shop --engine pg") {
 		t.Errorf("up and the project run before the dashboard: %v", calls)
 	}
 }

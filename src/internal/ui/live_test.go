@@ -3,6 +3,7 @@ package ui
 import (
 	"bytes"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -12,11 +13,11 @@ func TestLiveStreamsSummaryOffTerminal(t *testing.T) {
 	var buf bytes.Buffer
 	var frame atomic.Int32
 	var saw atomic.Bool
-	live := NewLive(&buf, false, func(f int, now time.Time) []string {
+	live := NewLive(&buf, false, func(int, time.Time) []string {
 		return []string{"full tree line"}
 	})
-	live.SetSummary(func(f int, now time.Time) string {
-		frame.Store(int32(f))
+	live.SetSummary(func(f int, _ time.Time) string {
+		frame.Store(int32(f)) // #nosec G115 -- a frame count in a short test
 		if f < 2 {
 			return ""
 		}
@@ -52,7 +53,7 @@ func TestLiveStreamSkipsSpinnerFrames(t *testing.T) {
 		return []string{"final"}
 	})
 	var n atomic.Int32
-	live.SetSummary(func(f int, now time.Time) string {
+	live.SetSummary(func(f int, _ time.Time) string {
 		n.Add(1)
 		glyphs := []string{"⠋", "⠙", "⠹", "⠸"}
 		return glyphs[f%len(glyphs)] + " Check configuration  " + Duration(time.Duration(f)*100*time.Millisecond)
@@ -94,7 +95,9 @@ func TestLiveTerminalOnlyFinalIsNotEnough(t *testing.T) {
 func TestLiveStreamsTreeLinesOffTerminal(t *testing.T) {
 	// Nested ├─ / └─ rows must stream mid-flight so the job drawer shows
 	// under-the-hood compose work before Stop.
-	var buf bytes.Buffer
+	// Live writes from its own goroutine while the test polls the output, so
+	// the buffer is read and written under one lock (go test -race).
+	var buf syncBuffer
 	var phase atomic.Int32
 	live := NewLive(&buf, false, func(int, time.Time) []string {
 		if phase.Load() == 0 {
@@ -147,4 +150,22 @@ func TestStreamStableBucketsElapsedEveryThreeSeconds(t *testing.T) {
 	if treeStreamKey("├─ ✔ mdblive-pg-1  1.0s") != "tree:mdblive-pg-1" {
 		t.Fatalf("treeStreamKey = %q", treeStreamKey("├─ ✔ mdblive-pg-1  1.0s"))
 	}
+}
+
+// syncBuffer is a bytes.Buffer safe for one writer and one reader at once.
+type syncBuffer struct {
+	mu sync.Mutex
+	b  bytes.Buffer
+}
+
+func (s *syncBuffer) Write(p []byte) (int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.b.Write(p)
+}
+
+func (s *syncBuffer) String() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.b.String()
 }

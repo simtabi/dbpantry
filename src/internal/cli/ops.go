@@ -210,18 +210,18 @@ compatibility. Poolers that mirror credentials at start are then restarted
 func (a *app) imagesCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "images",
-		Short: "Build and scan the engine images",
+		Short: "Build and scan the images: engines, cli, caddy, pgbouncer, patroni",
 	}
 	build := &cobra.Command{
-		Use:   "build [ENGINE...]",
-		Short: "Build the engine images for this architecture (default: every engine)",
+		Use:   "build [IMAGE...]",
+		Short: "Build images for this architecture: engines, cli, caddy, pgbouncer, patroni (default: all)",
 		RunE: func(c *cobra.Command, args []string) error {
 			return a.runSteps(c, script(append([]string{"scripts/build"}, args...)...))
 		},
 	}
 	scan := &cobra.Command{
-		Use:   "scan [ENGINE]",
-		Short: "Scan built images for vulnerabilities (honours .trivyignore.yaml)",
+		Use:   "scan [IMAGE]",
+		Short: "Scan built images for vulnerabilities, every image by default (honours .trivyignore.yaml)",
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(c *cobra.Command, args []string) error {
 			return a.runSteps(c, script(append([]string{"scripts/scan"}, args...)...))

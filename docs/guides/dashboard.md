@@ -63,7 +63,7 @@ The menu is five groups, not a flat list of every page:
 |---|---|---|
 | Overview | CRM-style home: welcome lead, eight KPI cards, stack funnel, needs-attention list, services, connect, projects, recent jobs | Start / stop the stack, run checks, provision, open Status |
 | Services | Containers, fixture | Restart, logs, copy a `dbpantry shell` command, fixture up/down |
-| Images | Local builds, grouped by prefix | Build, scan |
+| Images | Local builds, grouped by prefix | Build or scan any image the kit builds (engines, `cli`, `caddy`, `pgbouncer`, `patroni`), or all of them |
 | Engines / one engine | Endpoints, principals, pooler state. The page header holds the one Start; the status strip under it explains the state and opens Add-ons | New project, backup, restart, pooler sync, rotate this engine's passwords or every engine's (`secrets.rotate`, typed ROTATE; this engine's button is disabled until it runs) |
 | Projects / one project | Active, orphaned, unmanaged; extensions the engine reports. Rows use a ⋮ menu (connection, backup, rotate, drop). Unmanaged databases can be adopted via `project.new`. The Data badge counts every password-file project and the dropdown lists them all (orphaned marked, no connection link). Passwords blur until **Show password** (Live pauses; never logged) | New, rotate, drop, backup, adopt, connection `.env`, reveal |
 | Databases & users | Shared-hosting wizard over the same projects: provision steps, privileges matrix (owner / readonly), rename = create under new name then drop, link to password reveal (design.md D-97) | `project.new`, rotate, drop, adopt |
@@ -76,10 +76,10 @@ The menu is five groups, not a flat list of every page:
 | Connect | Publish modes (`#publish` cards), every engine's address (copy in Quick access), compose `networks:` snippet, TLS CA, UI front ends when `ui` is up, and **Run from this dashboard** (scoped jobs) | Switch `MDB_PUBLISH` + Start to apply; ⋮ engine menu; `project.new`, `stack.start`, `up`/`down`, `verify`; shell commands stay Copy (+ Logs) |
 | Page header → history | Back / Forward for in-app navigation (session stack) | — |
 | Header → Instance menu | Short links: Configuration, Connect, About, Status JSON, WebUIs, sign-in | — |
-| Configuration | Instance summary (profiles, network, env file) plus every `MDB_` key with origin (`env` / `file` / `unset`) | Validate, render, set a key; switch profiles / subnet / project name |
+| Configuration | Instance summary (profiles, network, env file) plus every `MDB_` key with origin (`env` / `file` / `unset`) | Validate, render, set a key, add the prod overlay (admin; `config prod-overlay` on this instance's `.env`); switch profiles / subnet / project name |
 | Connect | Publish modes (`MDB_PUBLISH`) with mode alerts, engine addresses (copy in Quick access), equal-height join/TLS, scoped jobs | Switch publish mode, Start to apply, copy addresses, provision |
 | Status | Health %, services up/down, engines, images/projects, jobs, Live badge legend | Open JSON, verify, deep-link services/engines |
-| Operations | Security, topology, health, destroy, API tokens | Certs, secrets rotate, HA, pooler, verify, destroy |
+| Operations | Security, topology, health, destroy, API tokens and webhooks (listed to admins) | Certs, secrets rotate, HA, pooler, verify, destroy; create and revoke API tokens; create and delete webhooks (the signing secret is shown once) |
 | Jobs | In-memory jobs and the audit log | Re-open a job's output |
 
 Every button that **changes** something opens a confirm modal first (warning for

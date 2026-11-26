@@ -9,7 +9,11 @@ way; they reach the databases through `kubectl exec` instead of
 
 It works on local clusters (OrbStack, kind, Docker Desktop, Rancher Desktop)
 and on real ones. Tested: OrbStack's built-in cluster (Kubernetes 1.35) and
-kind 0.33 (all five engines on kind; PG and MySQL on both).
+kind 0.33 (all five engines on kind; PG and MySQL on both). A separate
+instance home (`MDB_HOME`, as the binary uses) is tested on a live cluster by
+check 91: `MDB_VERIFY_K8S_CONTEXT=orbstack make verify CHECKS=91` (any local
+context: `kind-*`, `orbstack`, `docker-desktop`, `rancher-desktop`,
+`minikube`). It deploys into its own `mdbscratch*` namespace and deletes it.
 
 ## Requirements
 
@@ -266,7 +270,8 @@ The Services are `ClusterIP`. Set `service.type: LoadBalancer` in an
 | Symptom | Cause |
 |---|---|
 | `needs MDB_K8S_CONTEXT` | set it in `.env`; see `kubectl config get-contexts` |
-| Helm says `TLS handshake timeout` while kubectl works | the API server name resolves to an IPv6 address that does not answer, and Helm does not fall back to IPv4. Seen with OrbStack's `k8s.orb.local`. Point a kubeconfig context at `https://127.0.0.1:26443` with `tls-server-name: k8s.orb.local` |
+| Helm says `TLS handshake timeout` while kubectl works | the API server name resolves to an IPv6 address that does not answer, and Helm does not fall back to IPv4. Seen with OrbStack's `k8s.orb.local`. Point a kubeconfig context at `https://127.0.0.1:26443` with `tls-server-name: k8s.orb.local`, or, without touching the kubeconfig, export `HELM_KUBEAPISERVER=https://127.0.0.1:26443` and `HELM_KUBETLS_SERVER_NAME=k8s.orb.local` |
+| Built `dbpantry-*` images vanish from `docker images` while a local cluster runs | OrbStack and Docker Desktop share Docker's image store with the cluster, and the kubelet deletes unused images when the disk is over its threshold (`kubectl get events --field-selector involvedObject.kind=Node` shows `ImageGCFailed` or `FreedDiskSpace`). Free disk space, then `make build` again; `make verify` rebuilds an image a check needs |
 | `ErrImagePull` / `ErrImageNeverPull` on kind or minikube | the image is not in the cluster's store: `make build`, then load it (kind: `make up` does, or `MDB_K8S_LOAD_IMAGES=true`; minikube: `minikube image load`). See [Images](#images) |
 | `ErrImagePull` on another cluster | `global.imageRegistry` is `localhost`, which no cluster can pull from: push the images and set `MDB_IMAGE_PREFIX` (see [Images](#images)) |
 | `another operation (install/upgrade/rollback) is in progress` | an interrupted `make up` left the release `pending-upgrade`. Run `helm --kube-context <ctx> -n <ns> history <release>`, then `helm ... rollback <release> <last deployed revision>`, and run `make up` again |

@@ -54,29 +54,47 @@ trivy_archive() {
         "docker.io/aquasec/trivy:${TRIVY_VERSION}" image --input /scan/image.tar "$@"
 }
 
+# Every image scripts/build builds: each images/<name>/Dockerfile, by name. A
+# name with no Dockerfile fails rather than being skipped, which once let
+# `scan pg pgbouncer` drop pgbouncer silently (check 88).
 targets=()
 if (( $# )); then
-    for e in "$@"; do targets+=("$e"); done
+    for e in "$@"; do
+        [[ -f "$ROOT/images/$e/Dockerfile" ]] || die "no image named $e (images/$e/Dockerfile does not exist)"
+        targets+=("$e")
+    done
 else
-    for e in $(engine_list) cli; do
-        [[ -f "$ROOT/images/$e/Dockerfile" ]] && targets+=("$e")
+    for f in "$ROOT"/images/*/Dockerfile; do
+        [[ -f "$f" ]] || continue
+        e="${f%/Dockerfile}"; targets+=("${e##*/}")
     done
 fi
+
+ENV_FILE="${MDB_ENV_FILE:-$MDB_HOME/.env}"
+[[ -f "$ENV_FILE" ]] || ENV_FILE="$ROOT/.env.example"
+
+# The tag scripts/build gives each image; check 88 holds the two to the same one.
+engine_tag() {
+    local engine="$1" upper ver
+    engine_load "$engine" >/dev/null 2>&1 || return 1
+    upper="$(printf '%s' "$engine" | tr '[:lower:]-' '[:upper:]_')"
+    ver="$(mdb_env_get "MDB_${upper}_VERSION" "$ENV_FILE")"
+    mdb_image "$engine" "${ver:-$MDB_ENGINE_DEFAULT_VERSION}"
+}
+image_tag() {
+    case "$1" in
+        cli|caddy|pgbouncer) mdb_image "$1" dev ;;
+        patroni) mdb_image patroni "$(engine_tag pg | sed 's/.*://')" ;;
+        *) engine_tag "$1" ;;
+    esac
+}
 
 mkdir -p "${HOME}/.cache/trivy"
 
 failed=0
 scanned=0
 for engine in "${targets[@]}"; do
-    if [[ "$engine" == "cli" ]]; then
-        img="$(mdb_image cli dev)"
-    else
-        engine_load "$engine" >/dev/null 2>&1 || continue
-        upper="$(printf '%s' "$engine" | tr '[:lower:]-' '[:upper:]_')"
-        ver="$(mdb_env_get "MDB_${upper}_VERSION" "$MDB_HOME/.env")"
-        ver="${ver:-$MDB_ENGINE_DEFAULT_VERSION}"
-        img="$(mdb_image "$engine" "$ver")"
-    fi
+    img="$(image_tag "$engine")" || die "cannot name the image for $engine"
 
     if ! mdb_ctr image inspect "$img" >/dev/null 2>&1; then
         log "$engine: not built, skipping ($img)"

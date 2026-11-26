@@ -80,6 +80,22 @@ mdb_env_default_file() {
     printf '%s/.env\n' "$(mdb_instance_dir)"
 }
 
+# Where a secret file named in .env (MDB_*_FILE=secrets/x.txt) is: in a
+# container, under /run/secrets, where every service mounts the instance's
+# secrets/; on the host, in the instance home (D-84); an absolute path as
+# given. Never relative to the kit: the extracted kit has no secrets/.
+mdb_secret_path() {
+    local f="$1"
+    case "$f" in
+        /*) printf '%s\n' "$f" ;;
+        *)  if [[ "${MDB_IN_CONTAINER:-0}" == 1 ]]; then
+                printf '/run/secrets/%s\n' "${f#secrets/}"
+            else
+                printf '%s/%s\n' "${MDB_HOME:-${MDB_RT_ROOT:-.}}" "${f#./}"
+            fi ;;
+    esac
+}
+
 # Strip one layer of dotenv quoting from a raw value.
 #   "a b"        -> a b        (\" \$ \` and \\ unescaped, as the shell does)
 #   'a b'        -> a b        (literal)
@@ -156,7 +172,7 @@ mdb_env_needs_quotes() {
     _mdb_env_unsafe "$v"
 }
 
-export -f mdb_home_separate mdb_instance_dir mdb_env_default_file mdb_backup_dir _mdb_env_unsafe mdb_env_unquote mdb_env_get mdb_env_quote mdb_env_needs_quotes 2>/dev/null || true
+export -f mdb_secret_path mdb_home_separate mdb_instance_dir mdb_env_default_file mdb_backup_dir _mdb_env_unsafe mdb_env_unquote mdb_env_get mdb_env_quote mdb_env_needs_quotes 2>/dev/null || true
 
 # The images dbpantry builds are named <prefix>/dbpantry-<component>:<tag>.
 # The prefix is MDB_IMAGE_PREFIX, or localhost when it is unset (design.md

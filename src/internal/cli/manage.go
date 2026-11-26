@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -58,8 +57,12 @@ func (a *app) dashboardSettings(root string, s *config.Settings, f dashboardFlag
 		return ds, err
 	}
 	if changed("listen") {
-		if _, _, err := net.SplitHostPort(f.listen); err != nil {
-			return ds, fmt.Errorf("--listen %q: %w", f.listen, err)
+		// The same parser the server binds with: host:port, or a unix socket
+		// (unix:/path, unix:///path, /path.sock). A host:port check here
+		// refused /path.sock and passed unix:/path only by splitting it at
+		// its colon.
+		if _, err := dashboard.ParseListen(f.listen); err != nil {
+			return ds, fmt.Errorf("--listen: %w", err)
 		}
 		ds.Listen = f.listen
 	}
@@ -144,7 +147,8 @@ func (a *app) serviceLogs(root string, env []string) dashboard.Logs {
 		}
 		st := script(append(args, service)...)
 		st.Interruptible = true
-		return a.runStepTo(ctx, root, env, st, w, w)
+		// Killed with its follower when the page goes away (S4, 2026-11-24).
+		return a.runStepTo(ContextWithJobKill(ctx), root, env, st, w, w)
 	}
 }
 
@@ -247,7 +251,7 @@ func (a *app) newRunner(root string) *jobs.Runner {
 func (a *app) hooksBus(home string) *hooks.Bus {
 	b, err := hooks.New(filepath.Join(home, "webhooks.json"), 200)
 	if err != nil {
-		fmt.Fprintf(a.stderr, "dbpantry: webhooks store: %v\n", err)
+		_, _ = fmt.Fprintf(a.stderr, "dbpantry: webhooks store: %v\n", err)
 		b, _ = hooks.New("", 200)
 	}
 	return b

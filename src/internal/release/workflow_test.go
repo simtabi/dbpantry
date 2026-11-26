@@ -294,3 +294,142 @@ jobs:
 		t.Fatalf("a local build and scan was rejected: %v", p)
 	}
 }
+
+// sharedRelease is the call to simtabi/.github's go-release.yml, pinned to a
+// commit with its release as the comment, as the org's Go release rule asks.
+var sharedRelease = regexp.MustCompile(`(?m)^    uses: simtabi/\.github/\.github/workflows/go-release\.yml@[0-9a-f]{40} # v[0-9]+\.[0-9]+\.[0-9]+$`)
+
+// forbiddenPublishers are GoReleaser blocks that publish beyond the GitHub
+// release: the list simtabi/.github's go-release.yml refuses
+// (~/.claude/rules/go.md, "Never published to").
+var forbiddenPublishers = []string{"brews", "homebrew_casks", "scoops", "winget", "chocolateys", "aurs", "aur_sources",
+	"snapcrafts", "flatpaks", "nix", "dockers", "dockers_v2", "docker_manifests", "docker_signs", "kos", "krews",
+	"npms", "cloudsmiths", "furies", "publishers", "blobs", "uploads", "artifactories"}
+
+// shipProblems returns every way the release stops shipping the binary
+// (owner, 2026-11-18: "v0.2.0, shared workflow"): its publishing job must
+// call the shared go-release.yml behind the gates (prepare, scan, verify)
+// with the tag; pre-release tags must trigger it; and the GoReleaser config
+// must run make kit before the build (design.md D-85), build ./cmd/dbpantry,
+// and publish nowhere but the GitHub release.
+func shipProblems(t *testing.T, workflowSrc, goreleaserSrc []byte) []string {
+	t.Helper()
+	var problems []string
+	if !sharedRelease.Match(workflowSrc) {
+		problems = append(problems, "no job calls simtabi/.github's go-release.yml pinned to a commit with its version as the comment")
+	}
+	var wf struct {
+		On   map[string]yaml.Node `yaml:"on"`
+		Jobs map[string]struct {
+			Uses  string            `yaml:"uses"`
+			Needs yaml.Node         `yaml:"needs"`
+			With  map[string]string `yaml:"with"`
+		} `yaml:"jobs"`
+	}
+	if err := yaml.Unmarshal(workflowSrc, &wf); err != nil {
+		t.Fatalf("release.yml does not parse: %v", err)
+	}
+	called := false
+	for name, j := range wf.Jobs {
+		if !strings.HasPrefix(j.Uses, "simtabi/.github/.github/workflows/go-release.yml@") {
+			continue
+		}
+		called = true
+		var needs []string
+		if j.Needs.Kind == yaml.ScalarNode {
+			needs = []string{j.Needs.Value}
+		} else {
+			_ = j.Needs.Decode(&needs)
+		}
+		for _, gate := range []string{"prepare", "scan", "verify"} {
+			if !slices.Contains(needs, gate) {
+				problems = append(problems, "job "+name+" publishes without waiting for "+gate)
+			}
+		}
+		if j.With["tag"] == "" {
+			problems = append(problems, "job "+name+" does not pass the tag to go-release.yml")
+		}
+	}
+	if !called {
+		problems = append(problems, "no job publishes through go-release.yml")
+	}
+	var p push
+	if node, ok := wf.On["push"]; ok {
+		_ = node.Decode(&p)
+	}
+	if !slices.Contains(p.Tags, "v[0-9]+.[0-9]+.[0-9]+-*") {
+		problems = append(problems, "a pre-release tag (vX.Y.Z-rc.N) does not trigger the release")
+	}
+
+	var gr map[string]any
+	if err := yaml.Unmarshal(goreleaserSrc, &gr); err != nil {
+		t.Fatalf("src/.goreleaser.yaml does not parse: %v", err)
+	}
+	for _, k := range forbiddenPublishers {
+		if _, ok := gr[k]; ok {
+			problems = append(problems, "src/.goreleaser.yaml has a "+k+" block; a release publishes the GitHub release only")
+		}
+	}
+	before, _ := gr["before"].(map[string]any)
+	hooks, _ := before["hooks"].([]any)
+	if !slices.ContainsFunc(hooks, func(h any) bool { s, _ := h.(string); return strings.TrimSpace(s) == "make kit" }) {
+		problems = append(problems, "src/.goreleaser.yaml does not run make kit before the build, so the binary would ship without its kit")
+	}
+	builds, _ := gr["builds"].([]any)
+	main := false
+	for _, b := range builds {
+		if m, _ := b.(map[string]any); m["main"] == "./cmd/dbpantry" && m["dir"] == "src" {
+			main = true
+		}
+	}
+	if !main {
+		problems = append(problems, "src/.goreleaser.yaml does not build ./cmd/dbpantry from src")
+	}
+	return problems
+}
+
+// The release ships the binary, with its kit, through the shared workflow.
+func TestReleaseShipsTheBinaryThroughTheSharedWorkflow(t *testing.T) {
+	root := repoRoot(t)
+	wf, err := os.ReadFile(filepath.Join(root, ".github", "workflows", "release.yml")) // #nosec G304 -- a fixed file of this repository
+	if err != nil {
+		t.Fatal(err)
+	}
+	gr, err := os.ReadFile(filepath.Join(root, "src", ".goreleaser.yaml")) // #nosec G304 -- a fixed file of this repository
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, p := range shipProblems(t, wf, gr) {
+		t.Error(p)
+	}
+}
+
+// The shipping policy has to be able to fail: each of these breaks it.
+func TestShipPolicyRejectsAWrongRelease(t *testing.T) {
+	root := repoRoot(t)
+	wf, err := os.ReadFile(filepath.Join(root, ".github", "workflows", "release.yml")) // #nosec G304 -- a fixed file of this repository
+	if err != nil {
+		t.Fatal(err)
+	}
+	gr, err := os.ReadFile(filepath.Join(root, "src", ".goreleaser.yaml")) // #nosec G304 -- a fixed file of this repository
+	if err != nil {
+		t.Fatal(err)
+	}
+	w, g := string(wf), string(gr)
+	cases := map[string][2]string{
+		"no shared workflow":     {strings.Replace(w, "workflows/go-release.yml@", "workflows/other.yml@", 1), g},
+		"a floating pin":         {regexp.MustCompile(`go-release\.yml@[0-9a-f]{40} # v[0-9.]+`).ReplaceAllString(w, "go-release.yml@main"), g},
+		"no verify gate":         {strings.Replace(w, "needs: [prepare, scan, verify]", "needs: [prepare, scan]", 1), g},
+		"no pre-release trigger": {strings.Replace(w, "      - 'v[0-9]+.[0-9]+.[0-9]+-*'\n", "", 1), g},
+		"a Homebrew tap":         {w, g + "\nbrews:\n  - name: dbpantry\n"},
+		"no make kit":            {w, strings.Replace(g, "    - make kit\n", "    - true\n", 1)},
+	}
+	for name, c := range cases {
+		if c[0] == w && c[1] == g {
+			t.Fatalf("%s: the case changed nothing, so it proves nothing", name)
+		}
+		if len(shipProblems(t, []byte(c[0]), []byte(c[1]))) == 0 {
+			t.Errorf("%s was accepted", name)
+		}
+	}
+}

@@ -386,6 +386,10 @@
       softText.textContent = d.softMessage || 'This changes the running stack. Review the command, then confirm.';
     }
     modalEl.querySelector('[data-action-danger]').classList.toggle('d-none', !d.danger);
+    // "Type the value" only when there is a value to type (a revoke or a
+    // webhook delete has none).
+    modalEl.querySelector('[data-action-danger-typed]').classList.toggle('d-none', !d.confirmHint);
+    modalEl.querySelector('[data-action-danger-untyped]').classList.toggle('d-none', !!d.confirmHint);
     var fields = modalEl.querySelector('[data-action-fields]');
     fields.textContent = '';
     var fixed = Object.keys(d.fixed || {});
@@ -498,7 +502,7 @@
 
   // --- Actions -------------------------------------------------------------
 
-  var choiceKinds = { engine: true, service: true, volume: true, dump: true, 'env-type': true, 'env-name': true };
+  var choiceKinds = { engine: true, image: true, service: true, volume: true, dump: true, 'env-type': true, 'env-name': true };
   var fixedOptions = { 'pitr-type': ['full', 'diff', 'incr'] };
 
   // stoppedLabels marks the engines that are not running; the API lists
@@ -1948,6 +1952,47 @@
     });
   }
 
+  // --- Webhooks ------------------------------------------------------------
+
+  function createHook() {
+    openForm({
+      title: 'New webhook',
+      command: 'curl -X POST -H "Authorization: Bearer $TOKEN" -d \'{"url": URL, "events": [...]}\' ' + location.origin + '/api/v1/hooks',
+      submitLabel: 'Create',
+      fields: [
+        { name: 'url', label: 'URL (https; http only for localhost)', required: true },
+        { name: 'events', label: 'Events, comma-separated (empty: all), e.g. job.failed,job.succeeded' }
+      ],
+      submit: function (v) {
+        var events = (v.events || '').split(',').map(function (s) { return s.trim(); }).filter(Boolean);
+        return api('POST', '/api/v1/hooks', { url: v.url, events: events }).then(function (r) {
+          var box = document.querySelector('[data-hook-created]');
+          if (box) {
+            box.classList.remove('d-none');
+            box.querySelector('#mdb-new-hook-secret').value = r.secret;
+          }
+          toast('Webhook created — copy its secret now', 'success');
+        });
+      }
+    });
+  }
+
+  function deleteHook(id, url) {
+    openForm({
+      title: 'Delete the webhook to ' + url,
+      command: 'curl -X DELETE -H "Authorization: Bearer $TOKEN" ' + location.origin + '/api/v1/hooks/' + id,
+      danger: true,
+      submitLabel: 'Delete',
+      fields: [],
+      submit: function () {
+        return api('DELETE', '/api/v1/hooks/' + encodeURIComponent(id)).then(function () {
+          toast('Webhook deleted', 'success');
+          refreshPage();
+        });
+      }
+    });
+  }
+
   // --- Wiring --------------------------------------------------------------
 
   // Re-open a job the previous page load left running (refresh / navigation).
@@ -1991,7 +2036,10 @@
     }
     if (e.target.closest('[data-token-create]')) { e.preventDefault(); createToken(); return; }
     var r = e.target.closest('[data-token-revoke]');
-    if (r) { e.preventDefault(); revokeToken(r.getAttribute('data-token-revoke'), r.getAttribute('data-token-name')); }
+    if (r) { e.preventDefault(); revokeToken(r.getAttribute('data-token-revoke'), r.getAttribute('data-token-name')); return; }
+    if (e.target.closest('[data-hook-create]')) { e.preventDefault(); createHook(); return; }
+    var hd = e.target.closest('[data-hook-delete]');
+    if (hd) { e.preventDefault(); deleteHook(hd.getAttribute('data-hook-delete'), hd.getAttribute('data-hook-url')); }
   });
 
   startLogs();

@@ -1,11 +1,13 @@
 package dashboard
 
 import (
+	"errors"
 	"fmt"
 	"regexp"
 	"sort"
 	"strings"
 
+	"github.com/simtabi/dbpantry/src/internal/config"
 	"github.com/simtabi/dbpantry/src/internal/envtype"
 )
 
@@ -18,6 +20,7 @@ type Values map[string]string
 // line; an engine or a service must also be one the stack has.
 const (
 	KindEngine   = "engine"
+	KindImage    = "image" // an image the kit builds: images/<name>/Dockerfile
 	KindService  = "service"
 	KindName     = "name"     // a database or project name
 	KindKey      = "key"      // an MDB_ configuration key
@@ -66,6 +69,9 @@ type Action struct {
 	ConfirmValue func(v Values, env func(string) string) string `json:"-"`
 	// Secret names the flags whose values never reach the audit log.
 	Secret []string `json:"-"`
+	// Mask, when set, hides a positional value in the arguments as shown
+	// and audited (Redact handles flags only); the command gets them whole.
+	Mask func(shown []string, v Values) []string `json:"-"`
 }
 
 // optional appends flag and value when the value is set.
@@ -135,7 +141,10 @@ var Actions = []Action{
 	// --- Images --------------------------------------------------------------
 	{
 		Name: "images.build", Title: "Build images", Area: "images", Scope: ScopeOperate,
-		Params: []Param{{Name: "engine", Label: "Engine (empty: every engine)", Kind: KindEngine}},
+		// "engine" stays the parameter's name, so API callers posting an
+		// engine keep working; any image the kit builds is accepted, the
+		// pooler, HA, proxy and tools images included.
+		Params: []Param{{Name: "engine", Label: "Image (empty: every image)", Kind: KindImage}},
 		Command: func(v Values) []string {
 			if v["engine"] == "" {
 				return []string{"images", "build"}
@@ -145,7 +154,9 @@ var Actions = []Action{
 	},
 	{
 		Name: "images.scan", Title: "Scan images", Area: "images", Scope: ScopeOperate,
-		Params: []Param{{Name: "engine", Label: "Engine (empty: every engine)", Kind: KindEngine}},
+		// Every image scripts/build builds (check 88); "engine" stays the
+		// parameter's name for API callers.
+		Params: []Param{{Name: "engine", Label: "Image (empty: every image)", Kind: KindImage}},
 		Command: func(v Values) []string {
 			if v["engine"] == "" {
 				return []string{"images", "scan"}
@@ -249,12 +260,33 @@ var Actions = []Action{
 		Command: func(Values) []string { return []string{"config", "render"} },
 	},
 	{
+		// Puts compose.prod.yml into the instance's COMPOSE_FILE (design.md
+		// D-73), which check-env asks for before a prod boot. Idempotent, and
+		// only the instance's own .env: no parameter names a file.
+		Name: "config.prod-overlay", Title: "Add the prod overlay", Area: "config", Scope: ScopeAdmin,
+		Command: func(Values) []string { return []string{"config", "prod-overlay"} },
+	},
+	{
 		Name: "config.set", Title: "Set a configuration key", Area: "config", Scope: ScopeAdmin,
 		Params: []Param{
 			{Name: "key", Label: "Key (MDB_…)", Kind: KindKey, Required: true},
 			{Name: "value", Label: "Value", Kind: KindText, Required: true},
 		},
-		Command: func(v Values) []string { return []string{"config", "set", v["key"], v["value"]} },
+		// "--" so a value such as -1 or --help is never read as a flag.
+		Command: func(v Values) []string { return []string{"config", "set", "--", v["key"], v["value"]} },
+		// A key the Configuration page masks is masked in the job too.
+		Mask: func(shown []string, v Values) []string {
+			if !config.LooksSecret(v["key"]) {
+				return shown
+			}
+			out := append([]string(nil), shown...)
+			for i := range out {
+				if out[i] == v["value"] {
+					out[i] = "***"
+				}
+			}
+			return out
+		},
 	},
 
 	// --- Security ------------------------------------------------------------
@@ -312,8 +344,8 @@ var Actions = []Action{
 			{Name: "engine", Label: "Engine", Kind: KindEngine},
 		},
 		Command: func(v Values) []string {
-			args := []string{"addon", "enable", v["id"]}
-			return optional(args, "--engine", v["engine"])
+			args := optional([]string{"addon", "enable"}, "--engine", v["engine"])
+			return append(args, "--", v["id"])
 		},
 	},
 	{
@@ -323,8 +355,8 @@ var Actions = []Action{
 			{Name: "engine", Label: "Engine", Kind: KindEngine},
 		},
 		Command: func(v Values) []string {
-			args := []string{"addon", "disable", v["id"]}
-			return optional(args, "--engine", v["engine"])
+			args := optional([]string{"addon", "disable"}, "--engine", v["engine"])
+			return append(args, "--", v["id"])
 		},
 	},
 
@@ -418,20 +450,31 @@ var patterns = map[string]*regexp.Regexp{
 	KindNode:     regexp.MustCompile(`^[a-z0-9][a-z0-9_-]{0,62}$`),
 	KindPITRType: regexp.MustCompile(`^(full|diff|incr)$`),
 	KindEngine:   regexp.MustCompile(`^[a-z][a-z0-9-]{0,31}$`),
+	KindImage:    regexp.MustCompile(`^[a-z][a-z0-9-]{0,31}$`),
 	KindService:  regexp.MustCompile(`^[a-z][a-z0-9_-]{0,62}$`),
 	KindEnvType:  regexp.MustCompile(`^[a-z][a-z0-9-]{0,31}$`),
 	KindEnvName:  regexp.MustCompile(`^[a-z][a-z0-9-]{0,47}$`),
 }
 
+// ErrServicesUnavailable is validate's error for a service parameter while
+// the runtime does not answer: an outage, never "no such service".
+var ErrServicesUnavailable = errors.New("services are unavailable")
+
 // Choices are the values the stack has for the kinds that must name
 // something real. Engines lists the running ones first, and Running names
 // them, so a form can default to an engine that is up.
 type Choices struct {
-	Engines  []string `json:"engine"`
-	Running  []string `json:"running"`
-	Services []string `json:"service"`
-	Volumes  []string `json:"volume"`
-	Dumps    []string `json:"dump"`
+	// ServicesErr says why the services could not be read (the runtime did
+	// not answer). A service parameter is then unavailable, not unknown.
+	ServicesErr string   `json:"services_error,omitempty"`
+	Engines     []string `json:"engine"`
+	// Buildable are the images the kit builds, by name: every
+	// images/<name>/Dockerfile, which scripts/build takes as an argument.
+	Buildable []string `json:"image"`
+	Running   []string `json:"running"`
+	Services  []string `json:"service"`
+	Volumes   []string `json:"volume"`
+	Dumps     []string `json:"dump"`
 	// Profiles are Compose profile tokens the stack can start (engines,
 	// poolers, ui, ha, backup…). Forms multi-select them into a CSV.
 	Profiles []string `json:"profile"`
@@ -477,7 +520,14 @@ func (a Action) validate(in map[string]string, c Choices) (Values, error) {
 			if !contains(c.Engines, v) {
 				return nil, fmt.Errorf("there is no engine %q", v)
 			}
+		case KindImage:
+			if !contains(c.Buildable, v) {
+				return nil, fmt.Errorf("the kit builds no image %q", v)
+			}
 		case KindService:
+			if c.ServicesErr != "" {
+				return nil, fmt.Errorf("%w: %s", ErrServicesUnavailable, c.ServicesErr)
+			}
 			if !contains(c.Services, v) {
 				return nil, fmt.Errorf("there is no service %q in the stack", v)
 			}

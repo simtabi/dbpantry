@@ -174,3 +174,24 @@ func TestReadAuditMissingIsEmpty(t *testing.T) {
 		t.Fatalf("ReadAudit(missing) = %v, %v", got, err)
 	}
 }
+
+// S8 (2026-11-24 audit): an aborted job cannot be paused. Abort set the
+// state back to Running, Pause then succeeded, and the cancelled job's
+// writer blocked for good, holding the lock.
+func TestAnAbortedJobCannotBePaused(t *testing.T) {
+	release := make(chan struct{})
+	r := New(gated(release, 0), "", 10)
+	defer r.Close()
+	j, err := r.Start("images.build", "admin", true, []string{"images", "build"}, []string{"images", "build"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := r.Abort(j.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := r.Pause(j.ID); err == nil {
+		t.Error("an aborted job was paused")
+	}
+	close(release)
+	waitEnd(t, r, j.ID)
+}

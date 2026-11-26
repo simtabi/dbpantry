@@ -73,7 +73,18 @@ See [Configuration](configuration.md).
 
 ## Run from the binary alone
 
-`make kit && make dbpantry` builds `build/<os>/dbpantry` with the kit inside it:
+Download the binary for your platform from the
+[GitHub release](https://github.com/simtabi/dbpantry/releases) and check it
+against the release's `checksums.txt`:
+
+```bash
+shasum -a 256 -c checksums.txt --ignore-missing
+```
+
+Or build it: `make cross` builds every release target into
+`build/<os>/dbpantry_<os>_<arch>` (`.exe` on Windows) with `build/checksums.txt`
+(`cd build && shasum -a 256 -c checksums.txt`), and `make kit && make dbpantry`
+builds `build/<os>/dbpantry` for this machine, with the kit inside it:
 the scripts, compose files, engines and image sources. Copied anywhere and run
 where there is no checkout, it extracts the kit to
 `~/.config/dbpantry/kit/<version>` and keeps the instance (`.env`, `secrets/`,
@@ -86,8 +97,24 @@ dbpantry start --profiles pg --project myapp
 
 The kit is checked against its checksums on every run and extracted again if
 anything in it changed. `--home DIR` or `DBPANTRY_HOME` use another home. Images
-are still built locally on the first `up`, from the image sources in the kit
-(design.md D-85).
+are built locally on the first `up`, from the image sources in the kit, and any
+image that goes missing later is built again on the next `up` (design.md D-85,
+D-111).
+
+The dashboard comes from the same binary: `dbpantry dashboard` prints a launch
+URL on `127.0.0.1:8484`.
+
+| System | Binary | What it needs |
+|---|---|---|
+| macOS (amd64, arm64, universal) | `dbpantry_macos_*` | a container runtime ([runtimes](runtimes.md)) |
+| Linux (amd64, arm64) | `dbpantry_linux_*` | bash and a container runtime |
+| Windows (amd64, arm64) | `dbpantry_windows_*.exe` | WSL 2 with the Linux binary inside it ([windows](../runbooks/windows.md)) |
+| FreeBSD (amd64, arm64) | `dbpantry_freebsd_*` | bash and Podman; not tested |
+
+On Windows, `dbpantry.exe` runs each command through the Linux `dbpantry` inside
+WSL 2 and tells you what to install when it cannot. `dbpantry.exe dashboard`
+then serves from WSL and opens in a Windows browser, because WSL 2 forwards its
+ports to Windows' `localhost`.
 
 ## Verify the install
 

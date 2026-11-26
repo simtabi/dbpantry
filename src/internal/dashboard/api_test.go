@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/simtabi/dbpantry/src/internal/hooks"
 	"github.com/simtabi/dbpantry/src/internal/jobs"
 )
 
@@ -63,7 +64,7 @@ func newMgmt(t *testing.T, mode string, s Settings, block bool) *mgmt {
 		Auth: m.auth, Runner: m.runner, Settings: s, Audit: m.audit, BackupDir: "/srv/backups",
 		Env: func(string) string { return "" },
 		Choices: func(context.Context) (Choices, error) {
-			return Choices{Engines: []string{"pg"}, Services: []string{"pg", "caddy"}, Volumes: []string{"mdb_pg_data"}, Dumps: []string{"pg_settings_1.dump"}}, nil
+			return Choices{Engines: []string{"pg"}, Buildable: []string{"pg"}, Services: []string{"pg", "caddy"}, Volumes: []string{"mdb_pg_data"}, Dumps: []string{"pg_settings_1.dump"}}, nil
 		},
 	})
 	if err != nil {
@@ -306,6 +307,242 @@ func TestTheJobStreamsItsOutput(t *testing.T) {
 	b := m.do(call{method: http.MethodGet, path: "/api/v1/jobs/" + j.ID + "/events", cookie: c}).Body.String()
 	if !strings.Contains(b, `event: line`) || !strings.Contains(b, `ran images build pg`) || !strings.Contains(b, `event: end`) {
 		t.Errorf("events = %q", b)
+	}
+}
+
+// TestJobControlKeepsTheActionsGates: controlling a job (abort, pause,
+// continue, restart) needs the scope its action needs, and a restart is a
+// new run of the action, so a destructive one needs its typed confirmation
+// again. Until 2026-11-24 any operate token could restart a finished admin
+// job, --confirm included: a read token lists the ids, an operate token
+// re-ran secrets.rotate or destroy.volume.
+func TestJobControlKeepsTheActionsGates(t *testing.T) {
+	m := newMgmt(t, AuthToken, Settings{Auth: AuthToken, Listen: "127.0.0.1:0", Confirm: ConfirmAll, SessionHours: 1}, false)
+	tokens := map[Scope]string{}
+	for _, sc := range []Scope{ScopeOperate, ScopeAdmin} {
+		plain, _, err := m.tokens.Create("c"+sc.String(), sc, time.Hour, time.Now())
+		if err != nil {
+			t.Fatal(err)
+		}
+		tokens[sc] = plain
+	}
+	as := func(sc Scope, method, path, body string) *httptest.ResponseRecorder {
+		return m.do(call{method: method, path: path, body: body, header: map[string]string{"Authorization": "Bearer " + tokens[sc]}})
+	}
+	start := func(body string) jobs.Job {
+		t.Helper()
+		r := as(ScopeAdmin, http.MethodPost, "/api/v1/jobs", body)
+		if r.Code != http.StatusAccepted {
+			t.Fatalf("start %s = %d %s", body, r.Code, r.Body)
+		}
+		var j jobs.Job
+		_ = json.Unmarshal(r.Body.Bytes(), &j)
+		return wait(t, m.runner, j.ID)
+	}
+	ran := func() int { m.mu.Lock(); defer m.mu.Unlock(); return len(m.ran) }
+
+	rotate := start(`{"action":"secrets.rotate","confirm":"ROTATE"}`)
+	before := ran()
+	for _, op := range []string{"restart", "abort", "pause", "continue"} {
+		r := as(ScopeOperate, http.MethodPost, "/api/v1/jobs/"+rotate.ID+"/control", `{"op":"`+op+`"}`)
+		if r.Code != http.StatusForbidden {
+			t.Errorf("an operate token's %s of an admin job = %d, want 403: %s", op, r.Code, r.Body)
+		}
+	}
+	if r := as(ScopeAdmin, http.MethodPost, "/api/v1/jobs/"+rotate.ID+"/control", `{"op":"restart"}`); r.Code != http.StatusUnprocessableEntity {
+		t.Errorf("restarting a destructive job without its confirmation = %d, want 422: %s", r.Code, r.Body)
+	}
+	if r := as(ScopeAdmin, http.MethodPost, "/api/v1/jobs/"+rotate.ID+"/control", `{"op":"restart","confirm":"nope"}`); r.Code != http.StatusUnprocessableEntity {
+		t.Errorf("restarting with a wrong confirmation = %d, want 422", r.Code)
+	}
+	if got := ran(); got != before {
+		t.Fatalf("a refused restart ran %d command(s)", got-before)
+	}
+	r := as(ScopeAdmin, http.MethodPost, "/api/v1/jobs/"+rotate.ID+"/control", `{"op":"restart","confirm":"ROTATE"}`)
+	if r.Code != http.StatusAccepted {
+		t.Fatalf("an admin restart with the confirmation = %d %s", r.Code, r.Body)
+	}
+	var again jobs.Job
+	_ = json.Unmarshal(r.Body.Bytes(), &again)
+	wait(t, m.runner, again.ID)
+
+	// An operate action stays restartable by an operate token.
+	build := start(`{"action":"images.build","params":{"engine":"pg"}}`)
+	r = as(ScopeOperate, http.MethodPost, "/api/v1/jobs/"+build.ID+"/control", `{"op":"restart"}`)
+	if r.Code != http.StatusAccepted {
+		t.Fatalf("an operate restart of an operate job = %d %s", r.Code, r.Body)
+	}
+	_ = json.Unmarshal(r.Body.Bytes(), &again)
+	wait(t, m.runner, again.ID)
+}
+
+// TestRestartingADestroyRespectsAllowDestroy: a volume delete started while
+// allow_destroy was on cannot be restarted once it is off.
+func TestRestartingADestroyRespectsAllowDestroy(t *testing.T) {
+	on := Settings{Auth: AuthToken, Listen: "127.0.0.1:0", Confirm: ConfirmAll, SessionHours: 1, AllowDestroy: true}
+	m := newMgmt(t, AuthToken, on, false)
+	plain, _, err := m.tokens.Create("admin", ScopeAdmin, time.Hour, time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	hdr := map[string]string{"Authorization": "Bearer " + plain}
+	r := m.do(call{method: http.MethodPost, path: "/api/v1/jobs", body: `{"action":"destroy.volume","params":{"volume":"mdb_pg_data"},"confirm":"mdb_pg_data"}`, header: hdr})
+	if r.Code != http.StatusAccepted {
+		t.Fatalf("destroy with allow_destroy on = %d %s", r.Code, r.Body)
+	}
+	var j jobs.Job
+	_ = json.Unmarshal(r.Body.Bytes(), &j)
+	wait(t, m.runner, j.ID)
+
+	// The same runner behind a handler whose settings turn it off.
+	off := on
+	off.AllowDestroy = false
+	h, err := Handler(Sources{Snapshot: fixture, Project: showFixture}, Options{Auth: m.auth, Runner: m.runner, Settings: off, Audit: m.audit, BackupDir: "/srv/backups"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/jobs/"+j.ID+"/control", strings.NewReader(`{"op":"restart","confirm":"mdb_pg_data"}`))
+	req.Header.Set("Authorization", "Bearer "+plain)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusForbidden {
+		t.Errorf("restarting a destroy with allow_destroy off = %d, want 403: %s", rec.Code, rec.Body)
+	}
+}
+
+// TestReadScopeSeesNoPasswords: a project's page carries its password, and
+// project.new prints the paste-ready block into its job's output, so both
+// need the scope that provisions it (operate), not read. Until 2026-11-24 a
+// read token got DB_PASSWORD from either.
+func TestReadScopeSeesNoPasswords(t *testing.T) {
+	m := newMgmt(t, AuthToken, Settings{Auth: AuthToken, Listen: "127.0.0.1:0", Confirm: ConfirmAll, SessionHours: 1}, false)
+	tok := map[Scope]string{}
+	for _, sc := range []Scope{ScopeRead, ScopeOperate} {
+		plain, _, err := m.tokens.Create("p"+sc.String(), sc, time.Hour, time.Now())
+		if err != nil {
+			t.Fatal(err)
+		}
+		tok[sc] = plain
+	}
+	get := func(sc Scope, path string) *httptest.ResponseRecorder {
+		return m.do(call{method: http.MethodGet, path: path, header: map[string]string{"Authorization": "Bearer " + tok[sc]}})
+	}
+	r := m.do(call{method: http.MethodPost, path: "/api/v1/jobs", body: `{"action":"project.new","params":{"name":"app","engine":"pg"}}`,
+		header: map[string]string{"Authorization": "Bearer " + tok[ScopeOperate]}})
+	if r.Code != http.StatusAccepted {
+		t.Fatalf("project.new = %d %s", r.Code, r.Body)
+	}
+	var j jobs.Job
+	_ = json.Unmarshal(r.Body.Bytes(), &j)
+	wait(t, m.runner, j.ID)
+	for _, path := range []string{"/projects/pg/settings", "/api/v1/jobs/" + j.ID, "/api/v1/jobs/" + j.ID + "/events"} {
+		if r := get(ScopeRead, path); r.Code != http.StatusForbidden || strings.Contains(r.Body.String(), testPassword) {
+			t.Errorf("a read token's GET %s = %d, want 403 with no password", path, r.Code)
+		}
+		if r := get(ScopeOperate, path); r.Code != http.StatusOK {
+			t.Errorf("an operate token's GET %s = %d, want 200", path, r.Code)
+		}
+	}
+	// The project list names projects to read scope, without passwords.
+	if r := get(ScopeRead, "/projects"); r.Code != http.StatusOK || strings.Contains(r.Body.String(), testPassword) {
+		t.Errorf("a read token's /projects = %d", r.Code)
+	}
+}
+
+// TestASecretSetIsNeverShown: config.set of a key the Configuration page
+// masks (config.LooksSecret) reaches the command whole, and the audit log,
+// the job list and the job's shown arguments as ***.
+func TestASecretSetIsNeverShown(t *testing.T) {
+	m := newMgmt(t, AuthNone, Defaults, false)
+	c, csrf := m.session(t)
+	r := m.post(c, csrf, `{"action":"config.set","params":{"key":"MDB_UI_BASIC_AUTH_HASH","value":"`+testPassword+`"}}`)
+	if r.Code != http.StatusAccepted {
+		t.Fatalf("config.set = %d %s", r.Code, r.Body)
+	}
+	if strings.Contains(r.Body.String(), testPassword) {
+		t.Error("the 202 response shows the secret")
+	}
+	var j jobs.Job
+	_ = json.Unmarshal(r.Body.Bytes(), &j)
+	wait(t, m.runner, j.ID)
+	m.mu.Lock()
+	ran := strings.Join(m.ran[len(m.ran)-1], " ")
+	m.mu.Unlock()
+	if !strings.Contains(ran, testPassword) {
+		t.Fatalf("the command did not get the value: %q", ran)
+	}
+	for name, body := range map[string]string{
+		"job list":   m.do(call{method: http.MethodGet, path: "/api/v1/jobs", cookie: c}).Body.String(),
+		"job detail": m.do(call{method: http.MethodGet, path: "/api/v1/jobs/" + j.ID, cookie: c}).Body.String(),
+		"Jobs page":  m.do(call{method: http.MethodGet, path: "/jobs", cookie: c}).Body.String(),
+	} {
+		if strings.Contains(body, testPassword) {
+			t.Errorf("the %s shows the secret", name)
+		}
+	}
+	entries, err := jobs.ReadAudit(m.audit, 0)
+	if err != nil || len(entries) == 0 {
+		t.Fatalf("audit = %v %v", entries, err)
+	}
+	if got := strings.Join(entries[0].Args, " "); strings.Contains(got, testPassword) || !strings.Contains(got, "***") {
+		t.Errorf("the audit log has %q", got)
+	}
+	// A key that is not secret is shown as set.
+	r = m.post(c, csrf, `{"action":"config.set","params":{"key":"MDB_PROFILES","value":"pg"}}`)
+	_ = json.Unmarshal(r.Body.Bytes(), &j)
+	wait(t, m.runner, j.ID)
+	if got, _ := m.runner.Get(j.ID); !strings.Contains(strings.Join(got.Args, " "), "MDB_PROFILES pg") {
+		t.Errorf("a plain key's value was hidden: %v", got.Args)
+	}
+}
+
+// TestAJobEndsOnceForWebhooks: a finished job emits one completion event,
+// whether no page or several watch it. Until 2026-11-24 the event came from
+// each open event stream: none for a job nobody watched, two for two tabs.
+func TestAJobEndsOnceForWebhooks(t *testing.T) {
+	m := newMgmt(t, AuthNone, Defaults, false)
+	bus, err := hooks.New("", 200)
+	if err != nil {
+		t.Fatal(err)
+	}
+	h, err := Handler(Sources{Snapshot: fixture, Project: showFixture}, Options{Auth: m.auth, Runner: m.runner, Settings: Defaults, Audit: m.audit, Hooks: bus,
+		Choices: func(context.Context) (Choices, error) {
+			return Choices{Engines: []string{"pg"}, Buildable: []string{"pg"}}, nil
+		}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	m.h = h
+	c, csrf := m.session(t)
+	ended := func(id string) int {
+		n := 0
+		for _, e := range bus.Recent(200) {
+			if e.Type == hooks.JobSucceeded && e.Payload["id"] == id {
+				n++
+			}
+		}
+		return n
+	}
+	start := func() jobs.Job {
+		var j jobs.Job
+		_ = json.Unmarshal(m.post(c, csrf, `{"action":"images.build","params":{"engine":"pg"}}`).Body.Bytes(), &j)
+		return wait(t, m.runner, j.ID)
+	}
+	unwatched := start()
+	deadline := time.Now().Add(2 * time.Second)
+	for ended(unwatched.ID) == 0 && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
+	if n := ended(unwatched.ID); n != 1 {
+		t.Errorf("a job nobody watched emitted %d completion event(s), want 1", n)
+	}
+	watched := start()
+	for range 2 {
+		m.do(call{method: http.MethodGet, path: "/api/v1/jobs/" + watched.ID + "/events", cookie: c})
+	}
+	time.Sleep(50 * time.Millisecond)
+	if n := ended(watched.ID); n != 1 {
+		t.Errorf("a job watched by two streams emitted %d completion event(s), want 1", n)
 	}
 }
 

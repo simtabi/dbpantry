@@ -43,7 +43,7 @@ func TestStatusGuideMatchesTheDocs(t *testing.T) {
 		return
 	}
 	if os.Getenv("MDB_UPDATE_DOCS") == "1" {
-		if err := os.WriteFile(statusDoc, []byte(doc[:head]+want+doc[end:]), 0o600); err != nil {
+		if err := os.WriteFile(statusDoc, []byte(doc[:head]+want+doc[end:]), 0o600); err != nil { // #nosec G703 -- the repository's own doc, rewritten on request
 			t.Fatal(err)
 		}
 		return
@@ -71,7 +71,8 @@ func TestEveryStateHasAMeaningAndAKnownTone(t *testing.T) {
 }
 
 func TestProfileChipsGetDistinctFixedTones(t *testing.T) {
-	if toneFor("pg") != toneFor("pg") {
+	first, again := toneFor("pg"), toneFor("pg")
+	if first != again {
 		t.Fatal("a profile's colour must not change between renders")
 	}
 	names := []string{"pg", "mysql", "mariadb", "mongodb", "cassandra", "ui", "ha"}

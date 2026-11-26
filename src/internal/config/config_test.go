@@ -124,7 +124,7 @@ func TestShowOriginAndSet(t *testing.T) {
 	if got["MDB_PROFILES"] != "pg,mysql,ui" || got["MDB_BIND_ADDR"] != "127.0.0.1" || got["MDB_TZ"] != "UTC" {
 		t.Errorf("after set: %+v", got)
 	}
-	raw, _ := os.ReadFile(env)
+	raw, _ := os.ReadFile(env) // #nosec G304 -- the test's own temporary file
 	if !strings.Contains(string(raw), `MDB_PROFILES="pg,mysql,ui"`) {
 		t.Errorf("set did not quote the list: %s", raw)
 	}

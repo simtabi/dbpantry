@@ -15,6 +15,15 @@ do on Compose.
 > except `make logs`, which incus-compose refused over `--tail` (fixed since). The
 > other engines, HA and PITR have not been run on Incus. Verify check 58 pins the mapping against stub
 > binaries.
+>
+> **With a separate home (`MDB_HOME` apart from the kit), run once.** On 2026-11-24, on the same OS and
+> versions, the steps of check 77 passed with `MDB_BACKEND=incus`: init into the home, `dbpantry up` with
+> pg `healthy`, a query and the home's superuser password through the backend's exec, `project new`,
+> `backup run` with the dump in the home's `backups/`, `down`, and the kit unchanged (522 paths). The
+> first attempt found that incus-compose read the kit's `.env`, not the home's, and booted as project
+> `mdb` on the default subnet with `secrets/` and `certs/` from the kit; the backend now passes
+> `--env-file`, `--os-env` and `-p` (check 58). `make status` and `make logs` were not repeated in that
+> run.
 
 ## Requirements
 
@@ -40,6 +49,11 @@ do on Compose.
   images (`dbpantry-pg`, `dbpantry-caddy`) with one of them. Podman runs
   rootless; run `make` from a normal login session, not under `sg`, which
   changes the primary group and makes Podman's uid mapping fail.
+- **Containers that cannot resolve names** (seen on a VM whose resolver is its
+  host's NAT gateway) fail the image build at `apt-get update`. incus-compose
+  ignores a Compose `build.network`, but takes its builder from
+  `INCUS_COMPOSE_UP_BUILDER`, so a wrapper that runs `docker build --network
+  host` fixes the build without changing Docker's daemon configuration.
 - On macOS, Incus runs in a VM: `brew install colima incus` then
   `colima start --runtime incus`. Remove it with `colima delete`.
 

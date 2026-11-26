@@ -11,7 +11,7 @@
   {{else if not .S.Images}}
   <div class="card">
     <div class="empty"><div class="empty-icon">{{icon "package"}}</div><p class="empty-title">No images built yet</p><p class="empty-subtitle text-secondary">The first start builds each engine's image (several minutes each); building them here does it ahead of time.</p><div class="empty-action">{{actionButton . "images.build" "Build every image" "class=btn-primary" "icon=hammer"}}</div></div>
-    <div class="card-footer text-secondary small">The same as <code>dbpantry images build [ENGINE…]</code> and <code>dbpantry images scan [ENGINE]</code>. A scan fails on a fixable HIGH or CRITICAL finding.</div>
+    <div class="card-footer text-secondary small">The same as <code>dbpantry images build [IMAGE…]</code> and <code>dbpantry images scan [IMAGE]</code>. A scan fails on a fixable HIGH or CRITICAL finding.</div>
   </div>
   {{else}}
   {{range $i, $g := imageGroups .S.Images .S.ImagePrefix}}
@@ -34,7 +34,7 @@
     </div>
   </div>
   {{end}}
-  <div class="card mt-3"><div class="card-body text-secondary small mb-0">The same as <code>dbpantry images build [ENGINE…]</code> and <code>dbpantry images scan [ENGINE]</code>. A scan fails on a fixable HIGH or CRITICAL finding. Images under another prefix stay listed so an old <code>MDB_IMAGE_PREFIX</code> build is not invisible.</div></div>
+  <div class="card mt-3"><div class="card-body text-secondary small mb-0">The same as <code>dbpantry images build [IMAGE…]</code> and <code>dbpantry images scan [IMAGE]</code>. A scan fails on a fixable HIGH or CRITICAL finding. Images under another prefix stay listed so an old <code>MDB_IMAGE_PREFIX</code> build is not invisible.</div></div>
   {{end}}
 </div></div>
 {{end}}

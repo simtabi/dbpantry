@@ -32,7 +32,7 @@ func (a *app) addonLsCmd() *cobra.Command {
 		Use:   "ls",
 		Short: "List add-ons and whether each is on",
 		Args:  cobra.NoArgs,
-		RunE: func(c *cobra.Command, _ []string) error {
+		RunE: func(_ *cobra.Command, _ []string) error {
 			rows, err := a.addonStatuses(engine)
 			if err != nil {
 				return err
@@ -42,7 +42,7 @@ func (a *app) addonLsCmd() *cobra.Command {
 				enc.SetIndent("", "  ")
 				return enc.Encode(rows)
 			}
-			fmt.Fprintf(a.stdout, "%-28s %-10s %-10s %-6s %s\n", "ID", "ENGINE", "KIND", "ON", "TITLE")
+			_, _ = fmt.Fprintf(a.stdout, "%-28s %-10s %-10s %-6s %s\n", "ID", "ENGINE", "KIND", "ON", "TITLE")
 			for _, r := range rows {
 				on := "no"
 				if !r.Supported {
@@ -50,7 +50,7 @@ func (a *app) addonLsCmd() *cobra.Command {
 				} else if r.Enabled {
 					on = "yes"
 				}
-				fmt.Fprintf(a.stdout, "%-28s %-10s %-10s %-6s %s\n", r.ID, r.Engine, r.Kind, on, r.Title)
+				_, _ = fmt.Fprintf(a.stdout, "%-28s %-10s %-10s %-6s %s\n", r.ID, r.Engine, r.Kind, on, r.Title)
 			}
 			return nil
 		},
@@ -186,11 +186,11 @@ func (a *app) addonSet(c *cobra.Command, id, engineName, project string, enable 
 		if err := s.Set("MDB_PROFILES", next); err != nil {
 			return err
 		}
-		fmt.Fprintf(a.stdout, "wrote MDB_PROFILES=%s in %s\n", next, s.EnvFile)
+		_, _ = fmt.Fprintf(a.stdout, "wrote MDB_PROFILES=%s in %s\n", next, s.EnvFile)
 		svc := eng + "-pooler"
 		if enable {
 			if err := a.runSteps(c, script("scripts/runtime", "compose", "up", "-d", svc)); err != nil {
-				fmt.Fprintf(a.stderr, "note: start the pooler with: dbpantry up --profiles %s\n", next)
+				_, _ = fmt.Fprintf(a.stderr, "note: start the pooler with: dbpantry up --profiles %s\n", next)
 				return err
 			}
 		} else {
@@ -202,21 +202,21 @@ func (a *app) addonSet(c *cobra.Command, id, engineName, project string, enable 
 		if err := s.Set("MDB_PG_INIT_EXTENSIONS", init); err != nil {
 			return err
 		}
-		fmt.Fprintf(a.stdout, "wrote MDB_PG_INIT_EXTENSIONS in %s\n", s.EnvFile)
+		_, _ = fmt.Fprintf(a.stdout, "wrote MDB_PG_INIT_EXTENSIONS in %s\n", s.EnvFile)
 		if spec.NeedsPreload {
 			pre := addon.MergeCSV(s.Effective("MDB_PG_SHARED_PRELOAD"), name, enable)
 			if err := s.Set("MDB_PG_SHARED_PRELOAD", pre); err != nil {
 				return err
 			}
-			fmt.Fprintln(a.stderr, "note: shared_preload_libraries changed; restart pg for the library to load")
+			_, _ = fmt.Fprintln(a.stderr, "note: shared_preload_libraries changed; restart pg for the library to load")
 		}
 		if enable {
 			if err := a.addonCreateExtension(c, eng, name, project); err != nil {
-				fmt.Fprintf(a.stderr, "note: CREATE EXTENSION on live databases failed: %v\n", err)
-				fmt.Fprintln(a.stderr, "note: INIT list is updated; new projects will get the extension; retry or run SQL by hand")
+				_, _ = fmt.Fprintf(a.stderr, "note: CREATE EXTENSION on live databases failed: %v\n", err)
+				_, _ = fmt.Fprintln(a.stderr, "note: INIT list is updated; new projects will get the extension; retry or run SQL by hand")
 			}
 		} else {
-			fmt.Fprintln(a.stderr, "note: existing databases keep the extension; new projects will not get it from INIT (no DROP)")
+			_, _ = fmt.Fprintln(a.stderr, "note: existing databases keep the extension; new projects will not get it from INIT (no DROP)")
 		}
 	case addon.KindUI:
 		cur := s.Effective("MDB_PROFILES")
@@ -227,7 +227,7 @@ func (a *app) addonSet(c *cobra.Command, id, engineName, project string, enable 
 		if err := s.Set("MDB_PROFILES", next); err != nil {
 			return err
 		}
-		fmt.Fprintf(a.stdout, "wrote MDB_PROFILES=%s in %s\n", next, s.EnvFile)
+		_, _ = fmt.Fprintf(a.stdout, "wrote MDB_PROFILES=%s in %s\n", next, s.EnvFile)
 	case addon.KindEmbed:
 		val := "false"
 		if enable {
@@ -236,11 +236,11 @@ func (a *app) addonSet(c *cobra.Command, id, engineName, project string, enable 
 		if err := s.Set(spec.ConfigKey, val); err != nil {
 			return err
 		}
-		fmt.Fprintf(a.stdout, "wrote %s=%s in %s\n", spec.ConfigKey, val, s.EnvFile)
+		_, _ = fmt.Fprintf(a.stdout, "wrote %s=%s in %s\n", spec.ConfigKey, val, s.EnvFile)
 	default:
 		return usagef("unsupported kind %s", spec.Kind)
 	}
-	fmt.Fprintf(a.stdout, "addon %s %s for %s\n", verb, id, eng)
+	_, _ = fmt.Fprintf(a.stdout, "addon %s %s for %s\n", verb, id, eng)
 	return nil
 }
 
@@ -269,7 +269,7 @@ func (a *app) addonCreateExtension(c *cobra.Command, eng, extName, project strin
 		}
 	}
 	if len(dbs) == 0 {
-		fmt.Fprintln(a.stderr, "note: no project databases to CREATE EXTENSION on yet")
+		_, _ = fmt.Fprintln(a.stderr, "note: no project databases to CREATE EXTENSION on yet")
 		return nil
 	}
 	// Catalog names are [a-z0-9_-]+; refuse anything else before interpolating.
@@ -279,19 +279,19 @@ func (a *app) addonCreateExtension(c *cobra.Command, eng, extName, project strin
 	var first error
 	for _, db := range dbs {
 		if !safeDBName(db) {
-			fmt.Fprintf(a.stderr, "skip CREATE EXTENSION on %q: invalid name\n", db)
+			_, _ = fmt.Fprintf(a.stderr, "skip CREATE EXTENSION on %q: invalid name\n", db)
 			continue
 		}
 		sql := `CREATE EXTENSION IF NOT EXISTS "` + extName + `" CASCADE`
 		err := a.runSteps(c, script("scripts/runtime", "exec", eng, "psql", "-U", "postgres", "-d", db, "-v", "ON_ERROR_STOP=1", "-c", sql))
 		if err != nil {
-			fmt.Fprintf(a.stderr, "CREATE EXTENSION %s on %s: %v\n", extName, db, err)
+			_, _ = fmt.Fprintf(a.stderr, "CREATE EXTENSION %s on %s: %v\n", extName, db, err)
 			if first == nil {
 				first = err
 			}
 			continue
 		}
-		fmt.Fprintf(a.stdout, "CREATE EXTENSION %s on %s\n", extName, db)
+		_, _ = fmt.Fprintf(a.stdout, "CREATE EXTENSION %s on %s\n", extName, db)
 	}
 	return first
 }

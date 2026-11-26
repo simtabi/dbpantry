@@ -63,7 +63,7 @@ func (s *Settings) Show(examplePath string) ([]Entry, error) {
 		if e.Origin == OriginFile || e.Origin == OriginEnv {
 			e.File = s.EnvFile
 		}
-		if looksSecret(key) {
+		if LooksSecret(key) {
 			e.Secret = true
 			if e.Value != "" {
 				e.Value = "***"
@@ -127,7 +127,7 @@ func (s *Settings) Set(key, value string) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return err
 	}
-	return os.WriteFile(path, out, 0o600) // #nosec G306 -- the instance's own env file
+	return os.WriteFile(path, out, 0o600) // #nosec G306 G703 -- the instance's own env file
 }
 
 // documentedKeys reads KEY= lines (and commented # KEY=) from .env.example,
@@ -185,7 +185,10 @@ func looksLikeHeading(s string) bool {
 	return len(words) >= 1 && len(words) <= 6
 }
 
-func looksSecret(key string) bool {
+// LooksSecret reports whether a key's value is masked wherever it is shown:
+// the Configuration page, and the arguments a dashboard job records
+// (config.set's value in the job list and the audit log).
+func LooksSecret(key string) bool {
 	u := strings.ToUpper(key)
 	for _, part := range []string{"PASSWORD", "SECRET", "TOKEN", "KEY", "HASH", "CREDENTIAL"} {
 		if strings.Contains(u, part) {

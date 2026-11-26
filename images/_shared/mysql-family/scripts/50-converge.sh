@@ -22,6 +22,12 @@ export MDB_STAGE
 # shellcheck source=mdb-lib.sh
 source /usr/local/lib/mdb/mdb-lib.sh
 
+# Clear a marker a previous start left behind (design.md D-109). /run lives in
+# the container's filesystem, so it survives `docker restart`; without this, one
+# failed convergence kept the healthcheck refusing for good, even after a later
+# start converged. This start writes it again only if it fails too.
+rm -f /run/mdb/converge-failed
+
 secret=/run/secrets/proxysql_admin_password.txt
 
 if [[ ! -r "$secret" ]]; then
