@@ -14,6 +14,24 @@ need_runtime
 need_file "$MDB_ROOT/config/caddy/Caddyfile.tmpl"
 need_file "$MDB_ROOT/docker-compose.yml"
 
+# Caddy files the certificates it issues under the issuer's CA id and serves
+# a cached, still-valid one before issuing anew. An install upgraded to the
+# home's web CA (D-112) under the default id "local" kept serving the
+# certificates Caddy's own CA had issued into caddy_data -- measured on the
+# demo, 2026-11-25 -- so the web CA has an id of its own and every UI asks
+# for it. The scratch stack below starts with an empty volume and cannot see
+# this, hence a check on the template.
+tmpl="$MDB_ROOT/config/caddy/Caddyfile.tmpl"
+grep -qE '^[[:space:]]*ca[[:space:]]+dbpantry[[:space:]]*\{' "$tmpl" \
+    || vfail "Caddyfile.tmpl does not define the web CA under its own id (pki { ca dbpantry })"
+grep -qE '^[[:space:]]*ca[[:space:]]+local([[:space:]]|\{|$)' "$tmpl" \
+    && vfail "Caddyfile.tmpl still defines the web CA as 'local', whose cached certificates pre-date it"
+if ! grep -qE 'issuer[[:space:]]+internal[[:space:]]*\{' "$tmpl" \
+   || ! grep -qE '^[[:space:]]*ca[[:space:]]+dbpantry[[:space:]]*$' "$tmpl"; then
+    vfail "the UI sites do not ask for certificates from the dbpantry CA (tls { issuer internal { ca dbpantry } })"
+fi
+vinfo "the UIs are issued from the web CA's own id, never a cached 'local' certificate"
+
 # In a stack of its own (scratch_stack), whose cleanup is registered before
 # the boot, so a FAILED boot is cleaned up too. It used to boot the operator's
 # project and `make down` it at exit, stopping every service there, including
