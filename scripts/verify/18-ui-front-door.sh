@@ -79,3 +79,61 @@ vinfo "Adminer default server: $server"
 scratch_exec pgadmin test -f /pgadmin4/servers.json 2>/dev/null \
     || vfail "pgAdmin has no baked servers.json; SPEC section 7 requires it pre-provisioned"
 vinfo "pgAdmin servers.json present"
+
+# --- What a browser sees, from the host (2026-11-25) ---------------------------
+# "Answers 200" above passed while, in a browser, every UI's certificate was
+# untrusted (Caddy's own CA lived in its volume), phpMyAdmin printed "Failed to
+# read configuration file", pgAdmin printed "Failed to load preferences", and
+# http:// redirected to port 443 instead of the published one. Each is
+# asserted here through the published ports, as a browser reaches them.
+https_port="$(mdb_env_get MDB_CADDY_HTTPS_PORT "$SCRATCH_HOME/.env")"
+http_port="$(mdb_env_get MDB_CADDY_HTTP_PORT "$SCRATCH_HOME/.env")"
+[[ -n "$https_port" && -n "$http_port" ]] || vfail "the scratch stack names no Caddy ports"
+command -v curl >/dev/null 2>&1 || vfail "curl is required"
+jar="$(mktemp)"
+add_cleanup "rm -f '$jar'"
+browse() {
+    local host="$1"; shift
+    curl -s --max-time 20 --resolve "$host:$https_port:127.0.0.1" --resolve "$host:$http_port:127.0.0.1" \
+        -c "$jar" -b "$jar" "$@"
+}
+
+# 1. Every UI's certificate chains to the web CA that scripts/certs generated in
+# the home -- the one `dbpantry certs trust` installs -- and that CA can sign
+# for localhost names only.
+web_root="$SCRATCH_HOME/certs/web/root.crt"
+[[ -s "$web_root" ]] || vfail "scripts/certs wrote no web CA at certs/web/root.crt"
+openssl x509 -in "$web_root" -noout -ext nameConstraints 2>/dev/null | grep -q 'DNS:\.localhost' \
+    || vfail "the web CA is not name-constrained to .localhost"
+for ui in adminer pgadmin pma; do
+    browse "$ui.$domain" --cacert "$web_root" -o /dev/null "https://$ui.$domain:$https_port/" \
+        || vfail "https://$ui.$domain:$https_port/ does not verify against the home's web CA"
+done
+vinfo "every UI's certificate verifies against certs/web/root.crt (name-constrained to .localhost)"
+
+# 2. http:// redirects to the published HTTPS port, not to 443.
+loc="$(browse "adminer.$domain" -o /dev/null -w '%{redirect_url}' "http://adminer.$domain:$http_port/")"
+[[ "$loc" == "https://adminer.$domain:$https_port/" ]] \
+    || vfail "http://adminer.$domain:$http_port/ redirects to '$loc', not to the published HTTPS port $https_port"
+vinfo "http:// redirects to https on port $https_port"
+
+# 3. phpMyAdmin reads its configuration (its entrypoint writes
+# config.secret.inc.php and Apache drops to www-data: capabilities).
+page="$(browse "pma.$domain" -k "https://pma.$domain:$https_port/")"
+grep -q 'Failed to read configuration file' <<< "$page" \
+    && vfail "phpMyAdmin cannot read its configuration file (config.secret.inc.php)"
+grep -q 'pma_username' <<< "$page" || vfail "phpMyAdmin shows no login form"
+vinfo "phpMyAdmin reads its configuration and shows its login form"
+
+# 4. pgAdmin's API refuses a call without a same-origin Referer ("The referrer
+# header is missing"), so the front door's Referrer-Policy must let one through.
+h="pgadmin.$domain"; u="https://$h:$https_port"
+policy="$(browse "$h" -k -o /dev/null -D - "$u/browser/" | tr -d '\r' \
+    | awk -F': ' 'tolower($1) == "referrer-policy" {print $2}')"
+[[ "$policy" != no-referrer ]] \
+    || vfail "pgAdmin is served with Referrer-Policy no-referrer, so a browser's API calls fail (Failed to load preferences)"
+tok="$(browse "$h" -k "$u/browser/js/utils.js" | grep -oE "csrf_token'\] = '[^']+'" | sed -E "s/.*= '//; s/'\$//")"
+[[ -n "$tok" ]] || vfail "pgAdmin served no CSRF token"
+code="$(browse "$h" -k -o /dev/null -w '%{http_code}' -H "X-pgA-CSRFToken: $tok" -H "Referer: $u/browser/" "$u/preferences/")"
+[[ "$code" == 200 ]] || vfail "pgAdmin's preferences API answered $code to a browser's request"
+vinfo "pgAdmin is served with Referrer-Policy '${policy:-default}' and its preferences API answers"
