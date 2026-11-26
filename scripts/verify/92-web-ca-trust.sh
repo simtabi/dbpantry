@@ -100,11 +100,11 @@ fi
 [[ "$out" == *"no system trust store found"* ]] || vfail "no store: the failure does not say why: $out"
 
 # --- WSL: the Windows user store ------------------------------------------------------
-trust Linux trust STUB_R="5.15.167.4-microsoft-standard-WSL2" >/dev/null
+trust Linux trust STUB_R="6.6.36-microsoft-standard-WSL2" >/dev/null
 calls | grep -qxF 'certutil.exe -user -addstore Root C:\dbp\root.crt' \
     || vfail "WSL: the root was not added to the Windows user Root store: $(calls | tr '\n' ';')"
 calls | grep -q '^sudo' && vfail "WSL: sudo ran, but the browsers are Windows'"
-trust Linux untrust STUB_R="5.15.167.4-microsoft-standard-WSL2" >/dev/null
+trust Linux untrust STUB_R="6.6.36-microsoft-standard-WSL2" >/dev/null
 calls | grep -qxF "certutil.exe -user -delstore Root $fp" || vfail "WSL: untrust did not delete by fingerprint"
 vinfo "WSL: the Windows user Root store, removed by fingerprint"
 
