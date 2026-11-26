@@ -103,7 +103,8 @@ browse() {
 # for localhost names only.
 web_root="$SCRATCH_HOME/certs/web/root.crt"
 [[ -s "$web_root" ]] || vfail "scripts/certs wrote no web CA at certs/web/root.crt"
-openssl x509 -in "$web_root" -noout -ext nameConstraints 2>/dev/null | grep -q 'DNS:\.localhost' \
+# -text, not -ext: LibreSSL (macOS's /usr/bin/openssl) has no -ext.
+openssl x509 -in "$web_root" -noout -text 2>/dev/null | grep -A3 'Name Constraints' | grep -q 'DNS:\.localhost' \
     || vfail "the web CA is not name-constrained to .localhost"
 for ui in adminer pgadmin pma; do
     browse "$ui.$domain" --cacert "$web_root" -o /dev/null "https://$ui.$domain:$https_port/" \
