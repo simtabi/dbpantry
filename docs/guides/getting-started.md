@@ -129,7 +129,16 @@ deliberate: an engine reachable from the network the moment it starts is how
 development databases end up on the internet.
 
 The browser UIs are on <https://adminer.db.localhost> under the `ui` profile — Adminer
-for the SQL engines, plus per-engine consoles.
+for the SQL engines, plus per-engine consoles. Their certificates come from a web CA
+the toolkit generates in `certs/web/`, which can sign for localhost names only. Trust it
+once and browsers accept every UI without a warning:
+
+```bash
+make certs-trust        # dbpantry certs trust; macOS asks for your password
+```
+
+`make certs-untrust` removes it. When `MDB_CADDY_HTTPS_PORT` moves HTTPS off 443, the UIs
+are at `https://adminer.db.localhost:<port>/`, and `http://` on the HTTP port redirects there.
 
 ## 4. Isolation is real, and worth confirming
 

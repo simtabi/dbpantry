@@ -88,6 +88,11 @@ need no configuration beyond the port.
 If that stops working after a reboot, it is usually Docker Desktop starting
 before WSL2 is ready. Restart Docker Desktop.
 
+The browser UIs (`https://adminer.db.localhost`) open in a Windows browser too. Run
+`dbpantry.exe certs trust` once: it adds the toolkit's web CA to your Windows user
+certificate store (Windows asks you to confirm), so Edge and Chrome accept the UIs.
+Firefox keeps its own store; import `certs/web/root.crt` there if you use it.
+
 ## Git Bash and PowerShell
 
 `make` and the scripts here need a real bash. Git Bash is close but not close
