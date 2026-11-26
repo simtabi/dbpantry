@@ -156,3 +156,19 @@ tok="$(browse "$h" -k "$u/browser/js/utils.js" | grep -oE "csrf_token'\] = '[^']
 code="$(browse "$h" -k -o /dev/null -w '%{http_code}' -H "X-pgA-CSRFToken: $tok" -H "Referer: $u/browser/" "$u/preferences/")"
 [[ "$code" == 200 ]] || vfail "pgAdmin's preferences API answered $code to a browser's request"
 vinfo "pgAdmin is served with Referrer-Policy '${policy:-default}' and its preferences API answers"
+
+# 5. A changed front-door configuration reaches Caddy on the next `up`. Caddy
+# reads its Caddyfile and the web CA once, at start, with its admin API off,
+# and Compose recreates a container only when its definition changes -- not
+# when a bind-mounted file does -- so a new MDB_UI_DOMAIN, a renewed web CA or
+# an upgraded template was rendered and never served (the demo, 2026-11-25).
+newdomain="ui$RANDOM.localhost"
+printf '\n# check 18: a new UI domain\nMDB_UI_DOMAIN=%s\n' "$newdomain" >> "$SCRATCH_HOME/.env"
+scratch_up || vfail "make up after changing MDB_UI_DOMAIN failed"
+ok=""
+for _ in $(seq 1 30); do
+    if browse "adminer.$newdomain" --cacert "$web_root" -o /dev/null "https://adminer.$newdomain:$https_port/"; then ok=1; break; fi
+    sleep 2
+done
+[[ -n "$ok" ]] || vfail "after MDB_UI_DOMAIN=$newdomain and make up, Caddy does not serve https://adminer.$newdomain (it kept its old configuration)"
+vinfo "a changed MDB_UI_DOMAIN is served after make up (Caddy restarted with its new configuration)"
