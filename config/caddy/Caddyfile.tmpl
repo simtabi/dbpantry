@@ -27,9 +27,11 @@
 
 	# The home's web CA, not one Caddy generates in its volume (D-112). Caddy
 	# holds the root certificate and the intermediate pair; the root key stays
-	# in certs/web/ on the host.
+	# in certs/web/ on the host. Its own id, not "local": Caddy files issued
+	# certificates by CA id and serves a cached valid one first, so an
+	# upgraded install kept the old CA's certificates under "local".
 	pki {
-		ca local {
+		ca dbpantry {
 			name "dbpantry local web CA"
 			root {
 				format pem_file
@@ -53,6 +55,11 @@
 }
 
 (mdb_ui) {
+	tls {
+		issuer internal {
+			ca dbpantry
+		}
+	}
 	header {
 		X-Content-Type-Options nosniff
 		X-Frame-Options DENY
