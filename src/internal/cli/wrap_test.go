@@ -156,6 +156,8 @@ func TestCommandsRunTheirScripts(t *testing.T) {
 		{[]string{"pooler", "sync", "mariadb"}, nil},
 		{[]string{"certs", "init"}, []string{"scripts/certs " + p}},
 		{[]string{"certs", "renew"}, []string{"scripts/certs-renew " + p}},
+		{[]string{"certs", "trust"}, []string{"scripts/certs --trust" + p}},
+		{[]string{"certs", "untrust"}, []string{"scripts/certs --untrust" + p}},
 		{[]string{"secrets", "rotate", "--yes"}, []string{"scripts/rotate-secrets --yes" + p, "scripts/runtime compose restart mysql-pooler" + p}},
 		{[]string{"secrets", "rotate", "--yes", "--engine", "pg"}, []string{"scripts/rotate-secrets --yes --engine pg" + p}},
 		{[]string{"secrets", "rotate", "--yes", "--engine", "mysql"}, []string{"scripts/rotate-secrets --yes --engine mysql" + p, "scripts/runtime compose restart mysql-pooler" + p}},

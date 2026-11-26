@@ -152,7 +152,25 @@ func (a *app) certsCmd() *cobra.Command {
 		Args:  cobra.NoArgs,
 		RunE:  func(c *cobra.Command, _ []string) error { return a.runSteps(c, script("scripts/certs-renew")) },
 	}
-	cmd.AddCommand(initCmd, renew)
+	trust := &cobra.Command{
+		Use:   "trust",
+		Short: "Trust the web CA in this machine's store, so browsers accept the UIs (asks for your password)",
+		Long: `Install the home's web CA root (certs/web/root.crt) in this machine's trust
+store, so browsers accept https://*.db.localhost without a warning
+(scripts/certs --trust, design.md D-112): the login keychain on macOS, the
+system store and the NSS browser database on Linux (through sudo), the Windows
+user store under WSL. The CA can sign for localhost names only. Run it once
+per home; a second run changes nothing.`,
+		Args: cobra.NoArgs,
+		RunE: func(c *cobra.Command, _ []string) error { return a.runSteps(c, script("scripts/certs", "--trust")) },
+	}
+	untrust := &cobra.Command{
+		Use:   "untrust",
+		Short: "Remove the web CA from this machine's trust store",
+		Args:  cobra.NoArgs,
+		RunE:  func(c *cobra.Command, _ []string) error { return a.runSteps(c, script("scripts/certs", "--untrust")) },
+	}
+	cmd.AddCommand(initCmd, renew, trust, untrust)
 	return cmd
 }
 
